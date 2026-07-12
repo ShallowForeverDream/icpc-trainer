@@ -1,0 +1,26 @@
+{
+  "manifest_version": 3,
+  "name": "icpc-trainer Submit Bridge",
+  "version": "0.1.0",
+  "description": "Send an icpc-trainer C++ draft to the Codeforces submit form.",
+  "permissions": ["storage", "tabs"],
+  "background": { "service_worker": "background.js" },
+  "host_permissions": [
+    "https://*.chatgpt.site/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://codeforces.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": ["https://*.chatgpt.site/*", "http://localhost/*", "http://127.0.0.1/*"],
+      "js": ["trainer-bridge.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["https://codeforces.com/*"],
+      "js": ["codeforces-fill.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

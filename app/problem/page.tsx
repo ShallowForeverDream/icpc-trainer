@@ -1,40 +1,53 @@
 "use client";
 
-import { useState } from "react";
-import { AppShell, Icon, Pill } from "../components/AppShell";
+import { useMemo, useState } from "react";
+import { AppShell, Icon, ProblemRow } from "../components/AppShell";
+import { curatedProblems } from "../data/problems";
 
-export default function ProblemPage() {
-  const [tab, setTab] = useState("题目");
-  const [favorite, setFavorite] = useState(false);
-  const [submitted, setSubmitted] = useState(false);
+type SyncState = "idle" | "syncing" | "live" | "fallback";
+
+export default function ProblemLibraryPage() {
+  const [query, setQuery] = useState("");
+  const [rating, setRating] = useState("全部");
+  const [problems, setProblems] = useState(curatedProblems);
+  const [syncState, setSyncState] = useState<SyncState>("idle");
+
+  const filtered = useMemo(() => problems.filter((problem) => {
+    const matchesQuery = `${problem.code} ${problem.title} ${problem.titleZh} ${problem.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase());
+    const matchesRating = rating === "全部" || (rating === "≤1200" ? problem.rating <= 1200 : rating === "1300–1500" ? problem.rating >= 1300 && problem.rating <= 1500 : problem.rating >= 1600);
+    return matchesQuery && matchesRating;
+  }), [problems, query, rating]);
+
+  async function syncProblems() {
+    setSyncState("syncing");
+    try {
+      const response = await fetch("/api/codeforces/problems", { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "同步失败");
+      setProblems(data.problems);
+      setSyncState(data.source === "codeforces" ? "live" : "fallback");
+    } catch {
+      setSyncState("fallback");
+    }
+  }
+
   return <AppShell active="题库">
-    <div className="problem-page-head">
-      <div><a href="/">← 返回训练台</a><span>每日推荐 · 第 3 题</span></div>
-      <div><button className={favorite ? "saved" : ""} onClick={() => setFavorite(!favorite)}>☆ {favorite ? "已收藏" : "收藏"}</button><button>反馈翻译</button></div>
+    <section className="library-hero">
+      <div><span className="eyebrow"><span className="live-dot" /> FIRST CURATED SET / 20</span><h1>中文题库，<em>从经典题开始。</em></h1><p>首批 20 道 Codeforces 精选题已完成中文结构化导入；评分、标签和英文题名可从官方公开 API 校准。</p></div>
+      <button className="button button-primary" onClick={syncProblems} disabled={syncState === "syncing"}><Icon name="history" /> {syncState === "syncing" ? "正在同步…" : syncState === "live" ? "已同步官方题库" : "同步 Codeforces"}</button>
+    </section>
+    <div className={`sync-banner sync-${syncState}`}>
+      <span>{syncState === "live" ? "官方数据已校准" : syncState === "fallback" ? "官方接口暂不可用，正在使用内置精选题数据" : "精选题数据已就绪"}</span>
+      <small>公开题库接口无需 API Key · 中文内容为独立整理的题意说明</small>
     </div>
-    <section className="problem-workspace">
-      <article className="statement-panel">
-        <div className="statement-title">
-          <div><span>CF 1904C</span><h1>Array Game</h1><p>数组游戏</p></div>
-          <div className="problem-meta"><b>1700</b><span>GREEDY</span><span>THINKING</span></div>
-        </div>
-        <div className="translation-note"><Icon name="spark" /><p><b>AI 中文翻译</b> · 已通过结构校验　<span>原题在比赛结束后可查看</span></p></div>
-        <div className="tabs">{["题目", "提交记录", "题解"].map(x => <button key={x} className={tab===x?"active":""} onClick={() => setTab(x)}>{x}</button>)}</div>
-        {tab === "题目" ? <div className="statement-body">
-          <p>你有一个由 <code>n</code> 个正整数构成的数组 <code>a</code>，以及一个整数 <code>k</code>。</p>
-          <p>在一次操作中，你可以选择两个不同的下标 <code>i</code> 和 <code>j</code>，然后将 <code>|aᵢ − aⱼ|</code> 添加到数组末尾。你的目标是在恰好进行 <code>k</code> 次操作后，使数组中的最小值尽可能小。</p>
-          <h2>输入格式</h2><p>第一行包含一个整数 <code>t</code>，表示测试用例数量。每个测试用例的第一行包含两个整数 <code>n</code> 和 <code>k</code>。</p>
-          <div className="constraints"><span>2 ≤ n ≤ 2·10³</span><span>1 ≤ k ≤ 3</span><span>1 ≤ aᵢ ≤ 10¹⁸</span></div>
-          <h2>输出格式</h2><p>对于每个测试用例，输出执行恰好 <code>k</code> 次操作后数组中的最小可能值。</p>
-          <h2>样例</h2>
-          <div className="samples"><div><b>输入 <button>复制</button></b><pre>4{`\n`}5 2{`\n`}3 9 7 15 1{`\n`}4 3{`\n`}7 4 15 12</pre></div><div><b>输出 <button>复制</button></b><pre>0{`\n`}0{`\n`}1{`\n`}0</pre></div></div>
-        </div> : tab === "提交记录" ? <div className="empty-state"><Icon name="history" /><h3>还没有提交</h3><p>完成第一份代码后，评测结果会实时显示在这里。</p></div> : <div className="locked-editorial"><Icon name="lock" /><h3>题解尚未解锁</h3><p>AC 后自动解锁；你也可以选择放弃本题并查看题解。</p><button>放弃并查看题解</button></div>}
-      </article>
-      <aside className="code-panel">
-        <div className="editor-head"><div><span className="active-dot" /> main.cpp</div><select aria-label="编译语言"><option>GNU C++20</option></select></div>
-        <div className="fake-editor"><pre><span className="ln">1</span><i>#include</i> <em>&lt;bits/stdc++.h&gt;</em>{`\n`}<span className="ln">2</span><i>using namespace</i> std;{`\n`}<span className="ln">3</span>{`\n`}<span className="ln">4</span><i>int</i> main() {'{'}{`\n`}<span className="ln">5</span>  ios::sync_with_stdio(<b>false</b>);{`\n`}<span className="ln">6</span>  cin.tie(<b>nullptr</b>);{`\n`}<span className="ln">7</span>{`\n`}<span className="ln">8</span>  <span className="cursor"> </span>{`\n`}<span className="ln">9</span>  <i>return</i> <b>0</b>;{`\n`}<span className="ln">10</span>{'}'}</pre></div>
-        <div className="editor-footer"><div><button>＋ 插入模板</button><span>已自动保存 14:32</span></div><button className="submit-button" onClick={() => setSubmitted(true)}>{submitted ? <><Icon name="check" /> 提交任务已创建</> : <>提交到 Codeforces <span>⌘ ↵</span></>}</button></div>
-      </aside>
+    <section className="library-toolbar">
+      <div className="template-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索题号、中文题名、标签…" /></div>
+      <div className="category-tabs">{["全部", "≤1200", "1300–1500", "≥1600"].map((item) => <button key={item} className={rating === item ? "active" : ""} onClick={() => setRating(item)}>{item}</button>)}</div>
+    </section>
+    <section className="panel curated-list">
+      <div className="panel-head"><div><span className="micro-label">CURATED PROBLEMSET</span><h2>精选训练集</h2></div><span className="calendar-total">显示 <b>{filtered.length}</b> / 20</span></div>
+      <div className="problem-list">{filtered.map((problem, index) => <ProblemRow key={problem.code} problem={problem} index={index + 1} />)}</div>
+      {filtered.length === 0 && <div className="empty-state"><Icon name="search" /><h3>没有匹配的题目</h3><p>换一个关键词或难度区间试试。</p></div>}
     </section>
   </AppShell>;
 }

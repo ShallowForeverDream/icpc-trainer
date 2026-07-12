@@ -5,14 +5,14 @@ import { AppShell, Icon, MetricCard, Pill, ProblemRow } from "./components/AppSh
 
 const recommendations = [
   [
-    { code: "CF 1970D1", title: "Reverse Card (Easy Version)", rating: 1300, tags: ["数论", "观察"], status: "未尝试" },
-    { code: "CF 1920C", title: "Partitioning the Array", rating: 1500, tags: ["数学", "枚举"], status: "未尝试" },
-    { code: "CF 1904C", title: "Array Game", rating: 1700, tags: ["贪心", "思维"], status: "未尝试" },
+    { code: "CF 1967B1", title: "Reverse Card (Easy Version)", titleZh: "反转卡牌（简单版）", rating: 1400, tags: ["数论", "观察"], status: "未尝试" },
+    { code: "CF 1920C", title: "Partitioning the Array", titleZh: "划分数组", rating: 1600, tags: ["数学", "枚举"], status: "未尝试" },
+    { code: "CF 1904C", title: "Array Game", titleZh: "数组游戏", rating: 1400, tags: ["贪心", "思维"], status: "未尝试" },
   ],
   [
-    { code: "CF 1914E2", title: "Game with Marbles", rating: 1400, tags: ["博弈", "排序"], status: "未尝试" },
-    { code: "CF 1899G", title: "Unusual Entertainment", rating: 1800, tags: ["数据结构", "DFS"], status: "未尝试" },
-    { code: "CF 1844C", title: "Particles", rating: 1600, tags: ["动态规划", "观察"], status: "未尝试" },
+    { code: "CF 1367C", title: "Social Distance", titleZh: "社交距离", rating: 1300, tags: ["贪心", "字符串"], status: "未尝试" },
+    { code: "CF 1791F", title: "Range Update Point Query", titleZh: "区间更新与单点查询", rating: 1600, tags: ["数据结构", "并查集"], status: "未尝试" },
+    { code: "CF 706B", title: "Interesting drink", titleZh: "有趣的饮料", rating: 1100, tags: ["二分", "排序"], status: "未尝试" },
   ],
 ];
 
@@ -27,8 +27,8 @@ export default function Home() {
       <section className="hero-grid">
         <div className="hero-copy">
           <div className="eyebrow"><span className="live-dot" /> TRAINING / 2026.07.12</div>
-          <h1>晚上好，<br /><em>继续向前。</em></h1>
-          <p>今天适合做一组 1500–1800 的思维题。你的「数学」状态不错，「图论」需要再热一热。</p>
+          <h1>把训练闭环，<br /><em>真正跑起来。</em></h1>
+          <p>首批 20 道中文精选题已经就绪。现在可以校准 Codeforces 官方题库、同步公开提交，并用浏览器扩展预填提交。</p>
           <div className="hero-actions">
             <a className="button button-primary" href="/problem"><Icon name="play" /> 开始今日训练</a>
             <a className="button button-ghost" href="/vp">创建一场 VP <span>↗</span></a>
@@ -59,10 +59,10 @@ export default function Home() {
       </section>
 
       <section className="metrics-grid">
-        <MetricCard label="本周新 AC" value="18" delta="+5" tone="blue" />
-        <MetricCard label="当前 CF Rating" value="1642" delta="+73" tone="green" />
-        <MetricCard label="首次 AC 率" value="61%" delta="+8%" tone="amber" />
-        <MetricCard label="本月 VP" value="7" delta="35h" tone="violet" />
+        <MetricCard label="中文精选题" value="20" delta="已导入" tone="blue" />
+        <MetricCard label="CF 公开 API" value="LIVE" delta="无需 Key" tone="green" />
+        <MetricCard label="提交扩展" value="β" delta="可下载" tone="amber" />
+        <MetricCard label="账号系统" value="P4" delta="暂缓" tone="violet" />
       </section>
 
       <section className="content-grid">

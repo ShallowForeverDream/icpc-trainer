@@ -34,4 +34,17 @@ test("ships a constrained Manifest V3 submit bridge", async () => {
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.host_permissions.includes("https://codeforces.com/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
+  assert.equal(manifest.version, "0.2.0");
+});
+
+test("ships live VP generation and the configured handle", async () => {
+  const [route, page] = await Promise.all([
+    readFile(new URL("app/api/vp/generate/route.ts", root), "utf8"),
+    readFile(new URL("app/vp/page.tsx", root), "utf8"),
+  ]);
+  assert.match(route, /getUserSubmissions/);
+  assert.match(route, /pickRandomSet/);
+  assert.match(route, /pickMirror/);
+  assert.match(page, /ShallowDream2/);
+  assert.match(page, /同步 Codeforces 判题/);
 });

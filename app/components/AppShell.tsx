@@ -24,15 +24,14 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
           <a href="/extension"><Icon name="book" /><span>扩展安装指南</span></a>
         </nav>
         <div className="sidebar-card"><span>CF</span><div><small>CODEFORCES API</small><b>公开题库可用</b><em>● 无需 API Key</em></div></div>
-        <a className="profile-mini" href="/submissions"><span>?</span><div><b>绑定 CF Handle</b><small>同步公开提交记录</small></div><Icon name="chevron" /></a>
+        <a className="profile-mini" href="/submissions"><span>S2</span><div><b>ShallowDream2</b><small>同步公开提交记录</small></div><Icon name="chevron" /></a>
       </aside>
       <main>
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-label="打开菜单">☰</button>
           <div className="crumb"><span>icpc-trainer</span><i>/</i><b>{active}</b></div>
           <div className="top-actions">
-            <button className="command-search"><Icon name="search" /><span>搜索题目、比赛、模板</span><kbd>⌘ K</kbd></button>
-            <button className="icon-button" aria-label="通知"><Icon name="bell" /><i /></button>
+            <a className="command-search" href="/problem"><Icon name="search" /><span>搜索题目与 Rating 题库</span><kbd>⌘ K</kbd></a>
             <a className="quick-button" href="/vp">＋ 创建 VP</a>
           </div>
         </header>

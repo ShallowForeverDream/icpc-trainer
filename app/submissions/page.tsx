@@ -7,7 +7,7 @@ type Submission = { id: number; createdAt: string; code: string; contestId?: num
 const verdictLabel: Record<string, string> = { OK: "Accepted", WRONG_ANSWER: "Wrong answer", TIME_LIMIT_EXCEEDED: "Time limit", MEMORY_LIMIT_EXCEEDED: "Memory limit", RUNTIME_ERROR: "Runtime error", TESTING: "Testing" };
 
 export default function SubmissionsPage() {
-  const [handle, setHandle] = useState("");
+  const [handle, setHandle] = useState("ShallowDream2");
   const [rows, setRows] = useState<Submission[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "ready" | "error">("idle");
   const [message, setMessage] = useState("无需 API Key，仅同步 Codeforces 公开提交记录。");

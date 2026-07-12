@@ -35,5 +35,5 @@ export const curatedProblems: CuratedProblem[] = [
 ];
 
 export function findCuratedProblem(code: string | undefined) {
-  return curatedProblems.find((problem) => problem.code.replace(" ", "") === (code ?? "").replace(" ", "")) ?? curatedProblems[curatedProblems.length - 1];
+  return curatedProblems.find((problem) => problem.code.replace(" ", "").toLowerCase() === (code ?? "").replace(" ", "").toLowerCase());
 }

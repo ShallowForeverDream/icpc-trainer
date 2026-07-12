@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "icpc-trainer Submit Bridge",
-  "version": "0.1.0",
-  "description": "Send an icpc-trainer C++ draft to the Codeforces submit form.",
+  "version": "0.2.0",
+  "description": "Fill or optionally submit an icpc-trainer C++ draft on Codeforces.",
   "permissions": ["storage", "tabs"],
   "background": { "service_worker": "background.js" },
   "host_permissions": [

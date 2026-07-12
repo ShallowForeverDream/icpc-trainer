@@ -1,53 +1,58 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { FormEvent, useMemo, useState } from "react";
 import { AppShell, Icon, ProblemRow } from "../components/AppShell";
 import { curatedProblems } from "../data/problems";
 
+type CatalogProblem = { code: string; contestId: number; index: string; title: string; titleZh?: string; rating: number; tags: string[]; status?: string };
 type SyncState = "idle" | "syncing" | "live" | "fallback";
+const ranges: Record<string, [number, number]> = { "800–1000": [800, 1000], "1100–1300": [1100, 1300], "1400–1600": [1400, 1600], "1700–1900": [1700, 1900], "2000+": [2000, 3500] };
 
 export default function ProblemLibraryPage() {
+  const [mode, setMode] = useState<"curated" | "rating">("curated");
   const [query, setQuery] = useState("");
-  const [rating, setRating] = useState("全部");
-  const [problems, setProblems] = useState(curatedProblems);
+  const [range, setRange] = useState("1400–1600");
+  const [problems, setProblems] = useState<CatalogProblem[]>(curatedProblems);
   const [syncState, setSyncState] = useState<SyncState>("idle");
+  const [page, setPage] = useState(1);
+  const [total, setTotal] = useState(20);
 
-  const filtered = useMemo(() => problems.filter((problem) => {
-    const matchesQuery = `${problem.code} ${problem.title} ${problem.titleZh} ${problem.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase());
-    const matchesRating = rating === "全部" || (rating === "≤1200" ? problem.rating <= 1200 : rating === "1300–1500" ? problem.rating >= 1300 && problem.rating <= 1500 : problem.rating >= 1600);
-    return matchesQuery && matchesRating;
-  }), [problems, query, rating]);
+  const filtered = useMemo(() => mode === "rating" ? problems : problems.filter((problem) => `${problem.code} ${problem.title} ${problem.titleZh ?? ""} ${problem.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase())), [mode, problems, query]);
 
-  async function syncProblems() {
+  async function syncCurated() {
+    setMode("curated");
     setSyncState("syncing");
     try {
       const response = await fetch("/api/codeforces/problems", { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "同步失败");
       setProblems(data.problems);
+      setTotal(data.problems.length);
       setSyncState(data.source === "codeforces" ? "live" : "fallback");
-    } catch {
-      setSyncState("fallback");
-    }
+    } catch { setProblems(curatedProblems); setTotal(20); setSyncState("fallback"); }
+  }
+
+  async function loadRating(nextPage = 1, event?: FormEvent, selectedRange = range) {
+    event?.preventDefault();
+    setMode("rating");
+    setSyncState("syncing");
+    const [min, max] = ranges[selectedRange];
+    try {
+      const response = await fetch(`/api/codeforces/problems?scope=all&min=${min}&max=${max}&page=${nextPage}&limit=60&q=${encodeURIComponent(query)}`, { cache: "no-store" });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? "加载失败");
+      setProblems(data.problems);
+      setPage(data.page);
+      setTotal(data.total);
+      setSyncState("live");
+    } catch { setSyncState("fallback"); }
   }
 
   return <AppShell active="题库">
-    <section className="library-hero">
-      <div><span className="eyebrow"><span className="live-dot" /> FIRST CURATED SET / 20</span><h1>中文题库，<em>从经典题开始。</em></h1><p>首批 20 道 Codeforces 精选题已完成中文结构化导入；评分、标签和英文题名可从官方公开 API 校准。</p></div>
-      <button className="button button-primary" onClick={syncProblems} disabled={syncState === "syncing"}><Icon name="history" /> {syncState === "syncing" ? "正在同步…" : syncState === "live" ? "已同步官方题库" : "同步 Codeforces"}</button>
-    </section>
-    <div className={`sync-banner sync-${syncState}`}>
-      <span>{syncState === "live" ? "官方数据已校准" : syncState === "fallback" ? "官方接口暂不可用，正在使用内置精选题数据" : "精选题数据已就绪"}</span>
-      <small>公开题库接口无需 API Key · 中文内容为独立整理的题意说明</small>
-    </div>
-    <section className="library-toolbar">
-      <div className="template-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索题号、中文题名、标签…" /></div>
-      <div className="category-tabs">{["全部", "≤1200", "1300–1500", "≥1600"].map((item) => <button key={item} className={rating === item ? "active" : ""} onClick={() => setRating(item)}>{item}</button>)}</div>
-    </section>
-    <section className="panel curated-list">
-      <div className="panel-head"><div><span className="micro-label">CURATED PROBLEMSET</span><h2>精选训练集</h2></div><span className="calendar-total">显示 <b>{filtered.length}</b> / 20</span></div>
-      <div className="problem-list">{filtered.map((problem, index) => <ProblemRow key={problem.code} problem={problem} index={index + 1} />)}</div>
-      {filtered.length === 0 && <div className="empty-state"><Icon name="search" /><h3>没有匹配的题目</h3><p>换一个关键词或难度区间试试。</p></div>}
-    </section>
+    <section className="library-hero"><div><span className="eyebrow"><span className="live-dot" /> CURATED + LIVE RATING POOL</span><h1>中文精选，<em>再扩充到完整题池。</em></h1><p>20 道题提供中文结构化导读；Rating 扩展题库直接读取 Codeforces 官方公开数据。</p></div><button className="button button-primary" onClick={mode === "curated" ? syncCurated : () => loadRating(page)} disabled={syncState === "syncing"}><Icon name="history" /> {syncState === "syncing" ? "正在读取题库…" : "刷新当前题库"}</button></section>
+    <div className={`sync-banner sync-${syncState}`}><span>{syncState === "live" ? "Codeforces 官方数据已加载" : syncState === "fallback" ? "官方接口暂不可用，保留当前数据" : "首批中文精选题已就绪"}</span><small>默认 Handle：ShallowDream2 · 公开接口无需 API Key</small></div>
+    <div className="catalog-mode-tabs"><button className={mode === "curated" ? "active" : ""} onClick={() => { setMode("curated"); setProblems(curatedProblems); setTotal(20); }}>中文精选 20</button><button className={mode === "rating" ? "active" : ""} onClick={() => loadRating(1)}>按 Rating 扩展</button></div>
+    <form className="library-toolbar" onSubmit={(event) => mode === "rating" ? loadRating(1, event) : event.preventDefault()}><div className="template-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索题号、题名或标签…" /></div>{mode === "rating" && <div className="category-tabs">{Object.keys(ranges).map((item) => <button type="button" key={item} className={range === item ? "active" : ""} onClick={() => { setRange(item); loadRating(1, undefined, item); }}>{item}</button>)}<button type="submit">搜索</button></div>}</form>
+    <section className="panel curated-list"><div className="panel-head"><div><span className="micro-label">{mode === "curated" ? "CHINESE CURATED SET" : `LIVE RATING / ${range}`}</span><h2>{mode === "curated" ? "精选训练集" : "Codeforces Rating 题库"}</h2></div><span className="calendar-total">当前 <b>{filtered.length}</b> / {total}</span></div><div className="problem-list">{filtered.map((problem, index) => <ProblemRow key={problem.code} problem={problem} index={(page - 1) * 60 + index + 1} />)}</div>{filtered.length === 0 && <div className="empty-state"><Icon name="search" /><h3>没有匹配的题目</h3><p>换一个关键词或 Rating 区间试试。</p></div>}{mode === "rating" && <div className="catalog-pagination"><button disabled={page <= 1 || syncState === "syncing"} onClick={() => loadRating(page - 1)}>← 上一页</button><span>第 {page} / {Math.max(1, Math.ceil(total / 60))} 页</span><button disabled={page * 60 >= total || syncState === "syncing"} onClick={() => loadRating(page + 1)}>下一页 →</button></div>}</section>
   </AppShell>;
 }

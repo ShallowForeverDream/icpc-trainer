@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppShell, Icon } from "../../components/AppShell";
 import { findCuratedProblem } from "../../data/problems";
@@ -18,17 +18,40 @@ int main() {
 
 export default function ProblemDetailPage() {
   const params = useParams<{ code: string }>();
-  const problem = useMemo(() => findCuratedProblem(decodeURIComponent(params.code ?? "1904C")), [params.code]);
+  const requestedCode = decodeURIComponent(params.code ?? "1904C");
+  const curated = useMemo(() => findCuratedProblem(requestedCode), [requestedCode]);
+  const [problem, setProblem] = useState(() => curated ?? { code: `CF ${requestedCode}`, contestId: Number(requestedCode.match(/^\d+/)?.[0] ?? 0), index: requestedCode.replace(/^\d+/, ""), title: "Codeforces Problem", titleZh: "中文题面待导入", rating: 0, tags: ["Codeforces"], summaryZh: "这道题来自按 Rating 扩展的实时题库，中文结构化题面尚未导入。", inputZh: "请查看 Codeforces 英文原题。", outputZh: "请查看 Codeforces 英文原题。" });
   const [tab, setTab] = useState("题目");
   const [favorite, setFavorite] = useState(false);
   const [code, setCode] = useState(initialCode);
   const [submitState, setSubmitState] = useState<"idle" | "sent">("idle");
+  const [autoSubmit, setAutoSubmit] = useState(false);
+
+  useEffect(() => {
+    if (curated) { setProblem(curated); return; }
+    fetch(`/api/codeforces/problems?scope=single&code=${encodeURIComponent(requestedCode)}`).then((response) => response.json()).then((data) => {
+      if (!data.problem) return;
+      setProblem({ ...data.problem, titleZh: "中文题面待导入", summaryZh: "这道题来自按 Rating 扩展的实时题库，中文结构化题面尚未导入。请在训练时结合英文原题。", inputZh: "请查看 Codeforces 英文原题中的输入说明。", outputZh: "请查看 Codeforces 英文原题中的输出说明。" });
+    }).catch(() => undefined);
+  }, [curated, requestedCode]);
+
+  useEffect(() => {
+    const favorites = JSON.parse(localStorage.getItem("icpc-trainer-favorites") ?? "[]") as string[];
+    setFavorite(favorites.includes(problem.code));
+  }, [problem.code]);
+
+  function toggleFavorite() {
+    const favorites = new Set<string>(JSON.parse(localStorage.getItem("icpc-trainer-favorites") ?? "[]"));
+    if (favorites.has(problem.code)) favorites.delete(problem.code); else favorites.add(problem.code);
+    localStorage.setItem("icpc-trainer-favorites", JSON.stringify([...favorites]));
+    setFavorite(favorites.has(problem.code));
+  }
 
   function sendToExtension() {
     window.postMessage({
       source: "icpc-trainer",
       type: "ICPC_TRAINER_SUBMIT",
-      payload: { contestId: problem.contestId, index: problem.index, languageLabel: "GNU C++20", sourceCode: code },
+      payload: { contestId: problem.contestId, index: problem.index, languageLabel: "GNU C++20", sourceCode: code, autoSubmit },
     }, window.location.origin);
     setSubmitState("sent");
   }
@@ -36,7 +59,7 @@ export default function ProblemDetailPage() {
   return <AppShell active="题库">
     <div className="problem-page-head">
       <div><a href="/problem">← 返回题库</a><span>首批精选 · {problem.code}</span></div>
-      <div><a href={`https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`} target="_blank" rel="noreferrer">查看英文原题 ↗</a><button className={favorite ? "saved" : ""} onClick={() => setFavorite(!favorite)}>☆ {favorite ? "已收藏" : "收藏"}</button></div>
+      <div><a href={`https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`} target="_blank" rel="noreferrer">查看英文原题 ↗</a><button className={favorite ? "saved" : ""} onClick={toggleFavorite}>☆ {favorite ? "已收藏" : "收藏"}</button></div>
     </div>
     <section className="problem-workspace">
       <article className="statement-panel">
@@ -56,7 +79,7 @@ export default function ProblemDetailPage() {
       <aside className="code-panel">
         <div className="editor-head"><div><span className="active-dot" /> main.cpp</div><select aria-label="编译语言"><option>GNU C++20</option></select></div>
         <textarea className="code-editor" value={code} onChange={(event) => setCode(event.target.value)} spellCheck={false} aria-label="C++ 代码编辑器" />
-        <div className="editor-footer"><div><a href="/templates">＋ 插入模板</a><span>当前草稿仅保存在本页</span></div><button className="submit-button" onClick={sendToExtension}>{submitState === "sent" ? <><Icon name="check" /> 已发送给浏览器扩展</> : <>提交到 Codeforces <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
+        <div className="editor-footer"><div><a href="/templates">＋ 插入模板</a><span>当前草稿仅保存在本页</span></div><label className="auto-submit-option"><input type="checkbox" checked={autoSubmit} onChange={(event) => setAutoSubmit(event.target.checked)} /> 预填后自动点击 Codeforces 提交按钮</label><button className="submit-button" onClick={sendToExtension}>{submitState === "sent" ? <><Icon name="check" /> 已发送给浏览器扩展</> : <>提交到 Codeforces <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
       </aside>
     </section>
   </AppShell>;

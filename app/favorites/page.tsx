@@ -1,4 +1,30 @@
 "use client";
-import { AppShell, ProblemRow } from "../components/AppShell";
 
-export default function FavoritesPage(){const items=[{code:"CF 2242E",title:"Product of Closures",rating:2200,tags:["构造","思维"],status:"未尝试"},{code:"CF 1904C",title:"Array Game",rating:1700,tags:["贪心","数学"],status:"已尝试"},{code:"GYM 104901K",title:"Deletion Game",rating:2100,tags:["最短路","建模"],status:"未尝试"}];return <AppShell active="收藏"><section className="library-hero"><div><span className="eyebrow"><span className="live-dot"/> SAVED PROBLEMS</span><h1>收藏夹</h1><p>把想做、想重做和适合队友的题目留在这里。</p></div><button className="button button-primary">＋ 新建分组</button></section><section className="content-grid favorite-layout"><div className="panel"><div className="panel-head"><div><span className="micro-label">DEFAULT LIST</span><h2>稍后训练</h2></div><span className="calendar-total">{items.length} 道题</span></div><div className="problem-list">{items.map((x,i)=><ProblemRow key={x.code} problem={x} index={i+1}/>)}</div></div><aside className="panel collection-list"><div className="panel-head"><div><span className="micro-label">COLLECTIONS</span><h2>分组</h2></div></div><button className="active"><span>稍后训练</span><b>3</b></button><button><span>图论专项</span><b>12</b></button><button><span>队内分享</span><b>8</b></button><button><span>复盘题</span><b>5</b></button></aside></section></AppShell>}
+import { useEffect, useState } from "react";
+import { AppShell, Icon, ProblemRow } from "../components/AppShell";
+import { curatedProblems } from "../data/problems";
+
+type FavoriteProblem = { code: string; title: string; titleZh?: string; rating: number; tags: string[] };
+
+export default function FavoritesPage() {
+  const [items, setItems] = useState<FavoriteProblem[]>([]);
+  useEffect(() => {
+    const codes = JSON.parse(localStorage.getItem("icpc-trainer-favorites") ?? "[]") as string[];
+    Promise.all(codes.map(async (code) => {
+      const curated = curatedProblems.find((problem) => problem.code === code);
+      if (curated) return curated;
+      try {
+        const response = await fetch(`/api/codeforces/problems?scope=single&code=${encodeURIComponent(code)}`);
+        const data = await response.json();
+        return data.problem as FavoriteProblem | undefined;
+      } catch { return undefined; }
+    })).then((problems) => setItems(problems.filter(Boolean) as FavoriteProblem[]));
+  }, []);
+
+  function clearFavorites() {
+    localStorage.removeItem("icpc-trainer-favorites");
+    setItems([]);
+  }
+
+  return <AppShell active="收藏"><section className="library-hero"><div><span className="eyebrow"><span className="live-dot" /> DEVICE-SAVED PROBLEMS</span><h1>收藏夹</h1><p>账号系统暂缓期间，收藏会安全地保存在当前浏览器。</p></div>{items.length > 0 && <button className="button button-ghost" onClick={clearFavorites}>清空收藏</button>}</section><section className="panel curated-list"><div className="panel-head"><div><span className="micro-label">LOCAL COLLECTION</span><h2>稍后训练</h2></div><span className="calendar-total">{items.length} 道题</span></div>{items.length ? <div className="problem-list">{items.map((problem, index) => <ProblemRow key={problem.code} problem={problem} index={index + 1} />)}</div> : <div className="empty-state"><Icon name="star" /><h3>还没有收藏题目</h3><p>进入题库，打开题目后点击「收藏」。</p><a className="button button-primary" href="/problem">浏览题库</a></div>}</section></AppShell>;
+}

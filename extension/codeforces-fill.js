@@ -19,4 +19,9 @@
   source.scrollIntoView({ behavior: "smooth", block: "center" });
   source.style.outline = "3px solid #b8f23e";
   await chrome.storage.local.remove("pendingSubmission");
+  if (pendingSubmission.autoSubmit) {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    const submit = source.form?.querySelector('input[type="submit"], button[type="submit"]');
+    if (submit instanceof HTMLElement) submit.click();
+  }
 })();

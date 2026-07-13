@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProblemset, getUserSubmissions, publicProblem, type CodeforcesProblem } from "../../../lib/codeforces";
 
-type GenerateRequest = { handle?: string; mode?: string; count?: number; targetRating?: number; durationMinutes?: number; seed?: string };
+type GenerateRequest = { handle?: string; participants?: string[]; mode?: string; count?: number; targetRating?: number; durationMinutes?: number; seed?: string };
 
 function hashSeed(value: string) {
   let hash = 2166136261;
@@ -47,6 +47,23 @@ function pickMirror(pool: CodeforcesProblem[], desiredCount: number, target: num
   return candidates[Math.floor(random() * Math.min(12, candidates.length))] ?? null;
 }
 
+function pickCombined(pool: CodeforcesProblem[], desiredCount: number, target: number, random: () => number) {
+  const groups = new Map<number, CodeforcesProblem[]>();
+  for (const problem of pool) {
+    if (!problem.contestId) continue;
+    const group = groups.get(problem.contestId) ?? [];
+    group.push(problem);
+    groups.set(problem.contestId, group);
+  }
+  const candidates = [...groups].map(([contestId, problems]) => ({ contestId, problems, average: problems.reduce((sum, item) => sum + (item.rating ?? target), 0) / problems.length })).filter((item) => item.problems.length >= 2).sort((a, b) => Math.abs(a.average - target) - Math.abs(b.average - target));
+  const chosen = [];
+  const window = candidates.slice(0, 24);
+  const sourceCount = Math.min(4, Math.max(2, Math.ceil(desiredCount / 4)));
+  while (chosen.length < sourceCount && window.length) chosen.push(window.splice(Math.floor(random() * window.length), 1)[0]);
+  if (chosen.length < 2) return null;
+  return { selected: pickRandomSet(chosen.flatMap((item) => item.problems), desiredCount, target, random), contestIds: chosen.map((item) => item.contestId) };
+}
+
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as GenerateRequest;
@@ -55,8 +72,9 @@ export async function POST(request: NextRequest) {
       const upstream = await fetch(`${backend}/vp/generate`, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "icpc-trainer-sites/0.1" }, body: JSON.stringify(body) });
       return NextResponse.json(await upstream.json(), { status: upstream.status });
     }
-    const handle = (body.handle ?? "ShallowDream2").trim();
-    if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) return NextResponse.json({ error: "Codeforces Handle 无效" }, { status: 400 });
+    const participants = [...new Set((body.participants?.length ? body.participants : [body.handle ?? "ShallowDream2"]).map((item) => item.trim()).filter(Boolean))].slice(0, 12);
+    if (!participants.length || participants.some((item) => !/^[A-Za-z0-9_.-]{3,24}$/.test(item))) return NextResponse.json({ error: "参赛 Handle 列表无效" }, { status: 400 });
+    const handle = participants[0];
     const count = Math.max(5, Math.min(13, Number(body.count) || 10));
     const targetRating = Math.max(800, Math.min(3000, Number(body.targetRating) || 1600));
     const durationMinutes = Math.max(60, Math.min(300, Number(body.durationMinutes) || 180));
@@ -69,24 +87,38 @@ export async function POST(request: NextRequest) {
 
     let selected: CodeforcesProblem[] = [];
     let sourceContestId: number | null = null;
+    let sourceContestIds: number[] = [];
     if (body.mode === "原场镜像") {
       const mirror = pickMirror(pool, count, targetRating, random);
       if (!mirror) return NextResponse.json({ error: "没有找到符合条件的历史比赛，请调整目标 Rating" }, { status: 422 });
       selected = mirror.problems;
       sourceContestId = mirror.contestId;
+      sourceContestIds = [mirror.contestId];
+    } else if (body.mode === "多场组合") {
+      const combined = pickCombined(pool, count, targetRating, random);
+      if (!combined) return NextResponse.json({ error: "没有找到足够的历史比赛用于组合" }, { status: 422 });
+      selected = combined.selected;
+      sourceContestIds = combined.contestIds;
     } else {
       selected = pickRandomSet(pool, count, targetRating, random);
     }
     if (selected.length < 5) return NextResponse.json({ error: "可用题目不足，请调整组卷条件" }, { status: 422 });
 
+    if (!sourceContestIds.length) sourceContestIds = [...new Set(selected.map((problem) => problem.contestId).filter((value): value is number => Boolean(value)))];
+    const sourceContests = sourceContestIds.map((contestId) => {
+      const sourceProblems = selected.filter((problem) => problem.contestId === contestId);
+      return { contestId, problemCount: sourceProblems.length, averageRating: Math.round(sourceProblems.reduce((sum, item) => sum + (item.rating ?? targetRating), 0) / Math.max(1, sourceProblems.length)), url: `https://codeforces.com/contest/${contestId}/standings` };
+    });
     return NextResponse.json({
       id: `vp-${hashSeed(`${seed}:${handle}`).toString(16)}`,
       handle,
-      mode: body.mode === "原场镜像" ? "原场镜像" : "随机组卷",
+      participants,
+      mode: body.mode === "原场镜像" ? "原场镜像" : body.mode === "多场组合" ? "多场组合" : "个性化组卷",
       seed,
       durationMinutes,
       targetRating,
       sourceContestId,
+      sourceContests,
       excludedSolved: solved.size,
       createdAt: new Date().toISOString(),
       problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem) })),

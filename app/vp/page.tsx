@@ -1,20 +1,29 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { AppShell, Icon, Pill } from "../components/AppShell";
+import { AppShell, Icon } from "../components/AppShell";
 import { browserApiUrl } from "../lib/browser-api";
 
 type VpProblem = { slot: string; code: string; contestId: number; index: string; title: string; rating: number; tags: string[] };
-type Contest = { id: string; handle: string; mode: string; seed: string; durationMinutes: number; targetRating: number; sourceContestId: number | null; excludedSolved: number; createdAt: string; startedAt?: number; problems: VpProblem[]; accepted?: string[] };
+type SourceContest = { contestId: number; problemCount: number; averageRating: number; url: string };
+type ProblemStanding = { solved: boolean; wrongAttempts: number; solvedMinutes: number | null; penalty: number };
+type StandingRow = { rank: number; handle: string; solved: number; penalty: number; problems: Record<string, ProblemStanding> };
+type Standings = { updatedAt: string; rows: StandingRow[] };
+type Contest = { id: string; handle: string; participants?: string[]; mode: string; seed: string; durationMinutes: number; targetRating: number; sourceContestId: number | null; sourceContests?: SourceContest[]; excludedSolved: number; createdAt: string; startedAt?: number; problems: VpProblem[]; standings?: Standings };
 
 const STORAGE_KEY = "icpc-trainer-active-vp";
+const modeOptions = [
+  ["个性化组卷", "跨比赛按 Rating 形成难度梯度", "✦"],
+  ["原场镜像", "完整复现一场历史比赛", "◫"],
+  ["多场组合", "从 2–4 场历史比赛组合", "⊞"],
+];
 
 export default function VpPage() {
-  const [mode, setMode] = useState("随机组卷");
+  const [mode, setMode] = useState("个性化组卷");
   const [duration, setDuration] = useState(180);
   const [count, setCount] = useState(10);
   const [targetRating, setTargetRating] = useState(1600);
-  const [handle, setHandle] = useState("ShallowDream2");
+  const [participantText, setParticipantText] = useState("ShallowDream2");
   const [seed, setSeed] = useState("");
   const [contest, setContest] = useState<Contest | null>(null);
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "syncing">("idle");
@@ -30,7 +39,14 @@ export default function VpPage() {
     const timer = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(timer);
   }, [contest?.startedAt]);
+  useEffect(() => {
+    if (!contest?.startedAt) return;
+    void syncStandings(true);
+    const timer = window.setInterval(() => void syncStandings(true), 30_000);
+    return () => window.clearInterval(timer);
+  }, [contest?.id, contest?.startedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const participants = useMemo(() => [...new Set(participantText.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean))], [participantText]);
   const remaining = useMemo(() => {
     if (!contest?.startedAt) return contest ? contest.durationMinutes * 60 : duration * 60;
     return Math.max(0, contest.durationMinutes * 60 - Math.floor((now - contest.startedAt) / 1000));
@@ -43,10 +59,11 @@ export default function VpPage() {
   }
 
   async function generateContest() {
+    if (!participants.length) { setStatus("error"); setMessage("至少输入一个 Codeforces Handle"); return; }
     setStatus("loading");
     setMessage("");
     try {
-      const response = await fetch(browserApiUrl("/vp/generate"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle, mode, count, targetRating, durationMinutes: duration, seed: seed || undefined }) });
+      const response = await fetch(browserApiUrl("/vp/generate"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants, handle: participants[0], mode, count, targetRating, durationMinutes: duration, seed: seed || undefined }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "组卷失败");
       save(data);
@@ -60,59 +77,57 @@ export default function VpPage() {
 
   function startContest() {
     if (!contest || contest.startedAt) return;
-    save({ ...contest, startedAt: Date.now(), accepted: [] });
+    save({ ...contest, startedAt: Date.now() });
     setNow(Date.now());
   }
 
-  async function syncVerdicts() {
-    if (!contest) return;
-    setStatus("syncing");
+  async function syncStandings(silent = false) {
+    if (!contest?.startedAt) return;
+    if (!silent) setStatus("syncing");
     try {
-      const response = await fetch(browserApiUrl(`/codeforces/submissions?handle=${encodeURIComponent(contest.handle)}`), { cache: "no-store" });
+      const response = await fetch(browserApiUrl("/vp/standings"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants: contest.participants?.length ? contest.participants : [contest.handle], startedAt: contest.startedAt, durationMinutes: contest.durationMinutes, problems: contest.problems.map(({ contestId, index }) => ({ contestId, index })) }) });
       const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "同步失败");
-      const accepted = new Set<string>(contest.accepted ?? []);
-      for (const submission of data.submissions) if (submission.verdict === "OK" && contest.problems.some((problem) => problem.code === submission.code)) accepted.add(submission.code);
-      save({ ...contest, accepted: [...accepted] });
-      setMessage(`已检查最近提交，当前 AC ${accepted.size} 题`);
+      if (!response.ok) throw new Error(data.error ?? "榜单同步失败");
+      save({ ...contest, standings: data });
+      setMessage(`榜单更新于 ${new Date(data.updatedAt).toLocaleTimeString("zh-CN")}`);
       setStatus("idle");
     } catch (error) {
-      setMessage(error instanceof Error ? error.message : "同步失败");
-      setStatus("error");
+      if (!silent) { setMessage(error instanceof Error ? error.message : "榜单同步失败"); setStatus("error"); }
     }
   }
 
-  if (contest) return <AppShell active="模拟赛">
-    <section className="contest-room-head">
-      <div><span className="eyebrow"><span className="live-dot" /> {contest.startedAt ? "CONTEST RUNNING" : "CONTEST READY"}</span><h1>{contest.mode} · {contest.problems.length} 题</h1><p>绑定 {contest.handle} · Seed <code>{contest.seed}</code> · 已排除 {contest.excludedSolved} 道历史 AC</p></div>
-      <div className="contest-clock"><small>{contest.startedAt ? "剩余时间" : "比赛时长"}</small><b>{timeLabel}</b><span>{contest.accepted?.length ?? 0} / {contest.problems.length} AC</span></div>
-    </section>
-    <section className="contest-actions">
-      {!contest.startedAt ? <button className="button button-primary" onClick={startContest}><Icon name="play" /> 开始比赛</button> : <button className="button button-primary" onClick={syncVerdicts} disabled={status === "syncing"}><Icon name="history" /> {status === "syncing" ? "检查中…" : "同步 Codeforces 判题"}</button>}
-      <button className="button button-ghost" onClick={() => save(null)}>结束并重新组卷</button>
-      {message && <span className={status === "error" ? "form-error" : ""}>{message}</span>}
-    </section>
-    <section className="contest-problem-grid">
-      {contest.problems.map((problem) => {
-        const accepted = contest.accepted?.includes(problem.code);
-        return <article className={`contest-problem-card ${accepted ? "accepted" : ""}`} key={problem.code}><span>{problem.slot}</span><div><small>{contest.startedAt ? problem.code : "SOURCE HIDDEN UNTIL START"}</small><h2>{contest.startedAt ? problem.title : `Problem ${problem.slot}`}</h2>{contest.startedAt && <p>{problem.rating} · {problem.tags.slice(0, 3).join(" / ")}</p>}</div><strong>{accepted ? "AC" : "—"}</strong>{contest.startedAt && <a href={`/problem/${problem.contestId}${problem.index}`}>打开题目 →</a>}</article>;
-      })}
-    </section>
-  </AppShell>;
+  if (contest) {
+    const rows = contest.standings?.rows ?? (contest.participants ?? [contest.handle]).map((handle, index) => ({ rank: index + 1, handle, solved: 0, penalty: 0, problems: {} }));
+    return <AppShell active="模拟赛">
+      <section className="contest-room-head">
+        <div><span className="eyebrow"><span className="live-dot" /> {contest.startedAt ? "实时比赛" : "比赛已生成"}</span><h1>{contest.mode} · {contest.problems.length} 题</h1><p>{(contest.participants ?? [contest.handle]).join(" / ")} · Seed <code>{contest.seed}</code> · 已排除 {contest.excludedSolved} 道历史 AC</p></div>
+        <div className="contest-clock"><small>{contest.startedAt ? "剩余时间" : "比赛时长"}</small><b>{timeLabel}</b><span>{rows[0]?.solved ?? 0} AC · {rows.length} 位参赛者</span></div>
+      </section>
+      <section className="contest-actions">
+        {!contest.startedAt ? <button className="button button-primary" onClick={startContest}><Icon name="play" /> 开始比赛</button> : <button className="button button-primary" onClick={() => void syncStandings(false)} disabled={status === "syncing"}><Icon name="history" /> {status === "syncing" ? "同步中…" : "立即刷新榜单"}</button>}
+        <button className="button button-ghost" onClick={() => save(null)}>结束并重新组卷</button>
+        {message ? <span className={status === "error" ? "form-error" : ""}>{message}</span> : null}
+      </section>
+      {contest.startedAt && contest.sourceContests?.length ? <section className="contest-sources"><span>来源参考</span>{contest.sourceContests.map((source) => <a key={source.contestId} href={source.url} target="_blank" rel="noreferrer">CF {source.contestId} · {source.problemCount} 题 · 均分 {source.averageRating} ↗</a>)}</section> : null}
+      <section className="contest-live-layout">
+        <div className="contest-problem-grid">{contest.problems.map((problem) => {
+          const leaderState = rows[0]?.problems?.[`${problem.contestId}${problem.index}`];
+          return <article className={`contest-problem-card ${leaderState?.solved ? "accepted" : ""}`} key={problem.code}><span>{problem.slot}</span><div><small>{contest.startedAt ? problem.code : "START 后显示来源"}</small><h2>{contest.startedAt ? problem.title : `Problem ${problem.slot}`}</h2>{contest.startedAt ? <p>{problem.rating} · {problem.tags.slice(0, 3).join(" / ")}</p> : null}</div><strong>{leaderState?.solved ? `+${leaderState.wrongAttempts}` : leaderState?.wrongAttempts ? `-${leaderState.wrongAttempts}` : "—"}</strong>{contest.startedAt ? <a href={`/problem/${problem.contestId}${problem.index}`}>打开 →</a> : null}</article>;
+        })}</div>
+        <article className="panel live-standings"><div className="panel-head"><div><h2>实时榜单</h2><p>每 30 秒读取 Codeforces 公开提交</p></div><span className="live-dot" /></div><div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{rows.map((row) => <div className="standings-row" key={row.handle}><strong>{row.rank}</strong><b>{row.handle}</b><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div></article>
+      </section>
+    </AppShell>;
+  }
 
   return <AppShell active="模拟赛">
-    <section className="vp-hero"><div><span className="eyebrow"><span className="live-dot" /> REAL CODEFORCES POOL</span><h1>生成一场真正可做的 VP。</h1><p>实时读取 Codeforces 题库，排除 ShallowDream2 已 AC 的题目，并保存可复现随机种子。</p></div><div className="vp-rules"><span><b>−20</b>错误罚时</span><span><b>1h</b>最后封榜</span><span><b>0</b>重复题</span></div></section>
-    <section className="vp-builder">
+    <section className="vp-builder-head"><div><h1>创建 VP</h1><p>支持个性化组卷、原场镜像和多场组合；比赛开始后自动生成多人实时榜单。</p></div><div><b>{duration / 60}h</b><span>{count} 题</span><span>{participants.length || 0} 人</span></div></section>
+    <section className="vp-builder simplified-vp-builder">
       <div className="builder-main">
-        <div className="section-number"><span>01</span><div><h2>选择比赛模式</h2><p>随机组卷建立难度梯度，原场镜像选择一场真实历史比赛。</p></div></div>
-        <div className="mode-grid">{[["随机组卷", "跨比赛按 Rating 生成", "✦"], ["原场镜像", "选择完整历史比赛", "◫"]].map(([name, desc, icon]) => <button key={name} className={mode === name ? "active" : ""} onClick={() => setMode(name)}><b>{icon}</b><span><strong>{name}</strong><small>{desc}</small></span><i>{mode === name ? "●" : "○"}</i></button>)}</div>
-        <div className="section-number"><span>02</span><div><h2>比赛规模</h2><p>原场镜像会尽量选择题量接近的比赛。</p></div></div>
-        <div className="setting-row"><label>比赛时长</label><div className="segmented">{[[120, "2 小时"], [180, "3 小时"], [300, "5 小时"]].map(([value, label]) => <button key={value} className={duration === value ? "active" : ""} onClick={() => setDuration(Number(value))}>{label}</button>)}</div></div>
-        <div className="setting-row"><label>题目数量</label><div className="counter"><button onClick={() => setCount(Math.max(8, count - 1))}>−</button><strong>{count}</strong><button onClick={() => setCount(Math.min(13, count + 1))}>＋</button><span>8–13 道</span></div></div>
-        <div className="section-number"><span>03</span><div><h2>题池与复现</h2><p>Handle 用于排除已 AC；同一 Seed 和条件可复现同一场比赛。</p></div></div>
-        <div className="form-grid"><label>Codeforces Handle<input value={handle} onChange={(event) => setHandle(event.target.value)} /></label><label>目标 Rating<select value={targetRating} onChange={(event) => setTargetRating(Number(event.target.value))}>{[1200, 1400, 1600, 1800, 2000, 2200].map((value) => <option key={value}>{value}</option>)}</select></label><label>随机 Seed（可留空）<input value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="自动生成" /></label><label>题目来源<select><option>Codeforces 公开题库</option></select></label></div>
+        <div className="builder-section"><div><h2>比赛模式</h2><p>不同模式都会排除主 Handle 已 AC 的题目。</p></div><div className="mode-grid three-modes">{modeOptions.map(([name, description, icon]) => <button key={name} className={mode === name ? "active" : ""} onClick={() => setMode(name)}><b>{icon}</b><span><strong>{name}</strong><small>{description}</small></span><i>{mode === name ? "●" : "○"}</i></button>)}</div></div>
+        <div className="builder-section"><div><h2>规模与难度</h2><p>原场镜像会优先匹配接近题量和目标 Rating 的历史比赛。</p></div><div className="vp-inline-settings"><label>比赛时长<div className="segmented">{[[120, "2 小时"], [180, "3 小时"], [300, "5 小时"]].map(([value, label]) => <button type="button" key={value} className={duration === value ? "active" : ""} onClick={() => setDuration(Number(value))}>{label}</button>)}</div></label><label>题目数量<div className="counter"><button type="button" onClick={() => setCount(Math.max(5, count - 1))}>−</button><strong>{count}</strong><button type="button" onClick={() => setCount(Math.min(13, count + 1))}>＋</button></div></label><label>目标 Rating<select value={targetRating} onChange={(event) => setTargetRating(Number(event.target.value))}>{[1200, 1400, 1600, 1800, 2000, 2200].map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
+        <div className="builder-section"><div><h2>参赛者与复现</h2><p>第一位 Handle 用于排除已完成题目；所有 Handle 都会进入实时榜单。</p></div><div className="form-grid vp-participant-form"><label>Codeforces Handles（逗号分隔）<textarea value={participantText} onChange={(event) => setParticipantText(event.target.value)} placeholder="ShallowDream2, teammate" /></label><label>随机 Seed（可留空）<input value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="自动生成" /></label></div></div>
       </div>
-      <aside className="builder-summary"><span className="micro-label">CONTEST PREVIEW</span><h2>{mode}</h2><div className="summary-time"><b>{duration / 60}</b><span>小时</span><i>·</i><b>{count}</b><span>题</span></div><div className="difficulty-curve">{Array.from({ length: Math.min(10, count) }, (_, index) => <i key={index} style={{ height: `${25 + index * 7}%` }}><span>{String.fromCharCode(65 + index)}</span></i>)}</div><div className="summary-list"><p><Icon name="check" /> 排除 {handle || "绑定账号"} 最近 1000 条提交中的 AC</p><p><Icon name="check" /> 排除交互题与无 Rating 题目</p><p><Icon name="check" /> 保存随机种子和本机比赛进度</p><p><Icon name="check" /> 可同步 Codeforces 判题结果</p></div><div className="assurance"><Pill>LIVE POOL</Pill><span>生成时读取官方公开 API</span></div><button className="create-contest" onClick={generateContest} disabled={status === "loading"}>{status === "loading" ? "正在同步题库并组卷…" : "生成比赛 →"}</button>{message && <small className="summary-foot form-error">{message}</small>}</aside>
+      <aside className="builder-summary"><h2>{mode}</h2><div className="summary-time"><b>{duration / 60}</b><span>小时</span><i>·</i><b>{count}</b><span>题</span></div><div className="difficulty-curve">{Array.from({ length: Math.min(10, count) }, (_, index) => <i key={index} style={{ height: `${25 + index * 7}%` }}><span>{String.fromCharCode(65 + index)}</span></i>)}</div><div className="summary-list"><p><Icon name="check" /> 主账号：{participants[0] || "未填写"}</p><p><Icon name="check" /> {participants.length} 位参赛者进入实时榜单</p><p><Icon name="check" /> 20 分钟错误罚时</p><p><Icon name="check" /> 提供历史比赛来源参考</p></div><button className="create-contest" onClick={() => void generateContest()} disabled={status === "loading"}>{status === "loading" ? "正在同步并组卷…" : "生成比赛 →"}</button>{message ? <small className="summary-foot form-error">{message}</small> : null}</aside>
     </section>
   </AppShell>;
 }

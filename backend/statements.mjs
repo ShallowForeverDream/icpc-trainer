@@ -12,6 +12,7 @@ const execFileAsync = promisify(execFile);
 const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
+const TRANSLATION_VERSION = 3;
 const USER_AGENT = "icpc-trainer-statement-importer/0.3 (+https://icpc-lab-trainer.zhuj7933.chatgpt.site)";
 const importJobs = new Map();
 const recentTranslationAttempts = new Map();
@@ -34,6 +35,7 @@ db.exec(`
     source_kind TEXT,
     original_html TEXT,
     chinese_html TEXT,
+    translation_version INTEGER NOT NULL DEFAULT 0,
     images_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'importing',
     error TEXT,
@@ -50,6 +52,7 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS statement_assets_code_idx ON statement_assets(code);
 `);
+if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "translation_version")) db.exec("ALTER TABLE problem_statements ADD COLUMN translation_version INTEGER NOT NULL DEFAULT 0");
 
 const now = () => Date.now();
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -79,7 +82,8 @@ function publicStatement(row) {
     sourceUrl: row.source_url || `https://codeforces.com/problemset/problem/${row.contest_id}/${row.problem_index}`,
     sourceKind: row.source_kind || "pending",
     originalHtml: row.original_html || null,
-    chineseHtml: row.chinese_html || null,
+    chineseHtml: Number(row.translation_version || 0) >= TRANSLATION_VERSION ? row.chinese_html || null : null,
+    translationVersion: Number(row.translation_version || 0),
     images: safeImages(row.images_json),
     status: row.status,
     message: row.error || null,
@@ -111,6 +115,8 @@ function saveOriginal(document) {
       source_kind=excluded.source_kind,
       original_html=excluded.original_html,
       images_json=excluded.images_json,
+      chinese_html=NULL,
+      translation_version=0,
       status='translating',
       error=NULL,
       updated_at=excluded.updated_at
@@ -238,10 +244,12 @@ function parseModelJson(value) {
 
 async function translateChunk(texts) {
   const prompt = [
-    "你是 ICPC 竞赛题面翻译器。请把下面 JSON 数组中的每一项完整翻译为准确、自然的简体中文。",
-    "不得原样复制英文自然语言，不得解题或补充信息。变量名、数字、公式、数学符号、代码标识符以及要求原样输出的 YES/NO 等字面量保持不变。",
+    "你是 QOJ / 洛谷风格的中文竞赛题面编辑，不做逐词直译。请把下面 JSON 数组中的每一项改写为准确、自然、简洁的简体中文题面。",
+    "先理解整句逻辑，再按中文语序表达；不得解题、删减条件或补充信息。所有量词、奇偶性、上下界、先后顺序和充分必要关系必须准确。",
+    "术语统一：array=数组，index=下标，segment/subarray=区间/子数组，operation=操作，query=询问，positive integer=正整数，print/output=输出，input=输入，distinct=互不相同，at most=至多，at least=至少。禁止使用“阵列”“键入”“您”。",
+    "变量名、数字、公式、数学符号、代码标识符以及要求原样输出的 YES/NO 等字面量保持不变。",
     "只返回一个 JSON 对象，格式必须为 {\"translations\":[\"中文译文\"]}；条目数量和顺序必须与输入完全一致。",
-    "示例：输入 [\"Given an integer n, print YES if it is even.\"]，输出 {\"translations\":[\"给定一个整数 n，如果它是偶数则输出 YES。\"]}",
+    "示例：输入 [\"You are given an array a of n integers. Perform the following operation any number of times.\"]，输出 {\"translations\":[\"给定一个长度为 n 的整数数组 a。你可以进行任意次下述操作。\"]}",
     `输入：${JSON.stringify(texts)}`,
   ].join("\n");
   const payload = await translatorFetch("/v1/chat/completions", {
@@ -250,17 +258,29 @@ async function translateChunk(texts) {
     body: JSON.stringify({
       model: TRANSLATOR_MODEL,
       temperature: 0,
-      max_tokens: 7000,
+      max_tokens: 3500,
       response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: "你只负责把英文竞赛题面翻译成简体中文，必须翻译所有英文自然语言，禁止解题或添加解释。" },
+        { role: "system", content: "你是严谨的中文算法竞赛题面编辑。译文应像人工校对后的 QOJ 中文题面，术语统一、语序自然、语义精确，禁止生硬逐词直译。" },
         { role: "user", content: prompt },
       ],
     }),
   }, 5 * 60_000);
   const parsed = parseModelJson(payload.choices?.[0]?.message?.content);
   if (!Array.isArray(parsed.translations) || parsed.translations.length !== texts.length || parsed.translations.some((item) => typeof item !== "string")) throw new Error("翻译模型返回条目数不一致");
-  return parsed.translations;
+  return parsed.translations.map(polishChinese);
+}
+
+function polishChinese(value) {
+  return String(value)
+    .replaceAll("阵列", "数组")
+    .replaceAll("键入", "输入")
+    .replaceAll("索引", "下标")
+    .replace(/执行以下操作任意次数/g, "进行任意次下述操作")
+    .replace(/执行任意次数的以下操作/g, "进行任意次下述操作")
+    .replace(/您/g, "你")
+    .replace(/\s+([，。；：！？])/g, "$1")
+    .trim();
 }
 
 async function translateTexts(texts) {
@@ -268,7 +288,7 @@ async function translateTexts(texts) {
   for (let offset = 0; offset < texts.length;) {
     let size = 0;
     let end = offset;
-    while (end < texts.length && end - offset < 24 && size + texts[end].length < 5500) {
+    while (end < texts.length && end - offset < 8 && size + texts[end].length < 2400) {
       size += texts[end].length;
       end += 1;
     }
@@ -287,22 +307,36 @@ async function translateTexts(texts) {
 
 async function translateHtml(originalHtml, sourceUrl) {
   const $ = load(`<div id="translation-root">${originalHtml}</div>`, { xmlMode: false }, false);
+  const fixedHeadings = new Map([["input", "输入"], ["output", "输出"], ["example", "样例"], ["examples", "样例"], ["note", "说明"], ["interaction", "交互说明"]]);
+  $("#translation-root .section-title").each((_, element) => {
+    const translated = fixedHeadings.get($(element).text().trim().toLowerCase());
+    if (translated) $(element).text(translated);
+  });
   const records = [];
   $("#translation-root").find("*").contents().each((_, node) => {
     if (node.type !== "text") return;
-    if ($(node).parents("pre, code, .tex-span").length) return;
+    if ($(node).parents("pre, code, .tex-span, .section-title").length) return;
     const raw = node.data || "";
-    const trimmed = raw.trim();
-    if (!/[A-Za-z]{2}/.test(trimmed)) return;
-    records.push({ node, raw, trimmed });
+    const segments = raw.split(/(\${3}[\s\S]*?\${3})/g).map((value, index) => ({
+      value,
+      formula: index % 2 === 1,
+      trimmed: value.trim(),
+    }));
+    if (!segments.some((segment) => !segment.formula && /[A-Za-z]{2}/.test(segment.trimmed))) return;
+    records.push({ node, segments });
   });
-  const unique = [...new Set(records.map((item) => item.trimmed))];
+  const unique = [...new Set(records.flatMap((record) => record.segments
+    .filter((segment) => !segment.formula && /[A-Za-z]{2}/.test(segment.trimmed))
+    .map((segment) => segment.trimmed)))];
   const translations = await translateTexts(unique);
   const map = new Map(unique.map((item, index) => [item, translations[index]]));
   for (const record of records) {
-    const prefix = record.raw.match(/^\s*/)?.[0] || "";
-    const suffix = record.raw.match(/\s*$/)?.[0] || "";
-    record.node.data = `${prefix}${map.get(record.trimmed) || record.trimmed}${suffix}`;
+    record.node.data = record.segments.map((segment) => {
+      if (segment.formula || !/[A-Za-z]{2}/.test(segment.trimmed)) return segment.value;
+      const prefix = segment.value.match(/^\s*/)?.[0] || "";
+      const suffix = segment.value.match(/\s*$/)?.[0] || "";
+      return `${prefix}${map.get(segment.trimmed) || segment.trimmed}${suffix}`;
+    }).join("");
   }
   return sanitizeStatementHtml($("#translation-root").html() || "", sourceUrl).html;
 }
@@ -343,7 +377,7 @@ async function recognizeImageText(buffer, id, fallbackText) {
 
 async function translateStatement(code) {
   const row = statementRow(code);
-  if (!row?.original_html || row.chinese_html) return;
+  if (!row?.original_html || (row.chinese_html && Number(row.translation_version || 0) >= TRANSLATION_VERSION)) return;
   recentTranslationAttempts.set(code, now());
   try {
     setStatus(code, "translating", "正在缓存题面图片并识别其中的英文");
@@ -363,7 +397,7 @@ async function translateStatement(code) {
       for (const image of images) if (image.ocrEn) image.ocrZh = ocrTranslations[index++];
     }
     const chineseHtml = await translateHtml(row.original_html, row.source_url);
-    db.prepare("UPDATE problem_statements SET chinese_html = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, JSON.stringify(images), now(), code);
+    db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, JSON.stringify(images), now(), code);
   } catch (error) {
     const message = error instanceof Error ? error.message : "中文翻译失败";
     setStatus(code, "ready_original", `原题面已就绪；中文翻译稍后重试：${message}`);
@@ -431,7 +465,8 @@ export function createStatementHandler({ json, clientIp }) {
           upsertPending(parsed);
           void importOriginal(parsed);
           row = statementRow(parsed.code);
-        } else if (row.original_html && !row.chinese_html && ["ready_original", "translating", "model_downloading"].includes(row.status)) {
+        } else if (row.original_html && (!row.chinese_html || Number(row.translation_version || 0) < TRANSLATION_VERSION)) {
+          if (row.status === "ready") setStatus(parsed.code, "translating", "正在按新版术语规范重新校对中文题面");
           queueTranslation(parsed.code);
         } else if (!row.original_html && row.status === "source_required" && now() - row.updated_at > 10 * 60_000) {
           void importOriginal(parsed);
@@ -464,7 +499,7 @@ export function createStatementHandler({ json, clientIp }) {
           const matched = submitted.find((item) => item?.sourceUrl === image.sourceUrl && typeof item.ocrZh === "string");
           if (matched) image.ocrZh = matched.ocrZh.trim().slice(0, 4000);
         }
-        db.prepare("UPDATE problem_statements SET chinese_html = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, JSON.stringify(existingImages), now(), parsed.code);
+        db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, JSON.stringify(existingImages), now(), parsed.code);
         return json(response, 200, { statement: publicStatement(statementRow(parsed.code)) }), true;
       }
 

@@ -1,4 +1,5 @@
 import { browserApiUrl } from "./browser-api";
+import katex from "katex";
 
 export type StatementImage = {
   sourceUrl: string;
@@ -95,6 +96,41 @@ export function statementHtmlForDisplay(html: string, images: StatementImage[], 
   if (!root) return html;
   const imageMap = new Map(images.map((image) => [image.sourceUrl, image]));
 
+  root.querySelectorAll<HTMLElement>(".tex-span").forEach((element) => {
+    const raw = element.textContent?.trim() || "";
+    const expression = raw.replace(/^\${3}/, "").replace(/\${3}$/, "").trim();
+    if (!expression) return;
+    element.innerHTML = katex.renderToString(expression, { throwOnError: false, strict: "ignore", output: "htmlAndMathml" });
+    element.classList.add("tex-rendered");
+    element.setAttribute("aria-label", expression);
+  });
+
+  const textNodes: Text[] = [];
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let current = walker.nextNode();
+  while (current) {
+    const text = current as Text;
+    if (text.data.includes("$$$") && !text.parentElement?.closest("pre, code, .tex-span, .katex")) textNodes.push(text);
+    current = walker.nextNode();
+  }
+  for (const text of textNodes) {
+    const matches = [...text.data.matchAll(/\${3}([\s\S]+?)\${3}/g)];
+    if (!matches.length) continue;
+    const fragment = document.createDocumentFragment();
+    let offset = 0;
+    for (const match of matches) {
+      const index = match.index ?? 0;
+      fragment.append(document.createTextNode(text.data.slice(offset, index)));
+      const span = document.createElement("span");
+      span.className = "tex-span tex-rendered";
+      span.innerHTML = katex.renderToString(match[1].trim(), { throwOnError: false, strict: "ignore", output: "htmlAndMathml" });
+      fragment.append(span);
+      offset = index + match[0].length;
+    }
+    fragment.append(document.createTextNode(text.data.slice(offset)));
+    text.replaceWith(fragment);
+  }
+
   root.querySelectorAll<HTMLImageElement>("img").forEach((element) => {
     const sourceUrl = element.getAttribute("src") || "";
     const image = imageMap.get(sourceUrl);
@@ -139,6 +175,14 @@ function textNodesForTranslation(root: HTMLElement) {
   return nodes;
 }
 
+function splitFormulaSafeText(raw: string) {
+  return raw.split(/(\${3}[\s\S]*?\${3})/g).map((value, index) => ({
+    value,
+    formula: index % 2 === 1,
+    trimmed: value.trim(),
+  }));
+}
+
 export async function translateStatementInBrowser(
   originalHtml: string,
   images: StatementImage[],
@@ -162,16 +206,20 @@ export async function translateStatementInBrowser(
     const root = document.querySelector<HTMLElement>("#browser-translation-root");
     if (!root) throw new Error("原题面结构无效");
     const nodes = textNodesForTranslation(root);
-    const unique = [...new Set(nodes.map((node) => node.data.trim()))];
+    const records = nodes.map((node) => ({ node, segments: splitFormulaSafeText(node.data) }));
+    const unique = [...new Set(records.flatMap((record) => record.segments
+      .filter((segment) => !segment.formula && /[A-Za-z]{2}/.test(segment.trimmed))
+      .map((segment) => segment.trimmed)))];
     const translated = new Map<string, string>();
     for (let index = 0; index < unique.length; index += 1) {
       onProgress(`浏览器本地翻译 ${index + 1} / ${unique.length}`);
       translated.set(unique[index], await translator.translate(unique[index]));
     }
-    for (const node of nodes) {
-      const raw = node.data;
-      const trimmed = raw.trim();
-      node.data = `${raw.match(/^\s*/)?.[0] || ""}${translated.get(trimmed) || trimmed}${raw.match(/\s*$/)?.[0] || ""}`;
+    for (const record of records) {
+      record.node.data = record.segments.map((segment) => {
+        if (segment.formula || !/[A-Za-z]{2}/.test(segment.trimmed)) return segment.value;
+        return `${segment.value.match(/^\s*/)?.[0] || ""}${translated.get(segment.trimmed) || segment.trimmed}${segment.value.match(/\s*$/)?.[0] || ""}`;
+      }).join("");
     }
 
     const translatedImages: StatementImage[] = [];

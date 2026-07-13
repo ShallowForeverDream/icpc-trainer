@@ -1,59 +1,89 @@
 "use client";
 
-import { FormEvent, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
 import { AppShell, Icon, ProblemRow } from "../components/AppShell";
-import { curatedProblems } from "../data/problems";
 import { browserApiUrl } from "../lib/browser-api";
 
-type CatalogProblem = { code: string; contestId: number; index: string; title: string; titleZh?: string; rating: number; tags: string[]; status?: string };
-type SyncState = "idle" | "syncing" | "live" | "fallback";
-const ranges: Record<string, [number, number]> = { "800–1000": [800, 1000], "1100–1300": [1100, 1300], "1400–1600": [1400, 1600], "1700–1900": [1700, 1900], "2000+": [2000, 3500] };
+type CatalogProblem = { code: string; contestId: number; index: string; title: string; rating: number; tags: string[]; status?: string; reason?: string };
+type SyncState = "idle" | "syncing" | "live" | "error";
+type Profile = { solvedCount: number; estimatedRating: number; targetRating: number; familiarTags: string[] };
+
+const tagOptions = ["greedy", "math", "implementation", "dp", "data structures", "graphs", "trees", "binary search", "two pointers", "strings", "number theory", "combinatorics", "constructive algorithms", "shortest paths", "bitmasks", "sortings"];
+const ratings = Array.from({ length: 19 }, (_, index) => 800 + index * 100);
 
 export default function ProblemLibraryPage() {
-  const [mode, setMode] = useState<"curated" | "rating">("curated");
+  const [mode, setMode] = useState<"recommended" | "catalog">("recommended");
   const [query, setQuery] = useState("");
-  const [range, setRange] = useState("1400–1600");
-  const [problems, setProblems] = useState<CatalogProblem[]>(curatedProblems);
+  const [minRating, setMinRating] = useState(1200);
+  const [maxRating, setMaxRating] = useState(1800);
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
+  const [problems, setProblems] = useState<CatalogProblem[]>([]);
+  const [profile, setProfile] = useState<Profile | null>(null);
   const [syncState, setSyncState] = useState<SyncState>("idle");
+  const [message, setMessage] = useState("");
   const [page, setPage] = useState(1);
-  const [total, setTotal] = useState(20);
+  const [total, setTotal] = useState(0);
+  const pageSize = 40;
 
-  const filtered = useMemo(() => mode === "rating" ? problems : problems.filter((problem) => `${problem.code} ${problem.title} ${problem.titleZh ?? ""} ${problem.tags.join(" ")}`.toLowerCase().includes(query.toLowerCase())), [mode, problems, query]);
-
-  async function syncCurated() {
-    setMode("curated");
+  const loadProblems = useCallback(async (nextPage = 1, nextMode: "recommended" | "catalog" = mode) => {
     setSyncState("syncing");
+    setMessage("");
+    const params = new URLSearchParams({ min: String(minRating), max: String(maxRating), q: query, tags: selectedTags.join(",") });
+    if (nextMode === "recommended") params.set("handle", "ShallowDream2"), params.set("limit", "40");
+    else params.set("scope", "all"), params.set("page", String(nextPage)), params.set("limit", String(pageSize));
     try {
-      const response = await fetch("/api/codeforces/problems", { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "同步失败");
-      setProblems(data.problems);
-      setTotal(data.problems.length);
-      setSyncState(data.source === "codeforces" ? "live" : "fallback");
-    } catch { setProblems(curatedProblems); setTotal(20); setSyncState("fallback"); }
-  }
-
-  async function loadRating(nextPage = 1, event?: FormEvent, selectedRange = range) {
-    event?.preventDefault();
-    setMode("rating");
-    setSyncState("syncing");
-    const [min, max] = ranges[selectedRange];
-    try {
-      const response = await fetch(browserApiUrl(`/codeforces/problems?scope=all&min=${min}&max=${max}&page=${nextPage}&limit=60&q=${encodeURIComponent(query)}`), { cache: "no-store" });
+      const endpoint = nextMode === "recommended" ? "/codeforces/recommendations" : "/codeforces/problems";
+      const response = await fetch(browserApiUrl(`${endpoint}?${params}`), { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "加载失败");
-      setProblems(data.problems);
-      setPage(data.page);
-      setTotal(data.total);
+      setProblems(data.problems ?? []);
+      setProfile(nextMode === "recommended" ? data.profile ?? null : null);
+      setPage(data.page ?? 1);
+      setTotal(data.total ?? data.problems?.length ?? 0);
       setSyncState("live");
-    } catch { setSyncState("fallback"); }
+    } catch (error) {
+      setProblems([]);
+      setMessage(error instanceof Error ? error.message : "题库暂时不可用");
+      setSyncState("error");
+    }
+  }, [maxRating, minRating, mode, query, selectedTags]);
+
+  useEffect(() => { void loadProblems(1, "recommended"); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  function toggleTag(tag: string) {
+    setSelectedTags((current) => current.includes(tag) ? current.filter((item) => item !== tag) : [...current, tag]);
   }
 
+  function submit(event: FormEvent) {
+    event.preventDefault();
+    void loadProblems(1, mode);
+  }
+
+  const rangeValid = minRating <= maxRating;
+  const resultTitle = mode === "recommended" ? "个性化推荐" : "全部 Codeforces 题目";
+  const countLabel = useMemo(() => mode === "recommended" ? `${problems.length} 道候选` : `${total} 道匹配`, [mode, problems.length, total]);
+
   return <AppShell active="题库">
-    <section className="library-hero"><div><span className="eyebrow"><span className="live-dot" /> CURATED + LIVE RATING POOL</span><h1>中文精选，<em>直接阅读完整题面。</em></h1><p>首批 20 道精选题已导入中文题目描述、约束、输入输出与样例；Rating 扩展题库继续读取 Codeforces 官方公开数据。</p></div><button className="button button-primary" onClick={mode === "curated" ? syncCurated : () => loadRating(page)} disabled={syncState === "syncing"}><Icon name="history" /> {syncState === "syncing" ? "正在读取题库…" : "刷新当前题库"}</button></section>
-    <div className={`sync-banner sync-${syncState}`}><span>{syncState === "live" ? "Codeforces 官方数据已加载" : syncState === "fallback" ? "官方接口暂不可用，保留当前数据" : "首批 20 道完整中文题面已就绪"}</span><small>另已补充 CF 2176C · 默认 Handle：ShallowDream2</small></div>
-    <div className="catalog-mode-tabs"><button className={mode === "curated" ? "active" : ""} onClick={() => { setMode("curated"); setProblems(curatedProblems); setTotal(20); }}>中文精选 20</button><button className={mode === "rating" ? "active" : ""} onClick={() => loadRating(1)}>按 Rating 扩展</button></div>
-    <form className="library-toolbar" onSubmit={(event) => mode === "rating" ? loadRating(1, event) : event.preventDefault()}><div className="template-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索题号、题名或标签…" /></div>{mode === "rating" && <div className="category-tabs">{Object.keys(ranges).map((item) => <button type="button" key={item} className={range === item ? "active" : ""} onClick={() => { setRange(item); loadRating(1, undefined, item); }}>{item}</button>)}<button type="submit">搜索</button></div>}</form>
-    <section className="panel curated-list"><div className="panel-head"><div><span className="micro-label">{mode === "curated" ? "CHINESE CURATED SET" : `LIVE RATING / ${range}`}</span><h2>{mode === "curated" ? "精选训练集" : "Codeforces Rating 题库"}</h2></div><span className="calendar-total">当前 <b>{filtered.length}</b> / {total}</span></div><div className="problem-list">{filtered.map((problem, index) => <ProblemRow key={problem.code} problem={problem} index={(page - 1) * 60 + index + 1} />)}</div>{filtered.length === 0 && <div className="empty-state"><Icon name="search" /><h3>没有匹配的题目</h3><p>换一个关键词或 Rating 区间试试。</p></div>}{mode === "rating" && <div className="catalog-pagination"><button disabled={page <= 1 || syncState === "syncing"} onClick={() => loadRating(page - 1)}>← 上一页</button><span>第 {page} / {Math.max(1, Math.ceil(total / 60))} 页</span><button disabled={page * 60 >= total || syncState === "syncing"} onClick={() => loadRating(page + 1)}>下一页 →</button></div>}</section>
+    <section className="problem-library-head">
+      <div><h1>选下一道真正适合你的题。</h1><p>根据 ShallowDream2 的公开完成记录排除已做题，并按标签与目标 Rating 区间推荐。</p></div>
+      <button className="button button-primary" onClick={() => void loadProblems(1, mode)} disabled={syncState === "syncing"}><Icon name="history" /> {syncState === "syncing" ? "正在匹配…" : "刷新结果"}</button>
+    </section>
+
+    <section className="problem-filter-panel panel">
+      <div className="catalog-mode-tabs"><button className={mode === "recommended" ? "active" : ""} onClick={() => { setMode("recommended"); void loadProblems(1, "recommended"); }}>为你推荐</button><button className={mode === "catalog" ? "active" : ""} onClick={() => { setMode("catalog"); void loadProblems(1, "catalog"); }}>全部题库</button></div>
+      <form onSubmit={submit}>
+        <div className="library-filter-top"><label className="template-search"><Icon name="search" /><input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="题号、英文题名或标签" /></label><label>最低 Rating<select value={minRating} onChange={(event) => setMinRating(Number(event.target.value))}>{ratings.map((value) => <option key={value}>{value}</option>)}</select></label><label>最高 Rating<select value={maxRating} onChange={(event) => setMaxRating(Number(event.target.value))}>{ratings.map((value) => <option key={value}>{value}</option>)}</select></label><button className="button button-primary" type="submit" disabled={!rangeValid || syncState === "syncing"}>应用筛选</button></div>
+        <div className="tag-filter"><span>标签（满足任一）</span><div>{tagOptions.map((tag) => <button type="button" key={tag} className={selectedTags.includes(tag) ? "active" : ""} onClick={() => toggleTag(tag)}>{tag}</button>)}</div>{selectedTags.length ? <button type="button" className="clear-tags" onClick={() => setSelectedTags([])}>清空</button> : null}</div>
+      </form>
+    </section>
+
+    {profile ? <section className="recommendation-profile"><div><span>已排除</span><b>{profile.solvedCount}</b><small>道已 AC</small></div><div><span>近期水平</span><b>{profile.estimatedRating || "—"}</b><small>按公开 AC 中位数估计</small></div><div><span>本次目标</span><b>{profile.targetRating}</b><small>{profile.familiarTags.slice(0, 3).join(" · ") || "均衡训练"}</small></div><p>推荐不是固定精选集：每道题都来自当前 Codeforces 公开题库，并结合你的完成记录重新排序。</p></section> : null}
+
+    <section className="panel personalized-catalog">
+      <div className="panel-head"><div><h2>{resultTitle}</h2><p>{countLabel} · Rating {minRating}–{maxRating}{selectedTags.length ? ` · ${selectedTags.join(" / ")}` : ""}</p></div><span className={`catalog-live-state state-${syncState}`}><i />{syncState === "live" ? "实时题库" : syncState === "syncing" ? "加载中" : syncState === "error" ? "加载失败" : "等待筛选"}</span></div>
+      <div className="problem-list">{problems.map((problem, index) => <div className="catalog-problem-with-reason" key={problem.code}><ProblemRow problem={problem} index={(page - 1) * pageSize + index + 1} />{problem.reason ? <span><Icon name="spark" /> {problem.reason}</span> : null}</div>)}</div>
+      {!problems.length ? <div className="empty-state"><Icon name="search" /><h3>{message || "没有符合条件的题目"}</h3><p>可以放宽 Rating 区间或减少标签。</p></div> : null}
+      {mode === "catalog" && total > pageSize ? <div className="catalog-pagination"><button disabled={page <= 1 || syncState === "syncing"} onClick={() => void loadProblems(page - 1, "catalog")}>← 上一页</button><span>第 {page} / {Math.ceil(total / pageSize)} 页</span><button disabled={page * pageSize >= total || syncState === "syncing"} onClick={() => void loadProblems(page + 1, "catalog")}>下一页 →</button></div> : null}
+    </section>
   </AppShell>;
 }

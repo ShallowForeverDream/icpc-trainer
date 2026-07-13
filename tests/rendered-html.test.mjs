@@ -18,11 +18,15 @@ test("renders the icpc-trainer product home", async () => {
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /icpc-trainer/i);
-  assert.match(html, /中文精选题/);
+  assert.match(html, /今日训练/);
+  assert.match(html, /每日目标/);
+  assert.match(html, /最近完成/);
+  assert.match(html, /为你推荐/);
+  assert.doesNotMatch(html, /中文精选题/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/);
 });
 
-test("ships exactly twenty curated Chinese problem records", async () => {
+test("keeps twenty readable offline statement fallback records", async () => {
   const source = await readFile(new URL("app/data/problems.ts", root), "utf8");
   assert.equal((source.match(/\{ code: "CF /g) ?? []).length, 20);
   assert.match(source, /titleZh/);
@@ -46,6 +50,8 @@ test("ships readable Chinese fallbacks and a QOJ-like cached statement reader", 
   assert.match(statementClient, /ICPC_TRAINER_FETCH_STATEMENT/);
   assert.match(statementClient, /图片文字翻译/);
   assert.match(statementClient, /window\.Translator/);
+  assert.match(statementClient, /katex\.render/);
+  assert.match(statementClient, /tex-span/);
   const response = await render("/problem/2176C");
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -69,16 +75,29 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(background, /problem-statement/);
 });
 
-test("ships live VP generation and the configured handle", async () => {
-  const [route, page] = await Promise.all([
+test("ships live multiplayer VP generation, combined contests, and standings", async () => {
+  const [route, standingsRoute, recommendationRoute, page, catalog] = await Promise.all([
     readFile(new URL("app/api/vp/generate/route.ts", root), "utf8"),
+    readFile(new URL("app/api/vp/standings/route.ts", root), "utf8"),
+    readFile(new URL("app/api/codeforces/recommendations/route.ts", root), "utf8"),
     readFile(new URL("app/vp/page.tsx", root), "utf8"),
+    readFile(new URL("app/problem/page.tsx", root), "utf8"),
   ]);
   assert.match(route, /getUserSubmissions/);
   assert.match(route, /pickRandomSet/);
   assert.match(route, /pickMirror/);
+  assert.match(route, /pickCombined/);
+  assert.match(route, /sourceContests/);
+  assert.match(standingsRoute, /wrongAttempts/);
+  assert.match(standingsRoute, /penalty/);
+  assert.match(recommendationRoute, /targetRating/);
   assert.match(page, /ShallowDream2/);
-  assert.match(page, /同步 Codeforces 判题/);
+  assert.match(page, /实时榜单/);
+  assert.match(page, /多场组合/);
+  assert.match(page, /来源参考/);
+  assert.match(catalog, /个性化推荐/);
+  assert.match(catalog, /目标 Rating/);
+  assert.match(catalog, /selectedTags/);
 });
 
 test("ships the domestic API, cached statements, OCR, and local translation deployment", async () => {
@@ -94,6 +113,8 @@ test("ships the domestic API, cached statements, OCR, and local translation depl
   assert.match(backend, /\/submissions\/raw/);
   assert.match(backend, /Access-Control-Allow-Origin/);
   assert.match(backend, /\/codeforces\/problems/);
+  assert.match(backend, /\/codeforces\/recommendations/);
+  assert.match(backend, /\/vp\/standings/);
   assert.match(backend, /createStatementHandler/);
   assert.match(statements, /problem_statements/);
   assert.match(statements, /statement_assets/);

@@ -107,6 +107,67 @@ function publicSubmission(item) {
   };
 }
 
+function validHandle(value) {
+  return /^[A-Za-z0-9_.-]{3,24}$/.test(String(value || ""));
+}
+
+function normalizeParticipants(value, fallback = "ShallowDream2") {
+  const source = Array.isArray(value) ? value : String(value || fallback).split(/[\s,;]+/);
+  const handles = [...new Set(source.map((item) => String(item).trim()).filter(Boolean))].slice(0, 12);
+  if (!handles.length || handles.some((handle) => !validHandle(handle))) throw new Error("参赛 Handle 列表无效");
+  return handles;
+}
+
+function median(values) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  const middle = Math.floor(sorted.length / 2);
+  return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
+}
+
+async function recommendProblems(url) {
+  const handle = (url.searchParams.get("handle") || "ShallowDream2").trim();
+  if (!validHandle(handle)) throw new Error("Codeforces Handle 无效");
+  const min = Math.max(800, Number(url.searchParams.get("min")) || 1200);
+  const max = Math.min(3500, Math.max(min, Number(url.searchParams.get("max")) || 1800));
+  const limit = Math.min(40, Math.max(6, Number(url.searchParams.get("limit")) || 20));
+  const query = (url.searchParams.get("q") || "").trim().toLowerCase();
+  const requestedTags = [...new Set((url.searchParams.get("tags") || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))].slice(0, 8);
+  const [problemset, submissions] = await Promise.all([getProblemset(), getSubmissions(handle, 1000)]);
+  const accepted = submissions.filter((item) => item.verdict === "OK" && item.problem?.contestId);
+  const solved = new Set(accepted.map((item) => `${item.problem.contestId}${item.problem.index}`));
+  const recentRatings = accepted.slice(0, 180).map((item) => Number(item.problem.rating) || 0).filter(Boolean);
+  const profileRating = median(recentRatings) || Math.round((min + max) / 200) * 100;
+  const targetRating = Math.max(min, Math.min(max, Math.round((profileRating + 100) / 100) * 100));
+  const tagCounts = new Map();
+  for (const submission of accepted.slice(0, 180)) for (const tag of submission.problem.tags || []) tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+  const familiarTags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([tag]) => tag);
+  const candidates = problemset.filter((problem) => {
+    if (problem.type !== "PROGRAMMING" || !problem.contestId || !problem.rating || problem.tags.includes("interactive")) return false;
+    if (problem.rating < min || problem.rating > max || solved.has(`${problem.contestId}${problem.index}`)) return false;
+    if (requestedTags.length && !requestedTags.some((tag) => problem.tags.includes(tag))) return false;
+    return !query || `${problem.contestId}${problem.index} ${problem.name} ${problem.tags.join(" ")}`.toLowerCase().includes(query);
+  }).map((problem) => {
+    const requested = problem.tags.filter((tag) => requestedTags.includes(tag));
+    const familiar = problem.tags.filter((tag) => familiarTags.includes(tag));
+    const stableNoise = hashSeed(`${handle}:${problem.contestId}${problem.index}`) % 80;
+    const score = Math.abs(problem.rating - targetRating) * 5 - requested.length * 450 - familiar.length * 70 + stableNoise;
+    const reason = requested.length
+      ? `匹配标签：${requested.slice(0, 2).join(" / ")}`
+      : familiar.length
+        ? `${familiar[0]} 延伸训练 · 接近目标 ${targetRating}`
+        : `接近目标 Rating ${targetRating}`;
+    return { problem, score, reason };
+  }).sort((a, b) => a.score - b.score || b.problem.contestId - a.problem.contestId).slice(0, limit);
+  return {
+    source: "codeforces",
+    handle,
+    profile: { solvedCount: solved.size, estimatedRating: profileRating, targetRating, familiarTags },
+    total: candidates.length,
+    problems: candidates.map(({ problem, reason }) => ({ ...publicProblem(problem), reason })),
+  };
+}
+
 function pickRandomSet(pool, count, target, random) {
   const selected = [];
   const used = new Set();
@@ -133,6 +194,35 @@ function pickMirror(pool, desiredCount, target, random) {
   return candidates[Math.floor(random() * Math.min(12, candidates.length))] || null;
 }
 
+function pickCombined(pool, desiredCount, target, random) {
+  const groups = new Map();
+  for (const problem of pool) {
+    const group = groups.get(problem.contestId) || [];
+    group.push(problem);
+    groups.set(problem.contestId, group);
+  }
+  const candidates = [...groups.entries()].map(([contestId, problems]) => ({
+    contestId,
+    problems,
+    average: problems.reduce((sum, item) => sum + (item.rating || target), 0) / problems.length,
+  })).filter((item) => item.problems.length >= 2).sort((a, b) => Math.abs(a.average - target) - Math.abs(b.average - target));
+  const sourceCount = Math.min(4, Math.max(2, Math.ceil(desiredCount / 4)));
+  const chosenGroups = [];
+  const window = candidates.slice(0, Math.min(24, candidates.length));
+  while (chosenGroups.length < sourceCount && window.length) chosenGroups.push(window.splice(Math.floor(random() * window.length), 1)[0]);
+  if (chosenGroups.length < 2) return null;
+  const selected = [];
+  const used = new Set();
+  for (let index = 0; index < chosenGroups.length; index++) {
+    const desired = target - 400 + index * 800 / Math.max(1, chosenGroups.length - 1);
+    const choices = chosenGroups[index].problems.filter((item) => !used.has(`${item.contestId}${item.index}`)).sort((a, b) => Math.abs((a.rating || target) - desired) - Math.abs((b.rating || target) - desired));
+    if (choices[0]) { selected.push(choices[0]); used.add(`${choices[0].contestId}${choices[0].index}`); }
+  }
+  const union = chosenGroups.flatMap((item) => item.problems).filter((item) => !used.has(`${item.contestId}${item.index}`));
+  const rest = pickRandomSet(union, Math.max(0, desiredCount - selected.length), target, random);
+  return { selected: [...selected, ...rest].sort((a, b) => (a.rating || 0) - (b.rating || 0)), contestIds: chosenGroups.map((item) => item.contestId) };
+}
+
 async function readBody(request) {
   const chunks = [];
   let size = 0;
@@ -148,8 +238,8 @@ const handleAuth = createAuthHandler({ json, readBody, clientIp });
 const handleStatements = createStatementHandler({ json, clientIp });
 
 async function generateVp(body) {
-  const handle = String(body.handle || "ShallowDream2").trim();
-  if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) throw new Error("Codeforces Handle 无效");
+  const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
+  const handle = participants[0];
   const count = Math.max(5, Math.min(13, Number(body.count) || 10));
   const targetRating = Math.max(800, Math.min(3000, Number(body.targetRating) || 1600));
   const durationMinutes = Math.max(60, Math.min(300, Number(body.durationMinutes) || 180));
@@ -160,14 +250,65 @@ async function generateVp(body) {
   const pool = problemset.filter((problem) => problem.type === "PROGRAMMING" && problem.contestId && problem.rating && problem.rating >= Math.max(800, targetRating - 800) && problem.rating <= targetRating + 900 && !problem.tags.includes("interactive") && !solved.has(`${problem.contestId}${problem.index}`));
   let selected;
   let sourceContestId = null;
+  let sourceContestIds = [];
   if (body.mode === "原场镜像") {
     const mirror = pickMirror(pool, count, targetRating, random);
     if (!mirror) throw new Error("没有找到符合条件的历史比赛");
     selected = mirror.problems;
     sourceContestId = mirror.contestId;
+    sourceContestIds = [mirror.contestId];
+  } else if (body.mode === "多场组合") {
+    const combined = pickCombined(pool, count, targetRating, random);
+    if (!combined) throw new Error("没有找到足够的历史比赛用于组合");
+    selected = combined.selected;
+    sourceContestIds = combined.contestIds;
   } else selected = pickRandomSet(pool, count, targetRating, random);
   if (selected.length < 5) throw new Error("可用题目不足，请调整组卷条件");
-  return { id: `vp-${hashSeed(`${seed}:${handle}`).toString(16)}`, handle, mode: body.mode === "原场镜像" ? "原场镜像" : "随机组卷", seed, durationMinutes, targetRating, sourceContestId, excludedSolved: solved.size, createdAt: new Date().toISOString(), problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem) })) };
+  if (!sourceContestIds.length) sourceContestIds = [...new Set(selected.map((problem) => problem.contestId))];
+  const sourceContests = sourceContestIds.map((contestId) => {
+    const sourceProblems = selected.filter((problem) => problem.contestId === contestId);
+    return { contestId, problemCount: sourceProblems.length, averageRating: Math.round(sourceProblems.reduce((sum, item) => sum + (item.rating || targetRating), 0) / Math.max(1, sourceProblems.length)), url: `https://codeforces.com/contest/${contestId}/standings` };
+  });
+  const mode = body.mode === "原场镜像" ? "原场镜像" : body.mode === "多场组合" ? "多场组合" : "个性化组卷";
+  return { id: `vp-${hashSeed(`${seed}:${handle}`).toString(16)}`, handle, participants, mode, seed, durationMinutes, targetRating, sourceContestId, sourceContests, excludedSolved: solved.size, createdAt: new Date().toISOString(), problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem) })) };
+}
+
+async function buildVpStandings(body) {
+  const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
+  const startedAt = Number(body.startedAt);
+  const durationMinutes = Math.max(60, Math.min(600, Number(body.durationMinutes) || 180));
+  if (!Number.isFinite(startedAt) || startedAt <= 0) throw new Error("比赛尚未开始");
+  const problems = Array.isArray(body.problems) ? body.problems.slice(0, 20).filter((item) => Number(item?.contestId) && /^[A-Z][0-9]?$/.test(String(item?.index || ""))) : [];
+  if (!problems.length) throw new Error("比赛题目为空");
+  const startSeconds = Math.floor(startedAt / 1000);
+  const endSeconds = startSeconds + durationMinutes * 60;
+  const problemKeys = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, problem]));
+  const rows = [];
+  for (const handle of participants) {
+    const submissions = await getSubmissions(handle, 1000);
+    const states = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, { solved: false, wrongAttempts: 0, solvedMinutes: null, penalty: 0 }]));
+    const ordered = submissions.filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= endSeconds && problemKeys.has(`${item.problem?.contestId}${item.problem?.index}`)).sort((a, b) => a.creationTimeSeconds - b.creationTimeSeconds);
+    for (const submission of ordered) {
+      const key = `${submission.problem.contestId}${submission.problem.index}`;
+      const state = states.get(key);
+      if (!state || state.solved) continue;
+      if (submission.verdict === "OK") {
+        state.solved = true;
+        state.solvedMinutes = Math.max(0, Math.floor((submission.creationTimeSeconds - startSeconds) / 60));
+        state.penalty = state.solvedMinutes + state.wrongAttempts * 20;
+      } else if (!["COMPILATION_ERROR", "SKIPPED", "TESTING"].includes(submission.verdict || "")) state.wrongAttempts += 1;
+    }
+    const solved = [...states.values()].filter((state) => state.solved).length;
+    const penalty = [...states.values()].reduce((sum, state) => sum + state.penalty, 0);
+    rows.push({ handle, solved, penalty, problems: Object.fromEntries(states) });
+  }
+  rows.sort((a, b) => b.solved - a.solved || a.penalty - b.penalty || a.handle.localeCompare(b.handle));
+  let previous = null;
+  rows.forEach((row, index) => {
+    row.rank = previous && previous.solved === row.solved && previous.penalty === row.penalty ? previous.rank : index + 1;
+    previous = row;
+  });
+  return { updatedAt: new Date().toISOString(), startedAt, durationMinutes, rows };
 }
 
 const server = http.createServer(async (request, response) => {
@@ -199,10 +340,12 @@ const server = http.createServer(async (request, response) => {
       const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
       const limit = Math.min(100, Math.max(20, Number(url.searchParams.get("limit")) || 60));
       const query = (url.searchParams.get("q") || "").trim().toLowerCase();
-      const filtered = all.filter((problem) => problem.type === "PROGRAMMING" && problem.contestId && problem.rating && problem.rating >= min && problem.rating <= max && !problem.tags.includes("interactive") && (!query || `${problem.contestId}${problem.index} ${problem.name} ${problem.tags.join(" ")}`.toLowerCase().includes(query))).sort((a, b) => (a.rating || 0) - (b.rating || 0) || (b.contestId || 0) - (a.contestId || 0) || a.index.localeCompare(b.index));
+      const tags = [...new Set((url.searchParams.get("tags") || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))];
+      const filtered = all.filter((problem) => problem.type === "PROGRAMMING" && problem.contestId && problem.rating && problem.rating >= min && problem.rating <= max && !problem.tags.includes("interactive") && (!tags.length || tags.some((tag) => problem.tags.includes(tag))) && (!query || `${problem.contestId}${problem.index} ${problem.name} ${problem.tags.join(" ")}`.toLowerCase().includes(query))).sort((a, b) => (a.rating || 0) - (b.rating || 0) || (b.contestId || 0) - (a.contestId || 0) || a.index.localeCompare(b.index));
       const offset = (page - 1) * limit;
       return json(response, 200, { source: "codeforces", page, total: filtered.length, problems: filtered.slice(offset, offset + limit).map(publicProblem) }, { "Cache-Control": "public, max-age=600" });
     }
+    if (request.method === "GET" && url.pathname === "/codeforces/recommendations") return json(response, 200, await recommendProblems(url), { "Cache-Control": "private, max-age=60" });
     if (request.method === "GET" && url.pathname === "/submissions/raw") {
       const handle = (url.searchParams.get("handle") || "").trim();
       const count = Math.min(1000, Math.max(1, Number(url.searchParams.get("count")) || 100));
@@ -216,6 +359,7 @@ const server = http.createServer(async (request, response) => {
       return json(response, 200, { source: "codeforces", handle, syncedAt: new Date().toISOString(), submissions });
     }
     if (request.method === "POST" && url.pathname === "/vp/generate") return json(response, 200, await generateVp(await readBody(request)));
+    if (request.method === "POST" && url.pathname === "/vp/standings") return json(response, 200, await buildVpStandings(await readBody(request)));
     return json(response, 404, { error: "Not found" });
   } catch (error) {
     console.error(new Date().toISOString(), request.method, url.pathname, error);

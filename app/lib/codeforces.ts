@@ -11,7 +11,7 @@ export type CodeforcesProblem = {
 export type CodeforcesSubmission = {
   id: number;
   creationTimeSeconds: number;
-  problem: { contestId?: number; index: string; name: string };
+  problem: { contestId?: number; index: string; name: string; rating?: number; tags?: string[] };
   programmingLanguage: string;
   verdict?: string;
   timeConsumedMillis: number;

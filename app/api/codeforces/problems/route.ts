@@ -20,7 +20,8 @@ export async function GET(request: NextRequest) {
       const page = Math.max(1, Number(request.nextUrl.searchParams.get("page")) || 1);
       const limit = Math.min(100, Math.max(20, Number(request.nextUrl.searchParams.get("limit")) || 60));
       const query = (request.nextUrl.searchParams.get("q") ?? "").trim().toLowerCase();
-      const filtered = all.filter((problem) => problem.type === "PROGRAMMING" && problem.contestId && problem.rating && problem.rating >= min && problem.rating <= max && !problem.tags.includes("interactive") && (!query || `${problem.contestId}${problem.index} ${problem.name} ${problem.tags.join(" ")}`.toLowerCase().includes(query)));
+      const tags = [...new Set((request.nextUrl.searchParams.get("tags") ?? "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))];
+      const filtered = all.filter((problem) => problem.type === "PROGRAMMING" && problem.contestId && problem.rating && problem.rating >= min && problem.rating <= max && !problem.tags.includes("interactive") && (!tags.length || tags.some((tag) => problem.tags.includes(tag))) && (!query || `${problem.contestId}${problem.index} ${problem.name} ${problem.tags.join(" ")}`.toLowerCase().includes(query)));
       filtered.sort((a, b) => (a.rating ?? 0) - (b.rating ?? 0) || (b.contestId ?? 0) - (a.contestId ?? 0) || a.index.localeCompare(b.index));
       const offset = (page - 1) * limit;
       return NextResponse.json({ source: "codeforces", page, total: filtered.length, problems: filtered.slice(offset, offset + limit).map(publicProblem) }, { headers: { "Cache-Control": "public, max-age=0, s-maxage=600" } });

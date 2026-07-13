@@ -4,7 +4,8 @@
 
 ## 当前能力
 
-- 20 道精选 Codeforces 题的中文结构化导读
+- 20 道精选 Codeforces 题的完整中文题面（描述、约束、输入输出与样例）
+- 额外收录 CF 2176C，Rating 扩展题命中已导入题面时可直接阅读
 - 通过 Codeforces 公开 API 校准题名、Rating，并按 Handle 同步最近提交
 - 按 Rating 分页扩展完整公开题池
 - 真实随机组卷与历史原场镜像 VP，支持排除 AC、Seed、计时恢复和判题同步
@@ -27,7 +28,8 @@ Node.js 版本要求：`>=22.13.0`。
 
 ## 目录
 
-- `app/data/problems.ts`：首批 20 道中文精选题
+- `app/data/problems.ts`：首批 20 道中文精选题元数据
+- `app/data/problem-statements.ts`：完整中文题面与官方样例
 - `app/api/codeforces/`：Codeforces 公开数据同步
 - `app/problem/`：题库与题目训练界面
 - `app/extension/`：扩展下载与安装指南

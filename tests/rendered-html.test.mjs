@@ -29,6 +29,26 @@ test("ships exactly twenty curated Chinese problem records", async () => {
   assert.match(source, /summaryZh/);
 });
 
+test("ships readable Chinese statements and the requested CF 2176C import", async () => {
+  const [statements, detailPage] = await Promise.all([
+    readFile(new URL("app/data/problem-statements.ts", root), "utf8"),
+    readFile(new URL("app/problem/[code]/page.tsx", root), "utf8"),
+  ]);
+  assert.equal((statements.match(/^    timeLimitSeconds:/gm) ?? []).length, 21);
+  assert.match(statements, /"2176c"/);
+  assert.match(statements, /奇数过程/);
+  assert.match(statements, /examples: ProblemExample\[\]/);
+  assert.match(detailPage, /完整中文题面/);
+  assert.match(detailPage, /样例输入/);
+  assert.match(detailPage, /样例输出/);
+  const response = await render("/problem/2176C");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /奇数过程/);
+  assert.match(html, /完整中文题面/);
+  assert.match(html, /1 0 1/);
+});
+
 test("ships a constrained Manifest V3 submit bridge", async () => {
   const manifest = JSON.parse(await readFile(new URL("extension/manifest.json", root), "utf8"));
   assert.equal(manifest.manifest_version, 3);

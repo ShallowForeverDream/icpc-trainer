@@ -8,6 +8,7 @@ import { AppShell, Icon } from "../../components/AppShell";
 import { findCuratedProblem } from "../../data/problems";
 import { findImportedStatement } from "../../data/problem-statements";
 import { browserApiUrl } from "../../lib/browser-api";
+import { saveTrainingEvent, type TrainingDifficulty, type TrainingOutcome } from "../../lib/training-client";
 import {
   CachedStatement,
   fetchStatementViaExtension,
@@ -55,7 +56,26 @@ const strategyByTag: Record<string, string> = {
   数据结构: "先写出需要支持的修改与查询，再选择能够满足复杂度的数据结构。",
   位运算: "逐位统计贡献，从高位到低位判断当前预算能否让这一位成立。",
   数论: "枚举较小参数，利用 gcd、整除或因子关系压缩另一维范围。",
+  greedy: "能否用交换论证说明：先做当前最优选择，不会让后续答案变差？",
+  math: "把操作或条件改写成等式、不等式、奇偶性或整除关系后，什么量保持不变？",
+  implementation: "先列出状态与边界，再把每条规则拆成可单独验证的分支。",
+  dp: "如果只保留解决后缀所需的最少信息，状态应该表示什么？转移最后一步是什么？",
+  graphs: "把对象看作点、关系看作边后，题目真正询问的是连通、最短路还是拓扑顺序？",
+  trees: "选定根后，每棵子树需要向父亲汇报哪一条最小信息？",
+  "binary search": "是否存在一个答案 x，使得 x 可行时更宽松的答案也必然可行？",
+  "two pointers": "当右端点移动时，左端点是否只需单调向前而不必回退？",
+  strings: "逐字符扫描时，决定未来所需的历史信息能否压缩到常数或一个前缀状态？",
+  "number theory": "先写出整除、gcd 或因子关系，哪一维可以通过枚举较小参数被消去？",
+  combinatorics: "尝试按最后一次选择或贡献位置计数，如何避免重复与遗漏？",
+  "constructive algorithms": "先从答案必须满足的局部条件反推结构，再尝试用最简单规则构造。",
+  "data structures": "明确必须支持的修改和查询，再判断是否真的需要树状数组、线段树或并查集。",
 };
+
+const thinkingPrompts = [
+  "先不想算法：用一句话写出“给定什么、要最优化或判断什么”。",
+  "只看约束范围：允许的时间复杂度大约是多少？哪些朴素枚举一定会超时？",
+  "写出最直接的暴力过程。它重复计算了什么，或在哪一步丢失了单调性？",
+];
 
 function statusText(statement: CachedStatement | null, error: string) {
   if (error) return error;
@@ -122,6 +142,14 @@ export default function ProblemDetailPage() {
   const [code, setCode] = useState(initialCode);
   const [submitState, setSubmitState] = useState<"idle" | "sent">("idle");
   const [autoSubmit, setAutoSubmit] = useState(false);
+  const [trainingMode, setTrainingMode] = useState(false);
+  const [metaRevealed, setMetaRevealed] = useState(false);
+  const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const [hintLevel, setHintLevel] = useState(0);
+  const [thinkingNote, setThinkingNote] = useState("");
+  const [difficulty, setDifficulty] = useState<TrainingDifficulty>("right");
+  const [trainingState, setTrainingState] = useState<"active" | "saving" | "saved" | "error">("active");
   const officialProblemUrl = `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
 
   const refreshStatement = useCallback(async () => {
@@ -196,6 +224,35 @@ export default function ProblemDetailPage() {
     setFavorite(favorites.includes(problem.code));
   }, [problem.code]);
 
+  useEffect(() => {
+    const enabled = new URLSearchParams(location.search).get("training") === "1";
+    setTrainingMode(enabled);
+    setMetaRevealed(!enabled);
+    try {
+      const saved = JSON.parse(localStorage.getItem(`icpc-trainer-thinking:${requestedCode}`) ?? "{}");
+      setThinkingNote(saved.note ?? "");
+      setHintLevel(Number(saved.hintLevel) || 0);
+      setDifficulty(["easy", "right", "hard"].includes(saved.difficulty) ? saved.difficulty : "right");
+      const startedAt = enabled ? Number(saved.startedAt) || Date.now() : null;
+      setSessionStartedAt(startedAt);
+      if (startedAt) localStorage.setItem(`icpc-trainer-thinking:${requestedCode}`, JSON.stringify({ ...saved, startedAt }));
+    } catch { localStorage.removeItem(`icpc-trainer-thinking:${requestedCode}`); }
+  }, [requestedCode]);
+
+  useEffect(() => {
+    if (!sessionStartedAt || trainingState === "saved") return;
+    const update = () => setElapsedSeconds(Math.max(0, Math.floor((Date.now() - sessionStartedAt) / 1000)));
+    update();
+    const interval = window.setInterval(update, 1000);
+    return () => window.clearInterval(interval);
+  }, [sessionStartedAt, trainingState]);
+
+  useEffect(() => {
+    if (!trainingMode) return;
+    const previous = JSON.parse(localStorage.getItem(`icpc-trainer-thinking:${requestedCode}`) ?? "{}");
+    localStorage.setItem(`icpc-trainer-thinking:${requestedCode}`, JSON.stringify({ ...previous, startedAt: sessionStartedAt, note: thinkingNote, hintLevel, difficulty }));
+  }, [difficulty, hintLevel, requestedCode, sessionStartedAt, thinkingNote, trainingMode]);
+
   function toggleFavorite() {
     const favorites = new Set<string>(JSON.parse(localStorage.getItem("icpc-trainer-favorites") ?? "[]"));
     if (favorites.has(problem.code)) favorites.delete(problem.code); else favorites.add(problem.code);
@@ -229,6 +286,18 @@ export default function ProblemDetailPage() {
     setSubmitState("sent");
   }
 
+  async function recordTraining(outcome: TrainingOutcome) {
+    setTrainingState("saving");
+    try {
+      await saveTrainingEvent({ code: requestedCode, outcome, durationMinutes: Math.max(1, Math.round(elapsedSeconds / 60)), hintLevel, difficulty, reflection: thinkingNote });
+      setTrainingState("saved");
+      localStorage.removeItem(`icpc-trainer-thinking:${requestedCode}`);
+    } catch { setTrainingState("error"); }
+  }
+
+  const elapsedLabel = `${String(Math.floor(elapsedSeconds / 60)).padStart(2, "0")}:${String(elapsedSeconds % 60).padStart(2, "0")}`;
+  const directionPrompt = strategyByTag[problem.tags[0]] ?? "从约束反推复杂度：能否先写出暴力，再找出被重复计算的部分？";
+
   const ready = Boolean(statement?.originalHtml);
   const status = statementAction || statusText(statement, statementError);
 
@@ -241,7 +310,7 @@ export default function ProblemDetailPage() {
       <article className="statement-panel">
         <div className="statement-title">
           <div><span>{problem.code}</span><h1>{problem.title}</h1><p>{problem.titleZh}</p></div>
-          <div className="problem-meta"><b>{problem.rating || "—"}</b>{problem.tags.slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}</div>
+          <div className={`problem-meta${trainingMode && !metaRevealed ? " meta-concealed" : ""}`}>{trainingMode && !metaRevealed ? <><b>?</b><span>标签已隐藏</span><button onClick={() => setMetaRevealed(true)}>主动揭示</button></> : <><b>{problem.rating || "—"}</b>{problem.tags.slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}</>}</div>
         </div>
         <div className={`translation-note${ready ? " statement-ready" : ""}`}><Icon name="spark" /><p><b>原题面默认显示 · 可切换中文</b>　<span>{status}</span></p></div>
         <div className="tabs">{["题目", "提交记录", "题解"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</div>
@@ -262,6 +331,17 @@ export default function ProblemDetailPage() {
         </> : tab === "提交记录" ? <div className="empty-state"><Icon name="history" /><h3>查看公开提交记录</h3><p>在「提交记录」输入 Codeforces Handle，即可同步最近提交与判题结果。</p><a className="button button-primary" href="/submissions">前往同步</a></div> : <div className="locked-editorial"><Icon name="spark" /><h3>解题导航</h3><p>{strategyByTag[problem.tags[0]] ?? "从约束范围反推目标复杂度，先写出朴素算法，再寻找可以复用的状态或单调性。"}</p><p>建议复杂度方向：根据 <b>{problem.tags.join(" / ")}</b> 标签选择对应模板，并使用样例和极端数据验证。</p><div className="hero-actions"><a className="button button-primary" href="/templates">打开算法模板</a><a className="button button-ghost" href={officialProblemUrl} target="_blank" rel="noreferrer">核对官方题面 ↗</a></div></div>}
       </article>
       <aside className="code-panel">
+        {trainingMode ? <section className="thinking-coach">
+          <div className="thinking-coach-head"><div><span>THINKING MODE</span><h2>思维训练</h2></div><strong>{elapsedLabel}</strong></div>
+          {trainingState === "saved" ? <div className="training-saved"><span>✓</span><div><b>本题训练已记录</b><small>后续推荐会区分独立完成、提示后完成和待补题。</small></div><Link href="/problem?recommended=1&mode=balanced&training=1">下一题 →</Link></div> : <>
+            <div className="thinking-stage"><small>第 {Math.min(4, hintLevel + 1)} / 4 步</small><p>{hintLevel < 3 ? thinkingPrompts[hintLevel] : directionPrompt}</p></div>
+            <textarea className="thinking-notes" value={thinkingNote} onChange={(event) => setThinkingNote(event.target.value)} placeholder="记录：目标、暴力算法、瓶颈、关键观察。不要只抄题解。" aria-label="思路草稿" />
+            <div className="thinking-actions"><button type="button" disabled={hintLevel >= 3} onClick={() => setHintLevel((value) => Math.min(3, value + 1))}>{hintLevel >= 3 ? "已到最后提示" : "卡住了，给下一步问题"}</button><button type="button" onClick={() => setMetaRevealed((value) => !value)}>{metaRevealed ? "重新隐藏标签" : "显示标签与 Rating"}</button></div>
+            <div className="difficulty-check"><span>这题对你：</span>{(["easy", "right", "hard"] as TrainingDifficulty[]).map((value) => <button type="button" key={value} className={difficulty === value ? "active" : ""} onClick={() => setDifficulty(value)}>{value === "easy" ? "偏简单" : value === "right" ? "刚刚好" : "偏困难"}</button>)}</div>
+            <div className="outcome-grid"><button type="button" onClick={() => void recordTraining("independent")}><b>独立完成</b><small>未看提示/题解</small></button><button type="button" onClick={() => void recordTraining("hinted")}><b>提示后完成</b><small>需要安排复盘</small></button><button type="button" onClick={() => void recordTraining("editorial")}><b>题解后完成</b><small>3 天后重做</small></button><button type="button" onClick={() => void recordTraining("unsolved")}><b>暂未解决</b><small>加入补题队列</small></button></div>
+            {trainingState === "saving" ? <p className="training-save-state">正在保存训练结果…</p> : trainingState === "error" ? <p className="form-error">保存失败，请重试。</p> : null}
+          </>}
+        </section> : null}
         <div className="editor-head"><div><span className="active-dot" /> main.cpp</div><select aria-label="编译语言"><option>GNU C++20</option></select></div>
         <textarea className="code-editor" value={code} onChange={(event) => setCode(event.target.value)} spellCheck={false} aria-label="C++ 代码编辑器" />
         <div className="editor-footer"><div><a href="/templates">＋ 打开模板库</a><span>草稿已自动保存在当前浏览器</span></div><label className="auto-submit-option"><input type="checkbox" checked={autoSubmit} onChange={(event) => setAutoSubmit(event.target.checked)} /> 预填后自动点击 Codeforces 提交按钮</label><button className="submit-button" onClick={sendToExtension}>{submitState === "sent" ? <><Icon name="check" /> 已发送给浏览器扩展</> : <>提交到 Codeforces <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>

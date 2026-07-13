@@ -146,3 +146,25 @@ test("ships invite-only authentication and administration", async () => {
   assert.match(register, /inviteCode/);
   assert.match(admin, /生成邀请码/);
 });
+
+test("ships a deliberate-practice loop and collects user experience feedback", async () => {
+  const [home, catalog, detail, shell, auth, admin] = await Promise.all([
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/problem/page.tsx", root), "utf8"),
+    readFile(new URL("app/problem/[code]/page.tsx", root), "utf8"),
+    readFile(new URL("app/components/AppShell.tsx", root), "utf8"),
+    readFile(new URL("backend/auth.mjs", root), "utf8"),
+    readFile(new URL("app/admin/page.tsx", root), "utf8"),
+  ]);
+  assert.match(home, /弱项攻坚/);
+  assert.match(home, /赛后补题/);
+  assert.match(catalog, /赛场思维模式/);
+  assert.match(catalog, /Boss 题/);
+  assert.match(detail, /THINKING MODE/);
+  assert.match(detail, /独立完成/);
+  assert.match(detail, /题解后完成/);
+  assert.match(shell, /体验建议/);
+  assert.match(auth, /CREATE TABLE IF NOT EXISTS training_events/);
+  assert.match(auth, /CREATE TABLE IF NOT EXISTS feedback/);
+  assert.match(admin, /USER FEEDBACK/);
+});

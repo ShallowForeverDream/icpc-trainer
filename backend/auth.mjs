@@ -40,6 +40,32 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS sessions_token_idx ON sessions(token_hash);
   CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id);
+  CREATE TABLE IF NOT EXISTS training_events (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    client_id TEXT NOT NULL,
+    handle TEXT NOT NULL,
+    code TEXT NOT NULL,
+    outcome TEXT NOT NULL CHECK (outcome IN ('independent', 'hinted', 'editorial', 'unsolved')),
+    duration_minutes INTEGER NOT NULL DEFAULT 0,
+    hint_level INTEGER NOT NULL DEFAULT 0,
+    difficulty TEXT NOT NULL DEFAULT 'right' CHECK (difficulty IN ('easy', 'right', 'hard')),
+    reflection TEXT NOT NULL DEFAULT '',
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS training_events_client_idx ON training_events(client_id, handle, created_at DESC);
+  CREATE INDEX IF NOT EXISTS training_events_code_idx ON training_events(client_id, handle, code, created_at DESC);
+  CREATE TABLE IF NOT EXISTS feedback (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+    client_id TEXT NOT NULL,
+    category TEXT NOT NULL,
+    rating INTEGER NOT NULL CHECK (rating BETWEEN 1 AND 5),
+    message TEXT NOT NULL,
+    page TEXT NOT NULL DEFAULT '/',
+    status TEXT NOT NULL DEFAULT 'new' CHECK (status IN ('new', 'reviewed', 'planned', 'done')),
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback(created_at DESC);
 `);
 
 class AuthError extends Error {
@@ -103,6 +129,80 @@ function requireAdmin(request) {
   return user;
 }
 
+function optionalUser(request) {
+  if (!bearerToken(request)) return null;
+  try { return requireUser(request); } catch { return null; }
+}
+
+function normalizeClientId(value) {
+  const clientId = String(value || "").trim();
+  if (!/^[A-Za-z0-9_-]{12,80}$/.test(clientId)) throw new AuthError(400, "训练设备标识无效");
+  return clientId;
+}
+
+function normalizeHandle(value) {
+  const handle = String(value || "ShallowDream2").trim();
+  if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) throw new AuthError(400, "Codeforces Handle 无效");
+  return handle;
+}
+
+function normalizeProblemCode(value) {
+  const code = String(value || "").replace(/^CF\s*/i, "").toUpperCase().trim();
+  if (!/^\d{1,7}[A-Z][0-9]?$/.test(code)) throw new AuthError(400, "题号格式无效");
+  return code;
+}
+
+function publicTrainingEvent(item) {
+  return {
+    id: Number(item.id),
+    code: `CF ${item.code}`,
+    outcome: item.outcome,
+    durationMinutes: Number(item.duration_minutes),
+    hintLevel: Number(item.hint_level),
+    difficulty: item.difficulty,
+    reflection: item.reflection,
+    createdAt: new Date(item.created_at).toISOString(),
+  };
+}
+
+function latestTrainingRows(clientId, handle, limit = 500) {
+  const rows = db.prepare("SELECT * FROM training_events WHERE client_id = ? AND lower(handle) = lower(?) ORDER BY created_at DESC LIMIT ?").all(clientId, handle, limit);
+  const seen = new Set();
+  return rows.filter((item) => {
+    if (seen.has(item.code)) return false;
+    seen.add(item.code);
+    return true;
+  });
+}
+
+function reviewDelay(outcome, difficulty) {
+  if (outcome === "unsolved") return 24 * 60 * 60 * 1000;
+  if (outcome === "editorial") return 3 * 24 * 60 * 60 * 1000;
+  if (outcome === "hinted") return 7 * 24 * 60 * 60 * 1000;
+  return difficulty === "hard" ? 14 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
+}
+
+export function getTrainingSignals(clientIdValue, handleValue) {
+  if (!clientIdValue) return { completedCodes: new Set(), unsolvedCodes: new Set(), dueCodes: new Set(), latestByCode: new Map(), stats: { total: 0, independent: 0, hinted: 0, editorial: 0, unsolved: 0 } };
+  let clientId;
+  let handle;
+  try { clientId = normalizeClientId(clientIdValue); handle = normalizeHandle(handleValue); }
+  catch { return { completedCodes: new Set(), unsolvedCodes: new Set(), dueCodes: new Set(), latestByCode: new Map(), stats: { total: 0, independent: 0, hinted: 0, editorial: 0, unsolved: 0 } }; }
+  const rows = latestTrainingRows(clientId, handle);
+  const completedCodes = new Set();
+  const unsolvedCodes = new Set();
+  const dueCodes = new Set();
+  const latestByCode = new Map();
+  const stats = { total: rows.length, independent: 0, hinted: 0, editorial: 0, unsolved: 0 };
+  for (const item of rows) {
+    latestByCode.set(item.code, item);
+    stats[item.outcome] += 1;
+    if (item.outcome === "unsolved") unsolvedCodes.add(item.code); else completedCodes.add(item.code);
+    if (item.created_at + reviewDelay(item.outcome, item.difficulty) <= now()) dueCodes.add(item.code);
+  }
+  return { completedCodes, unsolvedCodes, dueCodes, latestByCode, stats };
+}
+
 function checkLoginLimit(ip, email) {
   const key = `${ip}:${email}`;
   const current = now();
@@ -141,7 +241,7 @@ bootstrapAdmin();
 
 export function createAuthHandler({ json, readBody, clientIp }) {
   return async function handleAuth(request, response, url) {
-    if (!url.pathname.startsWith("/auth/") && !url.pathname.startsWith("/admin/")) return false;
+    if (!url.pathname.startsWith("/auth/") && !url.pathname.startsWith("/admin/") && !url.pathname.startsWith("/training/") && url.pathname !== "/feedback") return false;
     try {
       if (request.method === "POST" && url.pathname === "/auth/register") {
         const body = await readBody(request);
@@ -207,6 +307,49 @@ export function createAuthHandler({ json, readBody, clientIp }) {
         return true;
       }
 
+      if (request.method === "POST" && url.pathname === "/training/events") {
+        const body = await readBody(request);
+        const clientId = normalizeClientId(body.clientId);
+        const handle = normalizeHandle(body.handle);
+        const code = normalizeProblemCode(body.code);
+        const outcome = String(body.outcome || "");
+        const difficulty = ["easy", "right", "hard"].includes(body.difficulty) ? body.difficulty : "right";
+        if (!["independent", "hinted", "editorial", "unsolved"].includes(outcome)) throw new AuthError(400, "训练结果无效");
+        const durationMinutes = Math.max(0, Math.min(600, Math.round(Number(body.durationMinutes) || 0)));
+        const hintLevel = Math.max(0, Math.min(4, Math.round(Number(body.hintLevel) || 0)));
+        const reflection = String(body.reflection || "").trim().slice(0, 1000);
+        const createdAt = now();
+        const result = db.prepare("INSERT INTO training_events (client_id, handle, code, outcome, duration_minutes, hint_level, difficulty, reflection, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(clientId, handle, code, outcome, durationMinutes, hintLevel, difficulty, reflection, createdAt);
+        const event = db.prepare("SELECT * FROM training_events WHERE id = ?").get(result.lastInsertRowid);
+        json(response, 201, { event: publicTrainingEvent(event) });
+        return true;
+      }
+
+      if (request.method === "GET" && url.pathname === "/training/summary") {
+        const clientId = normalizeClientId(url.searchParams.get("clientId"));
+        const handle = normalizeHandle(url.searchParams.get("handle"));
+        const rows = latestTrainingRows(clientId, handle);
+        const signals = getTrainingSignals(clientId, handle);
+        const dueReviews = rows.filter((item) => signals.dueCodes.has(item.code)).slice(0, 20).map(publicTrainingEvent);
+        json(response, 200, { stats: signals.stats, dueReviews, recent: rows.slice(0, 12).map(publicTrainingEvent) });
+        return true;
+      }
+
+      if (request.method === "POST" && url.pathname === "/feedback") {
+        const body = await readBody(request);
+        const clientId = normalizeClientId(body.clientId);
+        const category = String(body.category || "体验建议").trim().slice(0, 40);
+        const rating = Math.max(1, Math.min(5, Math.round(Number(body.rating) || 0)));
+        const message = String(body.message || "").trim();
+        const page = String(body.page || "/").trim().slice(0, 200);
+        if (message.length < 8 || message.length > 2000) throw new AuthError(400, "建议请填写 8–2000 个字符");
+        const user = optionalUser(request);
+        const createdAt = now();
+        const result = db.prepare("INSERT INTO feedback (user_id, client_id, category, rating, message, page, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(user?.id || null, clientId, category, rating, message, page, createdAt);
+        json(response, 201, { id: Number(result.lastInsertRowid), ok: true });
+        return true;
+      }
+
       if (request.method === "GET" && url.pathname === "/admin/users") {
         requireAdmin(request);
         const users = db.prepare("SELECT id, email, role, must_change_password, created_at FROM users ORDER BY created_at DESC LIMIT 500").all().map(publicUser);
@@ -218,6 +361,13 @@ export function createAuthHandler({ json, readBody, clientIp }) {
         requireAdmin(request);
         const invites = db.prepare("SELECT id, code_prefix, max_uses, used_count, expires_at, created_at FROM invites ORDER BY created_at DESC LIMIT 200").all().map((item) => ({ id: Number(item.id), codePrefix: item.code_prefix, maxUses: item.max_uses, usedCount: item.used_count, expiresAt: new Date(item.expires_at).toISOString(), createdAt: new Date(item.created_at).toISOString(), status: item.expires_at <= now() ? "expired" : item.used_count >= item.max_uses ? "used" : "active" }));
         json(response, 200, { invites });
+        return true;
+      }
+
+      if (request.method === "GET" && url.pathname === "/admin/feedback") {
+        requireAdmin(request);
+        const feedback = db.prepare("SELECT feedback.*, users.email FROM feedback LEFT JOIN users ON users.id = feedback.user_id ORDER BY feedback.created_at DESC LIMIT 300").all().map((item) => ({ id: Number(item.id), email: item.email || null, category: item.category, rating: Number(item.rating), message: item.message, page: item.page, status: item.status, createdAt: new Date(item.created_at).toISOString() }));
+        json(response, 200, { feedback });
         return true;
       }
 

@@ -1,5 +1,5 @@
 import http from "node:http";
-import { createAuthHandler } from "./auth.mjs";
+import { createAuthHandler, getTrainingSignals } from "./auth.mjs";
 import { createStatementHandler } from "./statements.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
@@ -125,6 +125,12 @@ function median(values) {
   return sorted.length % 2 ? sorted[middle] : Math.round((sorted[middle - 1] + sorted[middle]) / 2);
 }
 
+function percentile(values, ratio) {
+  if (!values.length) return 0;
+  const sorted = [...values].sort((a, b) => a - b);
+  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * ratio)))];
+}
+
 async function recommendProblems(url) {
   const handle = (url.searchParams.get("handle") || "ShallowDream2").trim();
   if (!validHandle(handle)) throw new Error("Codeforces Handle 无效");
@@ -132,38 +138,99 @@ async function recommendProblems(url) {
   const max = Math.min(3500, Math.max(min, Number(url.searchParams.get("max")) || 1800));
   const limit = Math.min(40, Math.max(6, Number(url.searchParams.get("limit")) || 20));
   const query = (url.searchParams.get("q") || "").trim().toLowerCase();
+  const mode = ["balanced", "weakness", "upsolve", "speed", "boss", "review"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "balanced";
+  const clientId = (url.searchParams.get("clientId") || "").trim();
   const requestedTags = [...new Set((url.searchParams.get("tags") || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))].slice(0, 8);
   const [problemset, submissions] = await Promise.all([getProblemset(), getSubmissions(handle, 1000)]);
-  const accepted = submissions.filter((item) => item.verdict === "OK" && item.problem?.contestId);
-  const solved = new Set(accepted.map((item) => `${item.problem.contestId}${item.problem.index}`));
-  const recentRatings = accepted.slice(0, 180).map((item) => Number(item.problem.rating) || 0).filter(Boolean);
-  const profileRating = median(recentRatings) || Math.round((min + max) / 200) * 100;
-  const targetRating = Math.max(min, Math.min(max, Math.round((profileRating + 100) / 100) * 100));
+  const training = getTrainingSignals(clientId, handle);
+  const attempted = new Map();
+  for (const item of submissions) {
+    if (!item.problem?.contestId) continue;
+    const key = `${item.problem.contestId}${item.problem.index}`;
+    const state = attempted.get(key) || { solved: false, wrong: 0, lastAt: 0, problem: item.problem };
+    state.lastAt = Math.max(state.lastAt, Number(item.creationTimeSeconds) || 0);
+    state.problem = item.problem;
+    if (item.verdict === "OK") state.solved = true;
+    else if (!["COMPILATION_ERROR", "SKIPPED", "TESTING"].includes(item.verdict || "")) state.wrong += 1;
+    attempted.set(key, state);
+  }
+  const solved = new Set([...attempted].filter(([, state]) => state.solved).map(([key]) => key));
+  const recentRatings = [...attempted.values()].filter((state) => state.solved).sort((a, b) => b.lastAt - a.lastAt).slice(0, 180).map((state) => Number(state.problem.rating) || 0).filter(Boolean);
+  const profileRating = percentile(recentRatings, 0.7) || median(recentRatings) || Math.round((min + max) / 200) * 100;
+  const targetOffset = mode === "speed" ? -100 : mode === "boss" ? 400 : mode === "upsolve" || mode === "review" ? 0 : 100;
+  const targetRating = Math.max(min, Math.min(max, Math.round((profileRating + targetOffset) / 100) * 100));
   const tagCounts = new Map();
-  for (const submission of accepted.slice(0, 180)) for (const tag of submission.problem.tags || []) tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+  const weaknessScores = new Map();
+  for (const state of attempted.values()) {
+    for (const tag of state.problem.tags || []) {
+      if (state.solved) tagCounts.set(tag, (tagCounts.get(tag) || 0) + 1);
+      const pain = state.wrong + (state.solved ? 0 : 2);
+      weaknessScores.set(tag, (weaknessScores.get(tag) || 0) + pain);
+    }
+  }
+  const problemByCode = new Map(problemset.filter((item) => item.contestId).map((item) => [`${item.contestId}${item.index}`, item]));
+  for (const [code, event] of training.latestByCode) {
+    const problem = problemByCode.get(code);
+    if (!problem) continue;
+    const pain = event.outcome === "unsolved" ? 5 : event.outcome === "editorial" ? 3 : event.outcome === "hinted" ? 1 : 0;
+    for (const tag of problem.tags || []) weaknessScores.set(tag, (weaknessScores.get(tag) || 0) + pain);
+  }
   const familiarTags = [...tagCounts.entries()].sort((a, b) => b[1] - a[1]).slice(0, 4).map(([tag]) => tag);
-  const candidates = problemset.filter((problem) => {
+  const weakTags = [...weaknessScores.entries()].filter(([, score]) => score > 0).sort((a, b) => b[1] - a[1] || (tagCounts.get(a[0]) || 0) - (tagCounts.get(b[0]) || 0)).slice(0, 5).map(([tag]) => tag);
+  const cfUpsolveCodes = new Set([...attempted].filter(([, state]) => !state.solved).map(([key]) => key));
+  const upsolveCodes = new Set([...cfUpsolveCodes, ...training.unsolvedCodes]);
+  const reviewCodes = training.dueCodes;
+  const baseCandidates = problemset.filter((problem) => {
     if (problem.type !== "PROGRAMMING" || !problem.contestId || !problem.rating || problem.tags.includes("interactive")) return false;
-    if (problem.rating < min || problem.rating > max || solved.has(`${problem.contestId}${problem.index}`)) return false;
+    const key = `${problem.contestId}${problem.index}`;
+    if (problem.rating < min || problem.rating > max || solved.has(key)) return false;
+    if (training.completedCodes.has(key) && mode !== "review") return false;
+    if (mode === "upsolve" && !upsolveCodes.has(key)) return false;
+    if (mode === "review" && !reviewCodes.has(key)) return false;
     if (requestedTags.length && !requestedTags.some((tag) => problem.tags.includes(tag))) return false;
     return !query || `${problem.contestId}${problem.index} ${problem.name} ${problem.tags.join(" ")}`.toLowerCase().includes(query);
   }).map((problem) => {
+    const key = `${problem.contestId}${problem.index}`;
     const requested = problem.tags.filter((tag) => requestedTags.includes(tag));
-    const familiar = problem.tags.filter((tag) => familiarTags.includes(tag));
+    const weak = problem.tags.filter((tag) => weakTags.includes(tag));
     const stableNoise = hashSeed(`${handle}:${problem.contestId}${problem.index}`) % 80;
-    const score = Math.abs(problem.rating - targetRating) * 5 - requested.length * 450 - familiar.length * 70 + stableNoise;
-    const reason = requested.length
+    let score = Math.abs(problem.rating - targetRating) * (mode === "boss" ? 7 : 5) - requested.length * 450 + stableNoise;
+    if (mode === "weakness") score -= weak.length * 650;
+    else if (mode === "balanced") score -= weak.length * 180;
+    if (mode === "upsolve") score -= (attempted.get(key)?.wrong || 0) * 140 + (attempted.get(key)?.lastAt || 0) / 1e8;
+    if (mode === "review") score -= (training.latestByCode.get(key)?.created_at || 0) / 1e8;
+    const reason = mode === "upsolve"
+      ? `补回做错或未完成的题${attempted.get(key)?.wrong ? ` · ${attempted.get(key).wrong} 次未通过` : ""}`
+      : mode === "review"
+        ? "已到复盘时间 · 再做一次检验是否真正掌握"
+        : mode === "boss"
+          ? `挑战题 · 高于近期舒适区约 ${Math.max(0, problem.rating - profileRating)} Rating`
+          : mode === "speed"
+            ? `限时巩固 · 目标在 25 分钟内独立完成`
+            : requested.length
       ? `匹配标签：${requested.slice(0, 2).join(" / ")}`
-      : familiar.length
-        ? `${familiar[0]} 延伸训练 · 接近目标 ${targetRating}`
-        : `接近目标 Rating ${targetRating}`;
+      : weak.length
+        ? `${weak[0]} 弱项训练 · 接近挑战位 ${targetRating}`
+        : `接近建议挑战位 ${targetRating}`;
     return { problem, score, reason };
-  }).sort((a, b) => a.score - b.score || b.problem.contestId - a.problem.contestId).slice(0, limit);
+  }).sort((a, b) => a.score - b.score || b.problem.contestId - a.problem.contestId);
+  const candidates = baseCandidates.slice(0, limit);
   return {
     source: "codeforces",
     handle,
-    profile: { solvedCount: solved.size, estimatedRating: profileRating, targetRating, familiarTags },
-    total: candidates.length,
+    profile: {
+      solvedCount: solved.size,
+      attemptedCount: attempted.size,
+      estimatedRating: profileRating,
+      targetRating,
+      familiarTags,
+      weakTags,
+      upsolveCount: upsolveCodes.size,
+      dueReviewCount: reviewCodes.size,
+      mode,
+      methodology: "优先补题与弱项；普通训练选择近期舒适区上方约 100 Rating，Boss 题上移约 400。",
+    },
+    total: baseCandidates.length,
     problems: candidates.map(({ problem, reason }) => ({ ...publicProblem(problem), reason })),
   };
 }

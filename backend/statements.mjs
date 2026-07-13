@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile);
 const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
-const TRANSLATION_VERSION = 3;
+const TRANSLATION_VERSION = 4;
 const USER_AGENT = "icpc-trainer-statement-importer/0.3 (+https://icpc-lab-trainer.zhuj7933.chatgpt.site)";
 const importJobs = new Map();
 const recentTranslationAttempts = new Map();
@@ -248,6 +248,7 @@ async function translateChunk(texts) {
     "先理解整句逻辑，再按中文语序表达；不得解题、删减条件或补充信息。所有量词、奇偶性、上下界、先后顺序和充分必要关系必须准确。",
     "术语统一：array=数组，index=下标，segment/subarray=区间/子数组，operation=操作，query=询问，positive integer=正整数，print/output=输出，input=输入，distinct=互不相同，at most=至多，at least=至少。禁止使用“阵列”“键入”“您”。",
     "变量名、数字、公式、数学符号、代码标识符以及要求原样输出的 YES/NO 等字面量保持不变。",
+    "ICPCMATH0END、ICPCMATH1END 这类内容是数学公式占位符，必须逐字保留在原位置，不得翻译、增删或移动。",
     "只返回一个 JSON 对象，格式必须为 {\"translations\":[\"中文译文\"]}；条目数量和顺序必须与输入完全一致。",
     "示例：输入 [\"You are given an array a of n integers. Perform the following operation any number of times.\"]，输出 {\"translations\":[\"给定一个长度为 n 的整数数组 a。你可以进行任意次下述操作。\"]}",
     `输入：${JSON.stringify(texts)}`,
@@ -317,28 +318,34 @@ async function translateHtml(originalHtml, sourceUrl) {
     if (node.type !== "text") return;
     if ($(node).parents("pre, code, .tex-span, .section-title").length) return;
     const raw = node.data || "";
-    const segments = raw.split(/(\${3}[\s\S]*?\${3})/g).map((value, index) => ({
-      value,
-      formula: index % 2 === 1,
-      trimmed: value.trim(),
-    }));
-    if (!segments.some((segment) => !segment.formula && /[A-Za-z]{2}/.test(segment.trimmed))) return;
-    records.push({ node, segments });
+    if (!/[A-Za-z]{2}/.test(raw.replace(/\${3}[\s\S]*?\${3}/g, ""))) return;
+    const formulas = [];
+    const masked = raw.replace(/\${3}[\s\S]*?\${3}/g, (formula) => {
+      const placeholder = `ICPCMATH${formulas.length}END`;
+      formulas.push({ placeholder, formula });
+      return placeholder;
+    });
+    records.push({ node, raw, trimmed: masked.trim(), formulas });
   });
-  const unique = [...new Set(records.flatMap((record) => record.segments
-    .filter((segment) => !segment.formula && /[A-Za-z]{2}/.test(segment.trimmed))
-    .map((segment) => segment.trimmed)))];
+  const unique = [...new Set(records.map((record) => record.trimmed))];
   const translations = await translateTexts(unique);
   const map = new Map(unique.map((item, index) => [item, translations[index]]));
   for (const record of records) {
-    record.node.data = record.segments.map((segment) => {
-      if (segment.formula || !/[A-Za-z]{2}/.test(segment.trimmed)) return segment.value;
-      const prefix = segment.value.match(/^\s*/)?.[0] || "";
-      const suffix = segment.value.match(/\s*$/)?.[0] || "";
-      return `${prefix}${map.get(segment.trimmed) || segment.trimmed}${suffix}`;
-    }).join("");
+    let translated = map.get(record.trimmed) || record.trimmed;
+    for (const { placeholder, formula } of record.formulas) {
+      const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
+      if (!flexiblePlaceholder.test(translated)) throw new Error(`翻译模型未保留公式占位符 ${placeholder}`);
+      translated = translated.replace(flexiblePlaceholder, formula);
+    }
+    const prefix = record.raw.match(/^\s*/)?.[0] || "";
+    const suffix = record.raw.match(/\s*$/)?.[0] || "";
+    record.node.data = `${prefix}${translated.trim()}${suffix}`;
   }
-  return sanitizeStatementHtml($("#translation-root").html() || "", sourceUrl).html;
+  const translatedHtml = sanitizeStatementHtml($("#translation-root").html() || "", sourceUrl).html;
+  const sourceFormulas = [...originalHtml.matchAll(/\${3}[\s\S]*?\${3}/g)].map((match) => match[0]);
+  const translatedFormulas = [...translatedHtml.matchAll(/\${3}[\s\S]*?\${3}/g)].map((match) => match[0]);
+  if (sourceFormulas.length !== translatedFormulas.length || sourceFormulas.some((formula, index) => formula !== translatedFormulas[index])) throw new Error("翻译过程改变了数学公式，已拒绝缓存该译文");
+  return translatedHtml;
 }
 
 async function downloadImage(image, code) {

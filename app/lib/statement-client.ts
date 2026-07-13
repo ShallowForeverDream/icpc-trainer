@@ -175,12 +175,24 @@ function textNodesForTranslation(root: HTMLElement) {
   return nodes;
 }
 
-function splitFormulaSafeText(raw: string) {
-  return raw.split(/(\${3}[\s\S]*?\${3})/g).map((value, index) => ({
-    value,
-    formula: index % 2 === 1,
-    trimmed: value.trim(),
-  }));
+function maskFormulaText(raw: string) {
+  const formulas: Array<{ placeholder: string; formula: string }> = [];
+  const masked = raw.replace(/\${3}[\s\S]*?\${3}/g, (formula) => {
+    const placeholder = `ICPCMATH${formulas.length}END`;
+    formulas.push({ placeholder, formula });
+    return placeholder;
+  });
+  return { masked, formulas };
+}
+
+function restoreFormulaText(translated: string, formulas: Array<{ placeholder: string; formula: string }>) {
+  let restored = translated;
+  for (const { placeholder, formula } of formulas) {
+    const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
+    if (!flexiblePlaceholder.test(restored)) throw new Error(`浏览器翻译未保留公式占位符 ${placeholder}`);
+    restored = restored.replace(flexiblePlaceholder, formula);
+  }
+  return restored;
 }
 
 export async function translateStatementInBrowser(
@@ -206,20 +218,19 @@ export async function translateStatementInBrowser(
     const root = document.querySelector<HTMLElement>("#browser-translation-root");
     if (!root) throw new Error("原题面结构无效");
     const nodes = textNodesForTranslation(root);
-    const records = nodes.map((node) => ({ node, segments: splitFormulaSafeText(node.data) }));
-    const unique = [...new Set(records.flatMap((record) => record.segments
-      .filter((segment) => !segment.formula && /[A-Za-z]{2}/.test(segment.trimmed))
-      .map((segment) => segment.trimmed)))];
+    const records = nodes
+      .filter((node) => /[A-Za-z]{2}/.test(node.data.replace(/\${3}[\s\S]*?\${3}/g, "")))
+      .map((node) => ({ node, raw: node.data, ...maskFormulaText(node.data) }));
+    const unique = [...new Set(records.map((record) => record.masked.trim()))];
     const translated = new Map<string, string>();
     for (let index = 0; index < unique.length; index += 1) {
       onProgress(`浏览器本地翻译 ${index + 1} / ${unique.length}`);
       translated.set(unique[index], await translator.translate(unique[index]));
     }
     for (const record of records) {
-      record.node.data = record.segments.map((segment) => {
-        if (segment.formula || !/[A-Za-z]{2}/.test(segment.trimmed)) return segment.value;
-        return `${segment.value.match(/^\s*/)?.[0] || ""}${translated.get(segment.trimmed) || segment.trimmed}${segment.value.match(/\s*$/)?.[0] || ""}`;
-      }).join("");
+      const masked = record.masked.trim();
+      const restored = restoreFormulaText(translated.get(masked) || masked, record.formulas);
+      record.node.data = `${record.raw.match(/^\s*/)?.[0] || ""}${restored.trim()}${record.raw.match(/\s*$/)?.[0] || ""}`;
     }
 
     const translatedImages: StatementImage[] = [];

@@ -1,0 +1,468 @@
+import { createHash } from "node:crypto";
+import { execFile } from "node:child_process";
+import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { dirname, join } from "node:path";
+import { promisify } from "node:util";
+import { DatabaseSync } from "node:sqlite";
+import { load } from "cheerio";
+import { datasetRowToStatement, normalizeStatementCode, parseCodeforcesStatement, sanitizeStatementHtml } from "./statement-parser.mjs";
+
+const execFileAsync = promisify(execFile);
+const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
+const OLLAMA_BASE_URL = String(process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
+const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:1.5b-instruct";
+const USER_AGENT = "icpc-trainer-statement-importer/0.3 (+https://icpc-lab-trainer.zhuj7933.chatgpt.site)";
+const importJobs = new Map();
+const recentTranslationAttempts = new Map();
+const importWindows = new Map();
+let translationQueue = Promise.resolve();
+let modelReadyPromise = null;
+
+mkdirSync(dirname(DB_PATH), { recursive: true });
+const db = new DatabaseSync(DB_PATH);
+db.exec(`
+  PRAGMA journal_mode = WAL;
+  CREATE TABLE IF NOT EXISTS problem_statements (
+    code TEXT PRIMARY KEY,
+    contest_id INTEGER NOT NULL,
+    problem_index TEXT NOT NULL,
+    title TEXT,
+    time_limit_text TEXT,
+    memory_limit_text TEXT,
+    source_url TEXT,
+    source_kind TEXT,
+    original_html TEXT,
+    chinese_html TEXT,
+    images_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'importing',
+    error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE TABLE IF NOT EXISTS statement_assets (
+    id TEXT PRIMARY KEY,
+    code TEXT NOT NULL REFERENCES problem_statements(code) ON DELETE CASCADE,
+    source_url TEXT NOT NULL,
+    content_type TEXT NOT NULL,
+    body BLOB NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS statement_assets_code_idx ON statement_assets(code);
+`);
+
+const now = () => Date.now();
+const sha256 = (value) => createHash("sha256").update(value).digest("hex");
+
+function statementRow(code) {
+  return db.prepare("SELECT * FROM problem_statements WHERE code = ?").get(code);
+}
+
+function safeImages(value) {
+  try {
+    const parsed = JSON.parse(value || "[]");
+    return Array.isArray(parsed) ? parsed : [];
+  } catch {
+    return [];
+  }
+}
+
+function publicStatement(row) {
+  if (!row) return null;
+  return {
+    code: row.code,
+    contestId: Number(row.contest_id),
+    index: row.problem_index,
+    title: row.title || `Codeforces ${row.code}`,
+    timeLimitText: row.time_limit_text || "",
+    memoryLimitText: row.memory_limit_text || "",
+    sourceUrl: row.source_url || `https://codeforces.com/problemset/problem/${row.contest_id}/${row.problem_index}`,
+    sourceKind: row.source_kind || "pending",
+    originalHtml: row.original_html || null,
+    chineseHtml: row.chinese_html || null,
+    images: safeImages(row.images_json),
+    status: row.status,
+    message: row.error || null,
+    updatedAt: new Date(row.updated_at).toISOString(),
+  };
+}
+
+function upsertPending(parsed) {
+  const timestamp = now();
+  db.prepare(`
+    INSERT INTO problem_statements (code, contest_id, problem_index, status, created_at, updated_at)
+    VALUES (?, ?, ?, 'importing', ?, ?)
+    ON CONFLICT(code) DO NOTHING
+  `).run(parsed.code, parsed.contestId, parsed.index, timestamp, timestamp);
+}
+
+function saveOriginal(document) {
+  const timestamp = now();
+  db.prepare(`
+    INSERT INTO problem_statements (code, contest_id, problem_index, title, time_limit_text, memory_limit_text, source_url, source_kind, original_html, images_json, status, error, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'translating', NULL, ?, ?)
+    ON CONFLICT(code) DO UPDATE SET
+      contest_id=excluded.contest_id,
+      problem_index=excluded.problem_index,
+      title=excluded.title,
+      time_limit_text=excluded.time_limit_text,
+      memory_limit_text=excluded.memory_limit_text,
+      source_url=excluded.source_url,
+      source_kind=excluded.source_kind,
+      original_html=excluded.original_html,
+      images_json=excluded.images_json,
+      status='translating',
+      error=NULL,
+      updated_at=excluded.updated_at
+  `).run(document.code, document.contestId, document.index, document.title, document.timeLimitText, document.memoryLimitText, document.sourceUrl, document.sourceKind, document.originalHtml, JSON.stringify(document.images || []), timestamp, timestamp);
+}
+
+function setStatus(code, status, error = null) {
+  db.prepare("UPDATE problem_statements SET status = ?, error = ?, updated_at = ? WHERE code = ?").run(status, error ? String(error).slice(0, 500) : null, now(), code);
+}
+
+async function fetchText(url, timeoutMs = 25_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(url, {
+      redirect: "follow",
+      headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" },
+      signal: controller.signal,
+    });
+    const text = await response.text();
+    if (!response.ok) throw new Error(`HTTP ${response.status}`);
+    return { text, finalUrl: response.url };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fetchDatasetRow(parsed) {
+  const id = `${parsed.contestId}/${parsed.index}`;
+  const where = encodeURIComponent(`"id"='${id}'`);
+  for (const split of ["train", "test"]) {
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 18_000);
+      const response = await fetch(`https://datasets-server.huggingface.co/filter?dataset=open-r1/codeforces&config=default&split=${split}&length=1&where=${where}`, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
+      clearTimeout(timeout);
+      if (!response.ok) continue;
+      const payload = await response.json();
+      if (payload.rows?.[0]?.row) return payload.rows[0].row;
+    } catch {
+      // Continue to the next split or the browser extension fallback.
+    }
+  }
+  return null;
+}
+
+async function importOriginal(parsed) {
+  if (importJobs.has(parsed.code)) return importJobs.get(parsed.code);
+  const job = (async () => {
+    setStatus(parsed.code, "importing");
+    const urls = [
+      `https://codeforces.com/problemset/problem/${parsed.contestId}/${parsed.index}?locale=en`,
+      `https://mirror.codeforces.com/problemset/problem/${parsed.contestId}/${parsed.index}?locale=en`,
+    ];
+    for (const url of urls) {
+      try {
+        const page = await fetchText(url);
+        const document = parseCodeforcesStatement(page.text, page.finalUrl, parsed.code);
+        saveOriginal(document);
+        queueTranslation(parsed.code);
+        return document;
+      } catch {
+        // Codeforces may challenge datacenter IPs. The extension and dataset fallbacks handle this.
+      }
+    }
+    const row = await fetchDatasetRow(parsed);
+    if (row) {
+      const document = datasetRowToStatement(row, parsed.code);
+      saveOriginal(document);
+      queueTranslation(parsed.code);
+      return document;
+    }
+    setStatus(parsed.code, "source_required", "需要浏览器扩展读取 Codeforces 原题面");
+    return null;
+  })().finally(() => importJobs.delete(parsed.code));
+  importJobs.set(parsed.code, job);
+  return job;
+}
+
+async function ollamaFetch(path, options = {}, timeoutMs = 120_000) {
+  if (!OLLAMA_BASE_URL) throw new Error("未配置本地中文翻译模型");
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    const response = await fetch(`${OLLAMA_BASE_URL}${path}`, { ...options, signal: controller.signal });
+    const payload = await response.json();
+    if (!response.ok) throw new Error(payload.error || `Ollama HTTP ${response.status}`);
+    return payload;
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function ensureOllamaModel(code) {
+  if (modelReadyPromise) return modelReadyPromise;
+  modelReadyPromise = (async () => {
+    const tags = await ollamaFetch("/api/tags", {}, 15_000);
+    const installed = (tags.models || []).some((item) => item.name === OLLAMA_MODEL || item.model === OLLAMA_MODEL || item.name?.startsWith(`${OLLAMA_MODEL}:`));
+    if (!installed) {
+      setStatus(code, "model_downloading", `首次使用正在下载本地翻译模型 ${OLLAMA_MODEL}`);
+      await ollamaFetch("/api/pull", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: OLLAMA_MODEL, stream: false }) }, 20 * 60_000);
+    }
+    return true;
+  })().catch((error) => {
+    modelReadyPromise = null;
+    throw error;
+  });
+  return modelReadyPromise;
+}
+
+function parseModelJson(value) {
+  const text = String(value || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = text.indexOf("{");
+  const end = text.lastIndexOf("}");
+  if (start < 0 || end <= start) throw new Error("翻译模型返回格式无效");
+  return JSON.parse(text.slice(start, end + 1));
+}
+
+async function translateChunk(texts) {
+  const prompt = [
+    "Translate every string in the JSON array from English to precise Simplified Chinese for a competitive-programming problem statement.",
+    "Preserve variable names, numbers, formulas, mathematical symbols, code identifiers, and capitalization of required literal outputs such as YES and NO.",
+    "Return only one JSON object in exactly this shape: {\"translations\":[\"...\"]}. Keep the same order and item count.",
+    JSON.stringify(texts),
+  ].join("\n");
+  const payload = await ollamaFetch("/api/chat", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: OLLAMA_MODEL,
+      stream: false,
+      format: "json",
+      options: { temperature: 0, num_ctx: 8192 },
+      messages: [
+        { role: "system", content: "You are a meticulous ICPC problem-statement translator. Never solve the problem and never add explanations." },
+        { role: "user", content: prompt },
+      ],
+    }),
+  }, 5 * 60_000);
+  const parsed = parseModelJson(payload.message?.content);
+  if (!Array.isArray(parsed.translations) || parsed.translations.length !== texts.length || parsed.translations.some((item) => typeof item !== "string")) throw new Error("翻译模型返回条目数不一致");
+  return parsed.translations;
+}
+
+async function translateTexts(texts) {
+  const translated = [];
+  for (let offset = 0; offset < texts.length;) {
+    let size = 0;
+    let end = offset;
+    while (end < texts.length && end - offset < 24 && size + texts[end].length < 5500) {
+      size += texts[end].length;
+      end += 1;
+    }
+    if (end === offset) end += 1;
+    const chunk = texts.slice(offset, end);
+    try {
+      translated.push(...await translateChunk(chunk));
+    } catch (error) {
+      if (chunk.length === 1) throw error;
+      for (const item of chunk) translated.push(...await translateChunk([item]));
+    }
+    offset = end;
+  }
+  return translated;
+}
+
+async function translateHtml(originalHtml, sourceUrl) {
+  const $ = load(`<div id="translation-root">${originalHtml}</div>`, { xmlMode: false }, false);
+  const records = [];
+  $("#translation-root").find("*").contents().each((_, node) => {
+    if (node.type !== "text") return;
+    if ($(node).parents("pre, code, .tex-span").length) return;
+    const raw = node.data || "";
+    const trimmed = raw.trim();
+    if (!/[A-Za-z]{2}/.test(trimmed)) return;
+    records.push({ node, raw, trimmed });
+  });
+  const unique = [...new Set(records.map((item) => item.trimmed))];
+  const translations = await translateTexts(unique);
+  const map = new Map(unique.map((item, index) => [item, translations[index]]));
+  for (const record of records) {
+    const prefix = record.raw.match(/^\s*/)?.[0] || "";
+    const suffix = record.raw.match(/\s*$/)?.[0] || "";
+    record.node.data = `${prefix}${map.get(record.trimmed) || record.trimmed}${suffix}`;
+  }
+  return sanitizeStatementHtml($("#translation-root").html() || "", sourceUrl).html;
+}
+
+async function downloadImage(image, code) {
+  const existing = db.prepare("SELECT id, content_type FROM statement_assets WHERE source_url = ? AND code = ? LIMIT 1").get(image.sourceUrl, code);
+  if (existing) return { ...image, assetId: existing.id, contentType: existing.content_type };
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 30_000);
+  try {
+    const response = await fetch(image.sourceUrl, { headers: { "User-Agent": USER_AGENT, Referer: `https://codeforces.com/problemset/problem/${code.replace(/([A-Z])/, "/$1")}` }, signal: controller.signal });
+    if (!response.ok) throw new Error(`图片 HTTP ${response.status}`);
+    const contentType = String(response.headers.get("content-type") || "").split(";")[0].toLowerCase();
+    if (!contentType.startsWith("image/")) throw new Error("资源不是图片");
+    const buffer = Buffer.from(await response.arrayBuffer());
+    if (!buffer.length || buffer.length > 6 * 1024 * 1024) throw new Error("图片大小超出限制");
+    const id = sha256(Buffer.concat([Buffer.from(image.sourceUrl), buffer]));
+    db.prepare("INSERT OR REPLACE INTO statement_assets (id, code, source_url, content_type, body, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, code, image.sourceUrl, contentType, buffer, now());
+    return { ...image, assetId: id, contentType, ocrEn: await recognizeImageText(buffer, id, image.alt || image.title || "") };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function recognizeImageText(buffer, id, fallbackText) {
+  const path = join(tmpdir(), `icpc-statement-${id}.img`);
+  try {
+    writeFileSync(path, buffer);
+    const result = await execFileAsync("tesseract", [path, "stdout", "-l", "eng", "--psm", "6"], { timeout: 60_000, maxBuffer: 2 * 1024 * 1024 });
+    const text = String(result.stdout || "").replace(/\s+/g, " ").trim().slice(0, 4000);
+    return /[A-Za-z]{2}/.test(text) ? text : /[A-Za-z]{2}/.test(fallbackText) ? fallbackText : "";
+  } catch {
+    return /[A-Za-z]{2}/.test(fallbackText) ? fallbackText : "";
+  } finally {
+    try { unlinkSync(path); } catch { /* ignore */ }
+  }
+}
+
+async function translateStatement(code) {
+  const row = statementRow(code);
+  if (!row?.original_html || row.chinese_html) return;
+  recentTranslationAttempts.set(code, now());
+  try {
+    await ensureOllamaModel(code);
+    setStatus(code, "translating", "正在生成中文题面并识别图片文字");
+    const originalImages = safeImages(row.images_json);
+    const images = [];
+    for (const image of originalImages.slice(0, 20)) {
+      try { images.push(await downloadImage(image, code)); }
+      catch (error) { images.push({ ...image, error: error instanceof Error ? error.message : "图片缓存失败" }); }
+    }
+    const ocrTexts = images.filter((item) => item.ocrEn).map((item) => item.ocrEn);
+    if (ocrTexts.length) {
+      const ocrTranslations = await translateTexts(ocrTexts);
+      let index = 0;
+      for (const image of images) if (image.ocrEn) image.ocrZh = ocrTranslations[index++];
+    }
+    const chineseHtml = await translateHtml(row.original_html, row.source_url);
+    db.prepare("UPDATE problem_statements SET chinese_html = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, JSON.stringify(images), now(), code);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "中文翻译失败";
+    setStatus(code, "ready_original", `原题面已就绪；中文翻译稍后重试：${message}`);
+  }
+}
+
+function queueTranslation(code) {
+  const last = recentTranslationAttempts.get(code) || 0;
+  if (now() - last < 45_000) return;
+  recentTranslationAttempts.set(code, now());
+  translationQueue = translationQueue.then(() => translateStatement(code)).catch((error) => console.error("statement translation queue", error));
+}
+
+function allowImport(ip, bucket, limit) {
+  const key = `${ip}:${bucket}`;
+  const timestamp = now();
+  const current = importWindows.get(key);
+  if (!current || timestamp - current.startedAt > 60 * 60_000) {
+    importWindows.set(key, { startedAt: timestamp, count: 1 });
+    return true;
+  }
+  current.count += 1;
+  return current.count <= limit;
+}
+
+async function readJsonBody(request, maxBytes = 2 * 1024 * 1024) {
+  const chunks = [];
+  let size = 0;
+  for await (const chunk of request) {
+    size += chunk.length;
+    if (size > maxBytes) throw Object.assign(new Error("题面数据过大"), { status: 413 });
+    chunks.push(chunk);
+  }
+  try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
+  catch { throw Object.assign(new Error("请求 JSON 无效"), { status: 400 }); }
+}
+
+function codeFromSourceUrl(sourceUrl) {
+  try {
+    const url = new URL(sourceUrl);
+    if (!/(^|\.)codeforces\.(com|org)$/.test(url.hostname.toLowerCase())) return null;
+    const match = url.pathname.match(/\/problem(?:set)?\/problem\/(\d+)\/([A-Z][0-9]?)/i);
+    return match ? `${match[1]}${match[2].toUpperCase()}` : null;
+  } catch { return null; }
+}
+
+export function createStatementHandler({ json, clientIp }) {
+  return async function handleStatement(request, response, url) {
+    if (!url.pathname.startsWith("/codeforces/statements")) return false;
+    try {
+      const assetMatch = url.pathname.match(/^\/codeforces\/statements\/assets\/([a-f0-9]{64})$/);
+      if (request.method === "GET" && assetMatch) {
+        const asset = db.prepare("SELECT content_type, body FROM statement_assets WHERE id = ?").get(assetMatch[1]);
+        if (!asset) return json(response, 404, { error: "图片不存在" }), true;
+        response.writeHead(200, { "Content-Type": asset.content_type, "Content-Length": asset.body.length, "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" });
+        response.end(asset.body);
+        return true;
+      }
+
+      if (request.method === "GET" && url.pathname === "/codeforces/statements") {
+        const parsed = normalizeStatementCode(url.searchParams.get("code"));
+        if (!parsed) return json(response, 400, { error: "题号格式无效" }), true;
+        let row = statementRow(parsed.code);
+        if (!row) {
+          upsertPending(parsed);
+          void importOriginal(parsed);
+          row = statementRow(parsed.code);
+        } else if (row.original_html && !row.chinese_html && ["ready_original", "translating", "model_downloading"].includes(row.status)) {
+          queueTranslation(parsed.code);
+        } else if (!row.original_html && row.status === "source_required" && now() - row.updated_at > 10 * 60_000) {
+          void importOriginal(parsed);
+        }
+        return json(response, row?.original_html ? 200 : 202, { statement: publicStatement(row) }), true;
+      }
+
+      if (request.method === "POST" && url.pathname === "/codeforces/statements/import") {
+        if (!allowImport(clientIp(request), "statement", 120)) return json(response, 429, { error: "本小时导入题面过多，请稍后再试" }), true;
+        const body = await readJsonBody(request);
+        const parsed = normalizeStatementCode(body.code);
+        if (!parsed || codeFromSourceUrl(body.sourceUrl) !== parsed.code) return json(response, 400, { error: "题号或原题地址无效" }), true;
+        const document = parseCodeforcesStatement(String(body.html || ""), String(body.sourceUrl), parsed.code);
+        saveOriginal(document);
+        queueTranslation(parsed.code);
+        return json(response, 201, { statement: publicStatement(statementRow(parsed.code)) }), true;
+      }
+
+      if (request.method === "POST" && url.pathname === "/codeforces/statements/translation") {
+        if (!allowImport(clientIp(request), "translation", 30)) return json(response, 429, { error: "本小时提交翻译过多，请稍后再试" }), true;
+        const body = await readJsonBody(request);
+        const parsed = normalizeStatementCode(body.code);
+        const row = parsed ? statementRow(parsed.code) : null;
+        if (!parsed || !row?.original_html) return json(response, 404, { error: "原题面尚未导入" }), true;
+        const chineseHtml = sanitizeStatementHtml(String(body.chineseHtml || ""), row.source_url).html;
+        if (load(chineseHtml, {}, false).text().trim().length < 20) return json(response, 400, { error: "中文题面内容为空" }), true;
+        const existingImages = safeImages(row.images_json);
+        const submitted = Array.isArray(body.imageTranslations) ? body.imageTranslations : [];
+        for (const image of existingImages) {
+          const matched = submitted.find((item) => item?.sourceUrl === image.sourceUrl && typeof item.ocrZh === "string");
+          if (matched) image.ocrZh = matched.ocrZh.trim().slice(0, 4000);
+        }
+        db.prepare("UPDATE problem_statements SET chinese_html = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, JSON.stringify(existingImages), now(), parsed.code);
+        return json(response, 200, { statement: publicStatement(statementRow(parsed.code)) }), true;
+      }
+
+      return json(response, 404, { error: "Not found" }), true;
+    } catch (error) {
+      const status = Number(error?.status) || 502;
+      console.error(new Date().toISOString(), request.method, url.pathname, error);
+      return json(response, status, { error: error instanceof Error ? error.message : "题面服务异常" }), true;
+    }
+  };
+}

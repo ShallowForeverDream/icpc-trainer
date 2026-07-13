@@ -29,32 +29,44 @@ test("ships exactly twenty curated Chinese problem records", async () => {
   assert.match(source, /summaryZh/);
 });
 
-test("ships readable Chinese statements and the requested CF 2176C import", async () => {
-  const [statements, detailPage] = await Promise.all([
+test("ships readable Chinese fallbacks and a QOJ-like cached statement reader", async () => {
+  const [statements, detailPage, statementClient] = await Promise.all([
     readFile(new URL("app/data/problem-statements.ts", root), "utf8"),
     readFile(new URL("app/problem/[code]/page.tsx", root), "utf8"),
+    readFile(new URL("app/lib/statement-client.ts", root), "utf8"),
   ]);
   assert.equal((statements.match(/^    timeLimitSeconds:/gm) ?? []).length, 21);
   assert.match(statements, /"2176c"/);
   assert.match(statements, /奇数过程/);
   assert.match(statements, /examples: ProblemExample\[\]/);
-  assert.match(detailPage, /完整中文题面/);
+  assert.match(detailPage, /原题面默认显示/);
+  assert.match(detailPage, /中文题面/);
   assert.match(detailPage, /样例输入/);
   assert.match(detailPage, /样例输出/);
+  assert.match(statementClient, /ICPC_TRAINER_FETCH_STATEMENT/);
+  assert.match(statementClient, /图片文字翻译/);
+  assert.match(statementClient, /window\.Translator/);
   const response = await render("/problem/2176C");
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /奇数过程/);
-  assert.match(html, /完整中文题面/);
-  assert.match(html, /1 0 1/);
+  assert.match(html, /原题面/);
+  assert.match(html, /中文题面/);
+  assert.match(html, /首次打开自动导入/);
 });
 
-test("ships a constrained Manifest V3 submit bridge", async () => {
-  const manifest = JSON.parse(await readFile(new URL("extension/manifest.json", root), "utf8"));
+test("ships a constrained Manifest V3 statement and submit bridge", async () => {
+  const [manifestText, background] = await Promise.all([
+    readFile(new URL("extension/manifest.json", root), "utf8"),
+    readFile(new URL("extension/background.js", root), "utf8"),
+  ]);
+  const manifest = JSON.parse(manifestText);
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.host_permissions.includes("https://codeforces.com/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "0.2.0");
+  assert.equal(manifest.version, "0.3.0");
+  assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
+  assert.match(background, /problem-statement/);
 });
 
 test("ships live VP generation and the configured handle", async () => {
@@ -69,10 +81,12 @@ test("ships live VP generation and the configured handle", async () => {
   assert.match(page, /同步 Codeforces 判题/);
 });
 
-test("ships the lightweight domestic API deployment", async () => {
-  const [backend, compose, nginx, browserApi] = await Promise.all([
+test("ships the domestic API, cached statements, OCR, and local translation deployment", async () => {
+  const [backend, statements, compose, dockerfile, nginx, browserApi] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
+    readFile(new URL("backend/statements.mjs", root), "utf8"),
     readFile(new URL("backend/compose.yaml", root), "utf8"),
+    readFile(new URL("backend/Dockerfile", root), "utf8"),
     readFile(new URL("deploy/nginx-icpc-trainer.conf", root), "utf8"),
     readFile(new URL("app/lib/browser-api.ts", root), "utf8"),
   ]);
@@ -80,7 +94,14 @@ test("ships the lightweight domestic API deployment", async () => {
   assert.match(backend, /\/submissions\/raw/);
   assert.match(backend, /Access-Control-Allow-Origin/);
   assert.match(backend, /\/codeforces\/problems/);
+  assert.match(backend, /createStatementHandler/);
+  assert.match(statements, /problem_statements/);
+  assert.match(statements, /statement_assets/);
+  assert.match(statements, /tesseract/);
+  assert.match(statements, /OLLAMA_MODEL/);
   assert.match(compose, /127\.0\.0\.1:8787:8787/);
+  assert.match(compose, /ollama\/ollama/);
+  assert.match(dockerfile, /tesseract-ocr/);
   assert.match(nginx, /\/icpc-api\//);
   assert.match(nginx, /114\.55\.130\.137/);
   assert.match(browserApi, /https:\/\/114\.55\.130\.137\/icpc-api/);

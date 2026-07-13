@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
-  "name": "icpc-trainer Submit Bridge",
-  "version": "0.2.0",
-  "description": "Fill or optionally submit an icpc-trainer C++ draft on Codeforces.",
+  "name": "icpc-trainer Browser Bridge",
+  "version": "0.3.0",
+  "description": "Import Codeforces statements and fill icpc-trainer submissions.",
   "permissions": ["storage", "tabs"],
   "background": { "service_worker": "background.js" },
   "host_permissions": [

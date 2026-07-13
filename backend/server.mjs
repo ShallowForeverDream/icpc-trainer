@@ -1,5 +1,6 @@
 import http from "node:http";
 import { createAuthHandler } from "./auth.mjs";
+import { createStatementHandler } from "./statements.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const CF_BASE = "https://codeforces.com/api";
@@ -144,6 +145,7 @@ async function readBody(request) {
 }
 
 const handleAuth = createAuthHandler({ json, readBody, clientIp });
+const handleStatements = createStatementHandler({ json, clientIp });
 
 async function generateVp(body) {
   const handle = String(body.handle || "ShallowDream2").trim();
@@ -182,6 +184,7 @@ const server = http.createServer(async (request, response) => {
   if (!allowRequest(request)) return json(response, 429, { error: "请求过于频繁" });
   try {
     if (await handleAuth(request, response, url)) return;
+    if (await handleStatements(request, response, url)) return;
     if (request.method === "GET" && url.pathname === "/problemset") return json(response, 200, { problems: await getProblemset() });
     if (request.method === "GET" && url.pathname === "/codeforces/problems") {
       const all = await getProblemset();

@@ -1,0 +1,14 @@
+{
+  "name": "@icpc-trainer/backend",
+  "version": "0.3.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node --test *.test.mjs"
+  },
+  "description": "icpc-trainer domestic API and cached Codeforces statement importer",
+  "dependencies": {
+    "cheerio": "1.2.0"
+  }
+}

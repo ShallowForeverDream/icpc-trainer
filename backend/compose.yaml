@@ -9,10 +9,12 @@ services:
       DB_PATH: /data/icpc-trainer.sqlite
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      OLLAMA_BASE_URL: http://ollama:11434
+      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b-instruct}
     volumes:
       - icpc-trainer-data:/data
-    mem_limit: 192m
-    cpus: 0.75
+    mem_limit: 512m
+    cpus: 1.25
     healthcheck:
       test: ["CMD", "node", "-e", "fetch('http://127.0.0.1:8787/health').then(r=>{if(!r.ok)process.exit(1)})"]
       interval: 30s
@@ -20,5 +22,15 @@ services:
       retries: 3
       start_period: 10s
 
+  ollama:
+    image: ollama/ollama:latest
+    container_name: icpc-trainer-ollama
+    restart: unless-stopped
+    volumes:
+      - icpc-trainer-ollama:/root/.ollama
+    mem_limit: 2304m
+    cpus: 2.25
+
 volumes:
   icpc-trainer-data:
+  icpc-trainer-ollama:

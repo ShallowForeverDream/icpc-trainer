@@ -12,7 +12,7 @@ const execFileAsync = promisify(execFile);
 const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
-const TRANSLATION_VERSION = 4;
+const TRANSLATION_VERSION = 11;
 const USER_AGENT = "icpc-trainer-statement-importer/0.3 (+https://icpc-lab-trainer.zhuj7933.chatgpt.site)";
 const importJobs = new Map();
 const recentTranslationAttempts = new Map();
@@ -234,42 +234,81 @@ async function ensureTranslationModel(code) {
   return modelReadyPromise;
 }
 
-function parseModelJson(value) {
-  const text = String(value || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const start = text.indexOf("{");
-  const end = text.lastIndexOf("}");
-  if (start < 0 || end <= start) throw new Error("翻译模型返回格式无效");
-  return JSON.parse(text.slice(start, end + 1));
-}
-
 async function translateChunk(texts) {
+  if (texts.length !== 1) throw new Error("翻译器仅接受单个完整自然段");
+  const sourceText = texts[0];
   const prompt = [
-    "你是 QOJ / 洛谷风格的中文竞赛题面编辑，不做逐词直译。请把下面 JSON 数组中的每一项改写为准确、自然、简洁的简体中文题面。",
+    "你是 QOJ / 洛谷风格的中文竞赛题面编辑，不做逐词直译。请把下面英文自然段改写为准确、自然、简洁的简体中文题面。",
     "先理解整句逻辑，再按中文语序表达；不得解题、删减条件或补充信息。所有量词、奇偶性、上下界、先后顺序和充分必要关系必须准确。",
     "术语统一：array=数组，index=下标，segment/subarray=区间/子数组，operation=操作，query=询问，positive integer=正整数，print/output=输出，input=输入，distinct=互不相同，at most=至多，at least=至少。禁止使用“阵列”“键入”“您”。",
     "变量名、数字、公式、数学符号、代码标识符以及要求原样输出的 YES/NO 等字面量保持不变。",
     "ICPCMATH0END、ICPCMATH1END 这类内容是数学公式占位符，必须逐字保留在原位置，不得翻译、增删或移动。",
-    "只返回一个 JSON 对象，格式必须为 {\"translations\":[\"中文译文\"]}；条目数量和顺序必须与输入完全一致。",
-    "示例：输入 [\"You are given an array a of n integers. Perform the following operation any number of times.\"]，输出 {\"translations\":[\"给定一个长度为 n 的整数数组 a。你可以进行任意次下述操作。\"]}",
-    `输入：${JSON.stringify(texts)}`,
+    "常见句式：output n numbers — the answer for exactly k actions for all k from 1 to n，应译为“输出 n 个整数，其中第 k 个整数表示恰好进行 k 次操作时的答案（1≤k≤n）”，不要照搬英文语序。",
+    "只返回中文译文正文，不要输出 JSON、Markdown 代码块、说明、前缀或引号。",
+    "示例：You are given an array a of n integers. Perform the following operation any number of times. → 给定一个长度为 n 的整数数组 a。你可以进行任意次下述操作。",
+    `英文原文：\n${sourceText}`,
   ].join("\n");
-  const payload = await translatorFetch("/v1/chat/completions", {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({
+  const requiredPlaceholders = [...new Set(sourceText.match(/ICPCMATH\d+END/g) || [])];
+  const finalPrompt = requiredPlaceholders.length
+    ? `${prompt}\n硬性校验：译文必须逐一包含以下占位符，且每个恰好出现一次：${requiredPlaceholders.join("、")}。即使句子看似可以简化，也不得合并、概括或省略它们所修饰的对象。输出前请自行核对。`
+    : prompt;
+  const maxTokens = Math.min(1200, Math.max(192, Math.ceil(sourceText.length * 1.4)));
+  async function requestTranslation(userPrompt) {
+    const payload = await translatorFetch("/v1/chat/completions", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
       model: TRANSLATOR_MODEL,
       temperature: 0,
-      max_tokens: 3500,
-      response_format: { type: "json_object" },
+      max_tokens: maxTokens,
       messages: [
         { role: "system", content: "你是严谨的中文算法竞赛题面编辑。译文应像人工校对后的 QOJ 中文题面，术语统一、语序自然、语义精确，禁止生硬逐词直译。" },
-        { role: "user", content: prompt },
+          { role: "user", content: userPrompt },
       ],
-    }),
-  }, 5 * 60_000);
-  const parsed = parseModelJson(payload.choices?.[0]?.message?.content);
-  if (!Array.isArray(parsed.translations) || parsed.translations.length !== texts.length || parsed.translations.some((item) => typeof item !== "string")) throw new Error("翻译模型返回条目数不一致");
-  return parsed.translations.map(polishChinese);
+      }),
+    }, 5 * 60_000);
+    let result = String(payload.choices?.[0]?.message?.content || "").trim();
+    result = result.replace(/^```(?:text|markdown)?\s*/i, "").replace(/\s*```$/, "").replace(/^(?:译文|翻译)[:：]\s*/i, "").trim();
+    if ((result.startsWith('"') && result.endsWith('"')) || (result.startsWith("“") && result.endsWith("”"))) result = result.slice(1, -1).trim();
+    return result;
+  }
+
+  let translated = await requestTranslation(finalPrompt);
+  const invalidPlaceholders = () => requiredPlaceholders.filter((placeholder) => {
+    const flexible = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "gi");
+    return [...translated.matchAll(flexible)].length !== 1;
+  });
+  let invalid = invalidPlaceholders();
+  if (invalid.length) {
+    translated = await requestTranslation([
+      "上一版中文译文错误地遗漏、重复或改写了数学公式占位符。请根据英文原文重新翻译，不得概括或省略细节。",
+      `英文原文：\n${sourceText}`,
+      `错误初译：\n${translated}`,
+      `正确译文必须逐一且仅出现一次这些占位符：${requiredPlaceholders.join("、")}。`,
+      "只返回修正后的中文译文正文。",
+    ].join("\n"));
+    invalid = invalidPlaceholders();
+  }
+  if (invalid.length) {
+    const parts = sourceText.split(/(ICPCMATH\d+END)/g);
+    const rebuilt = [];
+    for (const part of parts) {
+      if (/^ICPCMATH\d+END$/.test(part) || !/[A-Za-z]{2}/.test(part)) {
+        rebuilt.push(part);
+        continue;
+      }
+      rebuilt.push(await requestTranslation([
+        "下面文字是算法竞赛题面中被数学公式分隔出的英文片段。请翻译成简洁自然的中文，并保持与前后公式衔接；不得补充或省略信息。",
+        `英文片段：${part}`,
+        "只返回中文译文正文。",
+      ].join("\n")));
+    }
+    translated = rebuilt.join("");
+    invalid = invalidPlaceholders();
+  }
+  if (invalid.length) throw new Error(`公式保护回退异常：${invalid.join("、")}`);
+  if (!translated) throw new Error("翻译模型返回了空译文");
+  return [polishChinese(translated)];
 }
 
 function polishChinese(value) {
@@ -277,6 +316,11 @@ function polishChinese(value) {
     .replaceAll("阵列", "数组")
     .replaceAll("键入", "输入")
     .replaceAll("索引", "下标")
+    .replaceAll("测试案例", "测试用例")
+    .replaceAll("金币", "硬币")
+    .replaceAll("袋中会空掉", "袋子会被清空")
+    .replace(/硬币总金额/g, "硬币面值总和")
+    .replace(/袋子并不是在每次硬币(?:面值总和|总和)变为偶数时才清空的，而是每次在添加硬币的过程中变为偶数时都会清空/g, "袋子会在放入硬币的过程中每次面值总和变为偶数时立即清空，而不只是最后一次操作结束时清空")
     .replace(/执行以下操作任意次数/g, "进行任意次下述操作")
     .replace(/执行任意次数的以下操作/g, "进行任意次下述操作")
     .replace(/您/g, "你")
@@ -286,23 +330,7 @@ function polishChinese(value) {
 
 async function translateTexts(texts) {
   const translated = [];
-  for (let offset = 0; offset < texts.length;) {
-    let size = 0;
-    let end = offset;
-    while (end < texts.length && end - offset < 8 && size + texts[end].length < 2400) {
-      size += texts[end].length;
-      end += 1;
-    }
-    if (end === offset) end += 1;
-    const chunk = texts.slice(offset, end);
-    try {
-      translated.push(...await translateChunk(chunk));
-    } catch (error) {
-      if (chunk.length === 1) throw error;
-      for (const item of chunk) translated.push(...await translateChunk([item]));
-    }
-    offset = end;
-  }
+  for (const text of texts) translated.push(...await translateChunk([text]));
   return translated;
 }
 
@@ -318,6 +346,11 @@ async function translateHtml(originalHtml, sourceUrl) {
     if (node.type !== "text") return;
     if ($(node).parents("pre, code, .tex-span, .section-title").length) return;
     const raw = node.data || "";
+    const fixedHeading = fixedHeadings.get(raw.trim().toLowerCase());
+    if (fixedHeading) {
+      node.data = `${raw.match(/^\s*/)?.[0] || ""}${fixedHeading}${raw.match(/\s*$/)?.[0] || ""}`;
+      return;
+    }
     if (!/[A-Za-z]{2}/.test(raw.replace(/\${3}[\s\S]*?\${3}/g, ""))) return;
     const formulas = [];
     const masked = raw.replace(/\${3}[\s\S]*?\${3}/g, (formula) => {
@@ -344,7 +377,10 @@ async function translateHtml(originalHtml, sourceUrl) {
   const translatedHtml = sanitizeStatementHtml($("#translation-root").html() || "", sourceUrl).html;
   const sourceFormulas = [...originalHtml.matchAll(/\${3}[\s\S]*?\${3}/g)].map((match) => match[0]);
   const translatedFormulas = [...translatedHtml.matchAll(/\${3}[\s\S]*?\${3}/g)].map((match) => match[0]);
-  if (sourceFormulas.length !== translatedFormulas.length || sourceFormulas.some((formula, index) => formula !== translatedFormulas[index])) throw new Error("翻译过程改变了数学公式，已拒绝缓存该译文");
+  const formulaCounts = (formulas) => formulas.reduce((counts, formula) => counts.set(formula, (counts.get(formula) || 0) + 1), new Map());
+  const sourceCounts = formulaCounts(sourceFormulas);
+  const translatedCounts = formulaCounts(translatedFormulas);
+  if (sourceFormulas.length !== translatedFormulas.length || sourceCounts.size !== translatedCounts.size || [...sourceCounts].some(([formula, count]) => translatedCounts.get(formula) !== count)) throw new Error("翻译过程改变了数学公式，已拒绝缓存该译文");
   return translatedHtml;
 }
 
@@ -473,7 +509,7 @@ export function createStatementHandler({ json, clientIp }) {
           void importOriginal(parsed);
           row = statementRow(parsed.code);
         } else if (row.original_html && (!row.chinese_html || Number(row.translation_version || 0) < TRANSLATION_VERSION)) {
-          if (row.status === "ready") setStatus(parsed.code, "translating", "正在按新版术语规范重新校对中文题面");
+          setStatus(parsed.code, "translating", "正在按新版术语规范重新校对中文题面");
           queueTranslation(parsed.code);
         } else if (!row.original_html && row.status === "source_required" && now() - row.updated_at > 10 * 60_000) {
           void importOriginal(parsed);

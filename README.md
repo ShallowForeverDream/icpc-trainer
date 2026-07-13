@@ -6,7 +6,7 @@
 
 - 每道题首次打开时自动导入并缓存 Codeforces 原题面，默认显示原文，可像 QOJ 一样切换中文
 - 保留公式、样例、表格和题面图片；缓存图片后用 OCR 识别英文，并在中文题面图片下显示译文
-- 阿里云服务器通过 Ollama + Qwen2.5 本地生成中文题面，Chrome Translator API 可作为浏览器侧备用
+- 阿里云服务器通过 llama.cpp + Qwen2.5 本地生成中文题面，Chrome Translator API 可作为浏览器侧备用
 - 20 道精选题和 CF 2176C 继续提供人工整理中文题面作为即时兜底
 - 通过 Codeforces 公开 API 校准题名、Rating，并按 Handle 同步最近提交
 - 按 Rating 分页扩展完整公开题池
@@ -43,6 +43,6 @@ Node.js 版本要求：`>=22.13.0`。
 
 ## 已部署架构
 
-Sites 托管前端，浏览器通过 HTTPS 访问阿里云 ECS 的 Node API。账号、邀请码、原文/中文题面和图片均持久化在 Docker 数据卷中的 SQLite 数据库；Ollama 模型只运行在服务器内网，不开放公网端口。
+Sites 托管前端，浏览器通过 HTTPS 访问阿里云 ECS 的 Node API。账号、邀请码、原文/中文题面和图片均持久化在 Docker 数据卷中的 SQLite 数据库；llama.cpp 模型只运行在服务器内网，不开放公网端口。
 
 管理员账号通过服务器环境变量首次引导创建，密码不会写入仓库。不要提交邮箱密码、Codeforces API Secret 或服务器凭据。

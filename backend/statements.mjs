@@ -10,8 +10,8 @@ import { datasetRowToStatement, normalizeStatementCode, parseCodeforcesStatement
 
 const execFileAsync = promisify(execFile);
 const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
-const OLLAMA_BASE_URL = String(process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
-const OLLAMA_MODEL = process.env.OLLAMA_MODEL || "qwen2.5:1.5b-instruct";
+const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
+const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
 const USER_AGENT = "icpc-trainer-statement-importer/0.3 (+https://icpc-lab-trainer.zhuj7933.chatgpt.site)";
 const importJobs = new Map();
 const recentTranslationAttempts = new Map();
@@ -190,30 +190,37 @@ async function importOriginal(parsed) {
   return job;
 }
 
-async function ollamaFetch(path, options = {}, timeoutMs = 120_000) {
-  if (!OLLAMA_BASE_URL) throw new Error("未配置本地中文翻译模型");
+async function translatorFetch(path, options = {}, timeoutMs = 120_000) {
+  if (!TRANSLATOR_BASE_URL) throw new Error("未配置本地中文翻译模型");
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(`${OLLAMA_BASE_URL}${path}`, { ...options, signal: controller.signal });
+    const response = await fetch(`${TRANSLATOR_BASE_URL}${path}`, { ...options, signal: controller.signal });
     const payload = await response.json();
-    if (!response.ok) throw new Error(payload.error || `Ollama HTTP ${response.status}`);
+    if (!response.ok) throw new Error(payload.error?.message || payload.error || `翻译模型 HTTP ${response.status}`);
     return payload;
   } finally {
     clearTimeout(timeout);
   }
 }
 
-async function ensureOllamaModel(code) {
+async function ensureTranslationModel(code) {
   if (modelReadyPromise) return modelReadyPromise;
   modelReadyPromise = (async () => {
-    const tags = await ollamaFetch("/api/tags", {}, 15_000);
-    const installed = (tags.models || []).some((item) => item.name === OLLAMA_MODEL || item.model === OLLAMA_MODEL || item.name?.startsWith(`${OLLAMA_MODEL}:`));
-    if (!installed) {
-      setStatus(code, "model_downloading", `首次使用正在下载本地翻译模型 ${OLLAMA_MODEL}`);
-      await ollamaFetch("/api/pull", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ model: OLLAMA_MODEL, stream: false }) }, 20 * 60_000);
+    setStatus(code, "model_downloading", `首次使用正在下载或载入本地翻译模型 ${TRANSLATOR_MODEL}`);
+    for (let attempt = 0; attempt < 180; attempt += 1) {
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8_000);
+        const response = await fetch(`${TRANSLATOR_BASE_URL}/health`, { signal: controller.signal });
+        clearTimeout(timeout);
+        if (response.ok) return true;
+      } catch {
+        // llama.cpp downloads and loads the GGUF model during its first start.
+      }
+      await new Promise((resolve) => setTimeout(resolve, 10_000));
     }
-    return true;
+    throw new Error("本地翻译模型启动超时");
   })().catch((error) => {
     modelReadyPromise = null;
     throw error;
@@ -231,26 +238,27 @@ function parseModelJson(value) {
 
 async function translateChunk(texts) {
   const prompt = [
-    "Translate every string in the JSON array from English to precise Simplified Chinese for a competitive-programming problem statement.",
-    "Preserve variable names, numbers, formulas, mathematical symbols, code identifiers, and capitalization of required literal outputs such as YES and NO.",
-    "Return only one JSON object in exactly this shape: {\"translations\":[\"...\"]}. Keep the same order and item count.",
-    JSON.stringify(texts),
+    "你是 ICPC 竞赛题面翻译器。请把下面 JSON 数组中的每一项完整翻译为准确、自然的简体中文。",
+    "不得原样复制英文自然语言，不得解题或补充信息。变量名、数字、公式、数学符号、代码标识符以及要求原样输出的 YES/NO 等字面量保持不变。",
+    "只返回一个 JSON 对象，格式必须为 {\"translations\":[\"中文译文\"]}；条目数量和顺序必须与输入完全一致。",
+    "示例：输入 [\"Given an integer n, print YES if it is even.\"]，输出 {\"translations\":[\"给定一个整数 n，如果它是偶数则输出 YES。\"]}",
+    `输入：${JSON.stringify(texts)}`,
   ].join("\n");
-  const payload = await ollamaFetch("/api/chat", {
+  const payload = await translatorFetch("/v1/chat/completions", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
-      model: OLLAMA_MODEL,
-      stream: false,
-      format: "json",
-      options: { temperature: 0, num_ctx: 8192 },
+      model: TRANSLATOR_MODEL,
+      temperature: 0,
+      max_tokens: 7000,
+      response_format: { type: "json_object" },
       messages: [
-        { role: "system", content: "You are a meticulous ICPC problem-statement translator. Never solve the problem and never add explanations." },
+        { role: "system", content: "你只负责把英文竞赛题面翻译成简体中文，必须翻译所有英文自然语言，禁止解题或添加解释。" },
         { role: "user", content: prompt },
       ],
     }),
   }, 5 * 60_000);
-  const parsed = parseModelJson(payload.message?.content);
+  const parsed = parseModelJson(payload.choices?.[0]?.message?.content);
   if (!Array.isArray(parsed.translations) || parsed.translations.length !== texts.length || parsed.translations.some((item) => typeof item !== "string")) throw new Error("翻译模型返回条目数不一致");
   return parsed.translations;
 }
@@ -338,14 +346,16 @@ async function translateStatement(code) {
   if (!row?.original_html || row.chinese_html) return;
   recentTranslationAttempts.set(code, now());
   try {
-    await ensureOllamaModel(code);
-    setStatus(code, "translating", "正在生成中文题面并识别图片文字");
+    setStatus(code, "translating", "正在缓存题面图片并识别其中的英文");
     const originalImages = safeImages(row.images_json);
     const images = [];
     for (const image of originalImages.slice(0, 20)) {
       try { images.push(await downloadImage(image, code)); }
       catch (error) { images.push({ ...image, error: error instanceof Error ? error.message : "图片缓存失败" }); }
     }
+    db.prepare("UPDATE problem_statements SET images_json = ?, updated_at = ? WHERE code = ?").run(JSON.stringify(images), now(), code);
+    await ensureTranslationModel(code);
+    setStatus(code, "translating", "正在生成中文题面并翻译图片文字");
     const ocrTexts = images.filter((item) => item.ocrEn).map((item) => item.ocrEn);
     if (ocrTexts.length) {
       const ocrTranslations = await translateTexts(ocrTexts);

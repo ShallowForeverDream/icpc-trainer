@@ -9,8 +9,8 @@ services:
       DB_PATH: /data/icpc-trainer.sqlite
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
-      OLLAMA_BASE_URL: http://ollama:11434
-      OLLAMA_MODEL: ${OLLAMA_MODEL:-qwen2.5:1.5b-instruct}
+      TRANSLATOR_BASE_URL: http://llama:8080
+      TRANSLATOR_MODEL: ${TRANSLATOR_MODEL:-qwen2.5-1.5b-instruct}
     volumes:
       - icpc-trainer-data:/data
     mem_limit: 512m
@@ -22,15 +22,16 @@ services:
       retries: 3
       start_period: 10s
 
-  ollama:
-    image: ollama/ollama:latest
-    container_name: icpc-trainer-ollama
+  llama:
+    image: ghcr.io/ggml-org/llama.cpp:server
+    container_name: icpc-trainer-llama
     restart: unless-stopped
+    command: ["-m", "/models/qwen2.5-1.5b-instruct-q4_k_m.gguf", "--host", "0.0.0.0", "--port", "8080", "--alias", "qwen2.5-1.5b-instruct", "--jinja", "-c", "8192", "-t", "3"]
     volumes:
-      - icpc-trainer-ollama:/root/.ollama
+      - icpc-trainer-models:/models
     mem_limit: 2304m
-    cpus: 2.25
+    cpus: 1.75
 
 volumes:
   icpc-trainer-data:
-  icpc-trainer-ollama:
+  icpc-trainer-models:

@@ -98,9 +98,9 @@ test("ships the domestic API, cached statements, OCR, and local translation depl
   assert.match(statements, /problem_statements/);
   assert.match(statements, /statement_assets/);
   assert.match(statements, /tesseract/);
-  assert.match(statements, /OLLAMA_MODEL/);
+  assert.match(statements, /TRANSLATOR_MODEL/);
   assert.match(compose, /127\.0\.0\.1:8787:8787/);
-  assert.match(compose, /ollama\/ollama/);
+  assert.match(compose, /ggml-org\/llama\.cpp:server/);
   assert.match(dockerfile, /tesseract-ocr/);
   assert.match(nginx, /\/icpc-api\//);
   assert.match(nginx, /114\.55\.130\.137/);

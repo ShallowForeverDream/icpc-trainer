@@ -5,15 +5,19 @@ The production API runs as a small Docker container on
 
 `https://114.55.130.137/icpc-api/`
 
-The server intentionally reuses the existing Nginx installation and does not
-replace its port 80 virtual host, Java service, MySQL, or Elasticsearch.
+The server reuses Nginx for TLS termination. The previous Java, MySQL, and
+Elasticsearch workloads are stopped but their data has not been deleted.
+
+Account state is stored in the `icpc-trainer-data` Docker volume. The first
+administrator is created from `ADMIN_EMAIL` and `ADMIN_PASSWORD`; remove the
+plain bootstrap password from `.env` after the first successful start.
 
 TLS uses a Let's Encrypt short-lived IP certificate. A systemd timer checks
 renewal daily because IP certificates are valid for roughly six days.
 
 Deployment files:
 
-- `backend/compose.yaml`: API service
+- `backend/compose.yaml`: API service and persistent account volume
 - `nginx-icpc-trainer.conf`: isolated HTTPS virtual host
 - `renew-ip-certificate.sh`: automated renewal and Nginx reload
 - `icpc-trainer-cert-renew.*`: systemd unit and timer

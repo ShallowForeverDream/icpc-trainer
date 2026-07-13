@@ -65,3 +65,22 @@ test("ships the lightweight domestic API deployment", async () => {
   assert.match(nginx, /114\.55\.130\.137/);
   assert.match(browserApi, /https:\/\/114\.55\.130\.137\/icpc-api/);
 });
+
+test("ships invite-only authentication and administration", async () => {
+  const [auth, compose, login, register, admin] = await Promise.all([
+    readFile(new URL("backend/auth.mjs", root), "utf8"),
+    readFile(new URL("backend/compose.yaml", root), "utf8"),
+    readFile(new URL("app/login/page.tsx", root), "utf8"),
+    readFile(new URL("app/register/page.tsx", root), "utf8"),
+    readFile(new URL("app/admin/page.tsx", root), "utf8"),
+  ]);
+  assert.match(auth, /CREATE TABLE IF NOT EXISTS users/);
+  assert.match(auth, /CREATE TABLE IF NOT EXISTS invites/);
+  assert.match(auth, /scryptSync/);
+  assert.match(auth, /\/auth\/register/);
+  assert.match(auth, /\/admin\/invites/);
+  assert.match(compose, /icpc-trainer-data:\/data/);
+  assert.match(login, /ACCOUNT LOGIN/);
+  assert.match(register, /inviteCode/);
+  assert.match(admin, /生成邀请码/);
+});

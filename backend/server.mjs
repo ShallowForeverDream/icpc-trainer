@@ -1,4 +1,5 @@
 import http from "node:http";
+import { createAuthHandler } from "./auth.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const CF_BASE = "https://codeforces.com/api";
@@ -15,9 +16,13 @@ const json = (response, status, value, extra = {}) => {
   response.end(JSON.stringify(value));
 };
 
-function allowRequest(request) {
+function clientIp(request) {
   const forwarded = String(request.headers["x-real-ip"] || request.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  const ip = forwarded || request.socket.remoteAddress || "unknown";
+  return forwarded || request.socket.remoteAddress || "unknown";
+}
+
+function allowRequest(request) {
+  const ip = clientIp(request);
   const now = Date.now();
   const state = requestWindows.get(ip);
   if (!state || now - state.startedAt > 60_000) {
@@ -138,6 +143,8 @@ async function readBody(request) {
   return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
 }
 
+const handleAuth = createAuthHandler({ json, readBody, clientIp });
+
 async function generateVp(body) {
   const handle = String(body.handle || "ShallowDream2").trim();
   if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) throw new Error("Codeforces Handle 无效");
@@ -167,13 +174,14 @@ const server = http.createServer(async (request, response) => {
   if (ALLOWED_ORIGINS.has(origin)) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
-    response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
     response.setHeader("Vary", "Origin");
   }
   if (request.method === "OPTIONS") return response.writeHead(ALLOWED_ORIGINS.has(origin) ? 204 : 403).end();
   if (url.pathname === "/health") return json(response, 200, { status: "ok", service: "icpc-trainer-api", uptime: Math.round(process.uptime()) });
   if (!allowRequest(request)) return json(response, 429, { error: "请求过于频繁" });
   try {
+    if (await handleAuth(request, response, url)) return;
     if (request.method === "GET" && url.pathname === "/problemset") return json(response, 200, { problems: await getProblemset() });
     if (request.method === "GET" && url.pathname === "/codeforces/problems") {
       const all = await getProblemset();

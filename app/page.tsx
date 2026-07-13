@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { AppShell, Icon, MetricCard, Pill, ProblemRow } from "./components/AppShell";
 
 const recommendations = [
@@ -19,8 +19,33 @@ const recommendations = [
 export default function Home() {
   const [batch, setBatch] = useState(0);
   const [goal, setGoal] = useState(4);
-  const [done, setDone] = useState(2);
+  const [done, setDone] = useState(0);
+  const [activity, setActivity] = useState<Record<string, number>>({});
   const problems = useMemo(() => recommendations[batch % recommendations.length], [batch]);
+  const dateKey = (date: Date) => `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
+  const today = dateKey(new Date());
+  const days = useMemo(() => Array.from({ length: 91 }, (_, index) => { const date = new Date(); date.setDate(date.getDate() - 90 + index); return dateKey(date); }), []);
+  const totalActivity = Object.values(activity).reduce((sum, value) => sum + value, 0);
+  const weeklyActivity = days.slice(-7).reduce((sum, key) => sum + (activity[key] ?? 0), 0);
+  let streak = 0; for (let index = days.length - 1; index >= 0 && (activity[days[index]] ?? 0) > 0; index--) streak++;
+
+  useEffect(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem("icpc-trainer-dashboard") ?? "{}");
+      if (saved.goal) setGoal(saved.goal); if (saved.date === today && saved.done) setDone(saved.done); if (saved.activity) setActivity(saved.activity);
+    } catch { localStorage.removeItem("icpc-trainer-dashboard"); }
+  }, []);
+
+  function saveDashboard(nextGoal: number, nextDone: number, nextActivity = activity) {
+    setGoal(nextGoal); setDone(nextDone); setActivity(nextActivity);
+    localStorage.setItem("icpc-trainer-dashboard", JSON.stringify({ date: today, goal: nextGoal, done: nextDone, activity: nextActivity }));
+  }
+
+  function recordProblem() {
+    if (done >= goal) return;
+    const key = dateKey(new Date());
+    saveDashboard(goal, done + 1, { ...activity, [key]: (activity[key] ?? 0) + 1 });
+  }
 
   return (
     <AppShell active="训练台">
@@ -46,14 +71,14 @@ export default function Home() {
           <div className="goal-controls">
             <span>完成 {goal} 道题</span>
             <div>
-              <button aria-label="减少目标" onClick={() => setGoal(Math.max(done, goal - 1))}>−</button>
-              <button aria-label="增加目标" onClick={() => setGoal(goal + 1)}>＋</button>
-              <button className="complete-goal" onClick={() => setDone(Math.min(goal, done + 1))}>记一题</button>
+              <button aria-label="减少目标" onClick={() => saveDashboard(Math.max(done, goal - 1), done)}>−</button>
+              <button aria-label="增加目标" onClick={() => saveDashboard(goal + 1, done)}>＋</button>
+              <button className="complete-goal" onClick={recordProblem}>记一题</button>
             </div>
           </div>
           <div className="streak-row">
-            <div><Icon name="fire" /><span><b>12 天</b><small>连续训练</small></span></div>
-            <div><Icon name="clock" /><span><b>3h 48m</b><small>本周投入</small></span></div>
+            <div><Icon name="fire" /><span><b>{streak} 天</b><small>当前设备连续训练</small></span></div>
+            <div><Icon name="clock" /><span><b>{weeklyActivity} 题</b><small>本周手动记录</small></span></div>
           </div>
         </div>
       </section>
@@ -62,7 +87,7 @@ export default function Home() {
         <MetricCard label="中文精选题" value="20" delta="已导入" tone="blue" />
         <MetricCard label="CF 公开 API" value="LIVE" delta="无需 Key" tone="green" />
         <MetricCard label="提交扩展" value="β" delta="可下载" tone="amber" />
-        <MetricCard label="账号系统" value="P4" delta="暂缓" tone="violet" />
+        <MetricCard label="账号系统" value="LIVE" delta="邀请码" tone="violet" />
       </section>
 
       <section className="content-grid">
@@ -110,10 +135,10 @@ export default function Home() {
         <div className="panel calendar-panel">
           <div className="panel-head">
             <div><span className="micro-label">CONSISTENCY</span><h2>训练日历</h2></div>
-            <span className="calendar-total">过去一年 <b>326</b> 次提交</span>
+            <span className="calendar-total">当前设备累计 <b>{totalActivity}</b> 道</span>
           </div>
           <div className="heatmap" aria-label="训练活跃热力图">
-            {Array.from({ length: 91 }, (_, i) => <i key={i} className={`heat-${(i * 7 + i * i) % 5}`} />)}
+            {days.map((key) => <i key={key} className={`heat-${Math.min(4, activity[key] ?? 0)}`} title={`${key}: ${activity[key] ?? 0} 道`} />)}
           </div>
           <div className="heat-legend"><span>少</span>{[0,1,2,3,4].map(i => <i key={i} className={`heat-${i}`} />)}<span>多</span></div>
         </div>

@@ -1,6 +1,7 @@
 "use client";
 
-import { ReactNode, useState } from "react";
+import { ReactNode, useEffect, useState } from "react";
+import { readAuth, type AuthUser } from "../lib/auth-client";
 
 export function Icon({ name }: { name: string }) {
   const icons: Record<string, string> = { grid: "▦", search: "⌕", trophy: "♜", code: "⌘", history: "↻", star: "☆", play: "▶", fire: "♨", clock: "◷", shuffle: "⤨", spark: "✦", bell: "◉", chevron: "›", check: "✓", lock: "▣", team: "♟", book: "▤", filter: "≡" };
@@ -9,10 +10,17 @@ export function Icon({ name }: { name: string }) {
 
 export function AppShell({ children, active }: { children: ReactNode; active: string }) {
   const [mobileOpen, setMobileOpen] = useState(false);
+  const [user, setUser] = useState<AuthUser | null>(null);
+  useEffect(() => {
+    const refresh = () => setUser(readAuth()?.user ?? null);
+    refresh(); window.addEventListener("icpc-auth-change", refresh);
+    return () => window.removeEventListener("icpc-auth-change", refresh);
+  }, []);
   const nav = [
     ["训练台", "/", "grid"], ["题库", "/problem", "search"], ["模拟赛", "/vp", "trophy"],
     ["模板库", "/templates", "code"], ["提交记录", "/submissions", "history"], ["提交扩展", "/extension", "spark"], ["收藏", "/favorites", "star"],
   ];
+  if (user?.role === "admin") nav.push(["管理", "/admin", "team"]);
   return (
     <div className="app-frame">
       <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
@@ -24,7 +32,7 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
           <a href="/extension"><Icon name="book" /><span>扩展安装指南</span></a>
         </nav>
         <div className="sidebar-card"><span>CF</span><div><small>CODEFORCES API</small><b>公开题库可用</b><em>● 无需 API Key</em></div></div>
-        <a className="profile-mini" href="/submissions"><span>S2</span><div><b>ShallowDream2</b><small>同步公开提交记录</small></div><Icon name="chevron" /></a>
+        <a className="profile-mini" href={user ? "/account" : "/login"}><span>{user ? user.email.slice(0, 2).toUpperCase() : "S2"}</span><div><b>{user ? user.email : "登录 / 注册"}</b><small>{user ? (user.role === "admin" ? "管理员账号" : "训练账号") : "邀请码注册"}</small></div><Icon name="chevron" /></a>
       </aside>
       <main>
         <header className="topbar">
@@ -32,6 +40,7 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
           <div className="crumb"><span>icpc-trainer</span><i>/</i><b>{active}</b></div>
           <div className="top-actions">
             <a className="command-search" href="/problem"><Icon name="search" /><span>搜索题目与 Rating 题库</span><kbd>⌘ K</kbd></a>
+            <a className="account-button" href={user ? "/account" : "/login"}>{user ? "账号" : "登录"}</a>
             <a className="quick-button" href="/vp">＋ 创建 VP</a>
           </div>
         </header>

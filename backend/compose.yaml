@@ -5,6 +5,12 @@ services:
     restart: unless-stopped
     ports:
       - "127.0.0.1:8787:8787"
+    environment:
+      DB_PATH: /data/icpc-trainer.sqlite
+      ADMIN_EMAIL: ${ADMIN_EMAIL:-}
+      ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+    volumes:
+      - icpc-trainer-data:/data
     mem_limit: 192m
     cpus: 0.75
     healthcheck:
@@ -13,3 +19,6 @@ services:
       timeout: 5s
       retries: 3
       start_period: 10s
+
+volumes:
+  icpc-trainer-data:

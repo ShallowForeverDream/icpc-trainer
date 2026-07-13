@@ -17,6 +17,19 @@ int main() {
   return 0;
 }`;
 
+const strategyByTag: Record<string, string> = {
+  数学: "先把题目条件改写成等式或不等式，寻找奇偶性、整除关系和可直接计算的量。",
+  入门: "按题意逐步模拟，并在编码前列出所有边界情况。",
+  字符串: "明确字符下标与扫描方向，优先考虑一次线性遍历。",
+  排序: "先排序建立单调性，再检查能否用贪心、双指针或二分完成。",
+  模拟: "把每条操作规则翻译成独立分支，保持状态定义简单且可验证。",
+  贪心: "尝试证明局部最优选择不会破坏后续决策，并用反证或交换论证校验。",
+  二分: "确定答案或位置上的单调性，写清左右边界与开闭区间。",
+  数据结构: "先写出需要支持的修改与查询，再选择能够满足复杂度的数据结构。",
+  位运算: "逐位统计贡献，从高位到低位判断当前预算能否让这一位成立。",
+  数论: "枚举较小参数，利用 gcd、整除或因子关系压缩另一维范围。",
+};
+
 export default function ProblemDetailPage() {
   const params = useParams<{ code: string }>();
   const requestedCode = decodeURIComponent(params.code ?? "1904C");
@@ -35,6 +48,9 @@ export default function ProblemDetailPage() {
       setProblem({ ...data.problem, titleZh: "中文题面待导入", summaryZh: "这道题来自按 Rating 扩展的实时题库，中文结构化题面尚未导入。请在训练时结合英文原题。", inputZh: "请查看 Codeforces 英文原题中的输入说明。", outputZh: "请查看 Codeforces 英文原题中的输出说明。" });
     }).catch(() => undefined);
   }, [curated, requestedCode]);
+
+  useEffect(() => { setCode(localStorage.getItem(`icpc-trainer-draft:${requestedCode}`) ?? initialCode); }, [requestedCode]);
+  useEffect(() => { localStorage.setItem(`icpc-trainer-draft:${requestedCode}`, code); }, [code, requestedCode]);
 
   useEffect(() => {
     const favorites = JSON.parse(localStorage.getItem("icpc-trainer-favorites") ?? "[]") as string[];
@@ -75,12 +91,12 @@ export default function ProblemDetailPage() {
           <h2>输入格式</h2><p>{problem.inputZh}</p>
           <h2>输出格式</h2><p>{problem.outputZh}</p>
           <div className="source-callout"><b>校对提示</b><p>本页提供中文结构化导读，不替代 Codeforces 官方题面。边界条件、样例与特殊说明请以英文原题为准。</p></div>
-        </div> : tab === "提交记录" ? <div className="empty-state"><Icon name="history" /><h3>等待同步提交记录</h3><p>在「提交记录」绑定 Codeforces Handle 后即可查看公开提交。</p><a className="button button-primary" href="/submissions">前往绑定</a></div> : <div className="locked-editorial"><Icon name="lock" /><h3>题解尚未开放</h3><p>第一阶段先完成题库、中文导入和提交闭环，题解系统随后接入。</p></div>}
+        </div> : tab === "提交记录" ? <div className="empty-state"><Icon name="history" /><h3>查看公开提交记录</h3><p>在「提交记录」输入 Codeforces Handle，即可同步最近提交与判题结果。</p><a className="button button-primary" href="/submissions">前往同步</a></div> : <div className="locked-editorial"><Icon name="spark" /><h3>解题导航</h3><p>{strategyByTag[problem.tags[0]] ?? "从约束范围反推目标复杂度，先写出朴素算法，再寻找可以复用的状态或单调性。"}</p><p>建议复杂度方向：根据 <b>{problem.tags.join(" / ")}</b> 标签选择对应模板，并使用样例和极端数据验证。</p><div className="hero-actions"><a className="button button-primary" href="/templates">打开算法模板</a><a className="button button-ghost" href={`https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`} target="_blank" rel="noreferrer">核对官方题面 ↗</a></div></div>}
       </article>
       <aside className="code-panel">
         <div className="editor-head"><div><span className="active-dot" /> main.cpp</div><select aria-label="编译语言"><option>GNU C++20</option></select></div>
         <textarea className="code-editor" value={code} onChange={(event) => setCode(event.target.value)} spellCheck={false} aria-label="C++ 代码编辑器" />
-        <div className="editor-footer"><div><a href="/templates">＋ 插入模板</a><span>当前草稿仅保存在本页</span></div><label className="auto-submit-option"><input type="checkbox" checked={autoSubmit} onChange={(event) => setAutoSubmit(event.target.checked)} /> 预填后自动点击 Codeforces 提交按钮</label><button className="submit-button" onClick={sendToExtension}>{submitState === "sent" ? <><Icon name="check" /> 已发送给浏览器扩展</> : <>提交到 Codeforces <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
+        <div className="editor-footer"><div><a href="/templates">＋ 打开模板库</a><span>草稿已自动保存在当前浏览器</span></div><label className="auto-submit-option"><input type="checkbox" checked={autoSubmit} onChange={(event) => setAutoSubmit(event.target.checked)} /> 预填后自动点击 Codeforces 提交按钮</label><button className="submit-button" onClick={sendToExtension}>{submitState === "sent" ? <><Icon name="check" /> 已发送给浏览器扩展</> : <>提交到 Codeforces <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
       </aside>
     </section>
   </AppShell>;

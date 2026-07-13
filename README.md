@@ -9,6 +9,7 @@
 - 按 Rating 分页扩展完整公开题池
 - 真实随机组卷与历史原场镜像 VP，支持排除 AC、Seed、计时恢复和判题同步
 - 可安装的 Chrome / Edge Manifest V3 提交桥接扩展，支持预填或单次自动提交
+- 管理员账号、邀请码生成、邀请码注册、登录会话与密码修改
 - 题库筛选、题目编辑器、VP 构建器、模板库、收藏与训练台界面
 - Sites 私密部署流程
 
@@ -35,11 +36,8 @@ Node.js 版本要求：`>=22.13.0`。
 - `backend/`：部署在阿里云 ECS 的轻量级 Codeforces API
 - `deploy/`：公网 IP HTTPS、Nginx 与证书自动续期配置
 
-## 后续优先级
+## 已部署架构
 
-1. 国内 API 网关与数据库适配
-2. 中文题面导入审核后台
-3. 扩展状态回传与更多语言支持
-4. 管理员邀请码账号系统（暂不实现邮箱注册）
+Sites 托管前端，浏览器通过 HTTPS 访问阿里云 ECS 的轻量 Node API。账号、邀请码和会话持久化在 Docker 数据卷中的 SQLite 数据库；Codeforces 题库由 ECS 同步并缓存。
 
-正式接入国内服务时，在 Sites 环境变量中配置网关地址；示例见 `.env.example`。不要提交邮箱密码、Codeforces API Secret 或服务器凭据。
+管理员账号通过服务器环境变量首次引导创建，密码不会写入仓库。不要提交邮箱密码、Codeforces API Secret 或服务器凭据。

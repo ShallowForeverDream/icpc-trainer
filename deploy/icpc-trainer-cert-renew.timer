@@ -1,0 +1,10 @@
+[Unit]
+Description=Daily renewal check for the icpc-trainer IP TLS certificate
+
+[Timer]
+OnCalendar=*-*-* 03:35:00
+RandomizedDelaySec=20m
+Persistent=true
+
+[Install]
+WantedBy=timers.target

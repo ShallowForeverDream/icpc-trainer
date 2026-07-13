@@ -27,6 +27,10 @@ const globalCache = globalThis as typeof globalThis & {
   __icpcLastCall?: number;
 };
 
+function backendBase() {
+  return process.env.ICPC_API_BASE_URL?.replace(/\/$/, "") ?? "";
+}
+
 async function throttledFetch<T>(method: string, params: URLSearchParams) {
   const previous = globalCache.__icpcQueue ?? Promise.resolve();
   let resolveQueue!: () => void;
@@ -48,9 +52,13 @@ async function throttledFetch<T>(method: string, params: URLSearchParams) {
 export async function getProblemset() {
   const cached = globalCache.__icpcProblems;
   if (cached && cached.expiresAt > Date.now()) return cached.value;
-  const result = await throttledFetch<{ problems: CodeforcesProblem[] }>("problemset.problems", new URLSearchParams({ lang: "en" }));
-  globalCache.__icpcProblems = { expiresAt: Date.now() + 30 * 60 * 1000, value: result.problems };
-  return result.problems;
+  const base = backendBase();
+  const value = base
+    ? ((await (await fetch(`${base}/problemset`, { headers: { "User-Agent": "icpc-trainer-sites/0.1" } })).json()) as { problems: CodeforcesProblem[] }).problems
+    : (await throttledFetch<{ problems: CodeforcesProblem[] }>("problemset.problems", new URLSearchParams({ lang: "en" }))).problems;
+  if (!Array.isArray(value)) throw new Error("国内 API 返回了无效题库数据");
+  globalCache.__icpcProblems = { expiresAt: Date.now() + 30 * 60 * 1000, value };
+  return value;
 }
 
 export async function getUserSubmissions(handle: string, count = 1000) {
@@ -58,7 +66,11 @@ export async function getUserSubmissions(handle: string, count = 1000) {
   const key = `${handle.toLowerCase()}:${count}`;
   const cached = cache.get(key);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
-  const value = await throttledFetch<CodeforcesSubmission[]>("user.status", new URLSearchParams({ handle, from: "1", count: String(count) }));
+  const base = backendBase();
+  const value = base
+    ? ((await (await fetch(`${base}/submissions/raw?handle=${encodeURIComponent(handle)}&count=${count}`, { headers: { "User-Agent": "icpc-trainer-sites/0.1" } })).json()) as { submissions: CodeforcesSubmission[] }).submissions
+    : await throttledFetch<CodeforcesSubmission[]>("user.status", new URLSearchParams({ handle, from: "1", count: String(count) }));
+  if (!Array.isArray(value)) throw new Error("国内 API 返回了无效提交数据");
   cache.set(key, { expiresAt: Date.now() + 60 * 1000, value });
   return value;
 }

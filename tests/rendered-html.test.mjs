@@ -48,3 +48,16 @@ test("ships live VP generation and the configured handle", async () => {
   assert.match(page, /ShallowDream2/);
   assert.match(page, /同步 Codeforces 判题/);
 });
+
+test("ships the lightweight domestic API deployment", async () => {
+  const [backend, compose, nginx] = await Promise.all([
+    readFile(new URL("backend/server.mjs", root), "utf8"),
+    readFile(new URL("backend/compose.yaml", root), "utf8"),
+    readFile(new URL("deploy/nginx-icpc-trainer.conf", root), "utf8"),
+  ]);
+  assert.match(backend, /\/vp\/generate/);
+  assert.match(backend, /\/submissions\/raw/);
+  assert.match(compose, /127\.0\.0\.1:8787:8787/);
+  assert.match(nginx, /\/icpc-api\//);
+  assert.match(nginx, /114\.55\.130\.137/);
+});

@@ -1,0 +1,8 @@
+[Unit]
+Description=Renew the icpc-trainer IP TLS certificate
+After=docker.service nginx.service
+Requires=docker.service nginx.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/icpc-trainer/renew-ip-certificate.sh

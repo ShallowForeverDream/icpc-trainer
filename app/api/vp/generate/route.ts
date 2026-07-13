@@ -50,6 +50,11 @@ function pickMirror(pool: CodeforcesProblem[], desiredCount: number, target: num
 export async function POST(request: NextRequest) {
   try {
     const body = await request.json() as GenerateRequest;
+    const backend = process.env.ICPC_API_BASE_URL?.replace(/\/$/, "");
+    if (backend) {
+      const upstream = await fetch(`${backend}/vp/generate`, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "icpc-trainer-sites/0.1" }, body: JSON.stringify(body) });
+      return NextResponse.json(await upstream.json(), { status: upstream.status });
+    }
     const handle = (body.handle ?? "ShallowDream2").trim();
     if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) return NextResponse.json({ error: "Codeforces Handle 无效" }, { status: 400 });
     const count = Math.max(5, Math.min(13, Number(body.count) || 10));

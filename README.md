@@ -32,6 +32,8 @@ Node.js 版本要求：`>=22.13.0`。
 - `app/extension/`：扩展下载与安装指南
 - `extension/`：浏览器扩展源码
 - `public/icpc-trainer-extension.zip`：可下载扩展包
+- `backend/`：部署在阿里云 ECS 的轻量级 Codeforces API
+- `deploy/`：公网 IP HTTPS、Nginx 与证书自动续期配置
 
 ## 后续优先级
 

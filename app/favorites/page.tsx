@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react";
 import { AppShell, Icon, ProblemRow } from "../components/AppShell";
 import { curatedProblems } from "../data/problems";
+import { browserApiUrl } from "../lib/browser-api";
 
 type FavoriteProblem = { code: string; title: string; titleZh?: string; rating: number; tags: string[] };
 
@@ -14,7 +15,7 @@ export default function FavoritesPage() {
       const curated = curatedProblems.find((problem) => problem.code === code);
       if (curated) return curated;
       try {
-        const response = await fetch(`/api/codeforces/problems?scope=single&code=${encodeURIComponent(code)}`);
+        const response = await fetch(browserApiUrl(`/codeforces/problems?scope=single&code=${encodeURIComponent(code)}`));
         const data = await response.json();
         return data.problem as FavoriteProblem | undefined;
       } catch { return undefined; }

@@ -3,6 +3,7 @@ import http from "node:http";
 const PORT = Number(process.env.PORT || 8787);
 const CF_BASE = "https://codeforces.com/api";
 const USER_AGENT = "icpc-trainer-backend/0.1";
+const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-lab-trainer.zhuj7933.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
 let problemCache = null;
 const submissionCache = new Map();
 let apiQueue = Promise.resolve();
@@ -15,7 +16,8 @@ const json = (response, status, value, extra = {}) => {
 };
 
 function allowRequest(request) {
-  const ip = request.socket.remoteAddress || "unknown";
+  const forwarded = String(request.headers["x-real-ip"] || request.headers["x-forwarded-for"] || "").split(",")[0].trim();
+  const ip = forwarded || request.socket.remoteAddress || "unknown";
   const now = Date.now();
   const state = requestWindows.get(ip);
   if (!state || now - state.startedAt > 60_000) {
@@ -84,6 +86,21 @@ function publicProblem(problem) {
   return { code: `CF ${problem.contestId}${problem.index}`, contestId: problem.contestId, index: problem.index, title: problem.name, rating: problem.rating || 0, tags: problem.tags, status: "未尝试" };
 }
 
+function publicSubmission(item) {
+  return {
+    id: item.id,
+    createdAt: new Date(item.creationTimeSeconds * 1000).toISOString(),
+    code: item.problem.contestId ? `CF ${item.problem.contestId}${item.problem.index}` : item.problem.index,
+    contestId: item.problem.contestId,
+    index: item.problem.index,
+    title: item.problem.name,
+    language: item.programmingLanguage,
+    verdict: item.verdict || "TESTING",
+    timeMs: item.timeConsumedMillis,
+    memoryBytes: item.memoryConsumedBytes,
+  };
+}
+
 function pickRandomSet(pool, count, target, random) {
   const selected = [];
   const used = new Set();
@@ -146,15 +163,46 @@ async function generateVp(body) {
 
 const server = http.createServer(async (request, response) => {
   const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
+  const origin = String(request.headers.origin || "");
+  if (ALLOWED_ORIGINS.has(origin)) {
+    response.setHeader("Access-Control-Allow-Origin", origin);
+    response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
+    response.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    response.setHeader("Vary", "Origin");
+  }
+  if (request.method === "OPTIONS") return response.writeHead(ALLOWED_ORIGINS.has(origin) ? 204 : 403).end();
   if (url.pathname === "/health") return json(response, 200, { status: "ok", service: "icpc-trainer-api", uptime: Math.round(process.uptime()) });
   if (!allowRequest(request)) return json(response, 429, { error: "请求过于频繁" });
   try {
     if (request.method === "GET" && url.pathname === "/problemset") return json(response, 200, { problems: await getProblemset() });
+    if (request.method === "GET" && url.pathname === "/codeforces/problems") {
+      const all = await getProblemset();
+      const scope = url.searchParams.get("scope") || "all";
+      if (scope === "single") {
+        const code = (url.searchParams.get("code") || "").replace(/^CF\s*/i, "").toLowerCase();
+        const problem = all.find((item) => `${item.contestId}${item.index}`.toLowerCase() === code);
+        return problem ? json(response, 200, { source: "codeforces", problem: publicProblem(problem) }) : json(response, 404, { error: "题目不存在" });
+      }
+      const min = Math.max(800, Number(url.searchParams.get("min")) || 800);
+      const max = Math.min(3500, Number(url.searchParams.get("max")) || 3500);
+      const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
+      const limit = Math.min(100, Math.max(20, Number(url.searchParams.get("limit")) || 60));
+      const query = (url.searchParams.get("q") || "").trim().toLowerCase();
+      const filtered = all.filter((problem) => problem.type === "PROGRAMMING" && problem.contestId && problem.rating && problem.rating >= min && problem.rating <= max && !problem.tags.includes("interactive") && (!query || `${problem.contestId}${problem.index} ${problem.name} ${problem.tags.join(" ")}`.toLowerCase().includes(query))).sort((a, b) => (a.rating || 0) - (b.rating || 0) || (b.contestId || 0) - (a.contestId || 0) || a.index.localeCompare(b.index));
+      const offset = (page - 1) * limit;
+      return json(response, 200, { source: "codeforces", page, total: filtered.length, problems: filtered.slice(offset, offset + limit).map(publicProblem) }, { "Cache-Control": "public, max-age=600" });
+    }
     if (request.method === "GET" && url.pathname === "/submissions/raw") {
       const handle = (url.searchParams.get("handle") || "").trim();
       const count = Math.min(1000, Math.max(1, Number(url.searchParams.get("count")) || 100));
       if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) return json(response, 400, { error: "Handle 无效" });
       return json(response, 200, { submissions: await getSubmissions(handle, count) });
+    }
+    if (request.method === "GET" && url.pathname === "/codeforces/submissions") {
+      const handle = (url.searchParams.get("handle") || "").trim();
+      if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) return json(response, 400, { error: "请输入有效的 Codeforces Handle" });
+      const submissions = (await getSubmissions(handle, 100)).map(publicSubmission);
+      return json(response, 200, { source: "codeforces", handle, syncedAt: new Date().toISOString(), submissions });
     }
     if (request.method === "POST" && url.pathname === "/vp/generate") return json(response, 200, await generateVp(await readBody(request)));
     return json(response, 404, { error: "Not found" });

@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { useParams } from "next/navigation";
 import { AppShell, Icon } from "../../components/AppShell";
 import { findCuratedProblem } from "../../data/problems";
+import { browserApiUrl } from "../../lib/browser-api";
 
 const initialCode = `#include <bits/stdc++.h>
 using namespace std;
@@ -29,7 +30,7 @@ export default function ProblemDetailPage() {
 
   useEffect(() => {
     if (curated) { setProblem(curated); return; }
-    fetch(`/api/codeforces/problems?scope=single&code=${encodeURIComponent(requestedCode)}`).then((response) => response.json()).then((data) => {
+    fetch(browserApiUrl(`/codeforces/problems?scope=single&code=${encodeURIComponent(requestedCode)}`)).then((response) => response.json()).then((data) => {
       if (!data.problem) return;
       setProblem({ ...data.problem, titleZh: "中文题面待导入", summaryZh: "这道题来自按 Rating 扩展的实时题库，中文结构化题面尚未导入。请在训练时结合英文原题。", inputZh: "请查看 Codeforces 英文原题中的输入说明。", outputZh: "请查看 Codeforces 英文原题中的输出说明。" });
     }).catch(() => undefined);

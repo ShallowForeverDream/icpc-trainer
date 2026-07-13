@@ -3,6 +3,7 @@
 import { FormEvent, useMemo, useState } from "react";
 import { AppShell, Icon, ProblemRow } from "../components/AppShell";
 import { curatedProblems } from "../data/problems";
+import { browserApiUrl } from "../lib/browser-api";
 
 type CatalogProblem = { code: string; contestId: number; index: string; title: string; titleZh?: string; rating: number; tags: string[]; status?: string };
 type SyncState = "idle" | "syncing" | "live" | "fallback";
@@ -38,7 +39,7 @@ export default function ProblemLibraryPage() {
     setSyncState("syncing");
     const [min, max] = ranges[selectedRange];
     try {
-      const response = await fetch(`/api/codeforces/problems?scope=all&min=${min}&max=${max}&page=${nextPage}&limit=60&q=${encodeURIComponent(query)}`, { cache: "no-store" });
+      const response = await fetch(browserApiUrl(`/codeforces/problems?scope=all&min=${min}&max=${max}&page=${nextPage}&limit=60&q=${encodeURIComponent(query)}`), { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "加载失败");
       setProblems(data.problems);

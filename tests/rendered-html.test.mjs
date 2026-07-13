@@ -50,14 +50,18 @@ test("ships live VP generation and the configured handle", async () => {
 });
 
 test("ships the lightweight domestic API deployment", async () => {
-  const [backend, compose, nginx] = await Promise.all([
+  const [backend, compose, nginx, browserApi] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
     readFile(new URL("backend/compose.yaml", root), "utf8"),
     readFile(new URL("deploy/nginx-icpc-trainer.conf", root), "utf8"),
+    readFile(new URL("app/lib/browser-api.ts", root), "utf8"),
   ]);
   assert.match(backend, /\/vp\/generate/);
   assert.match(backend, /\/submissions\/raw/);
+  assert.match(backend, /Access-Control-Allow-Origin/);
+  assert.match(backend, /\/codeforces\/problems/);
   assert.match(compose, /127\.0\.0\.1:8787:8787/);
   assert.match(nginx, /\/icpc-api\//);
   assert.match(nginx, /114\.55\.130\.137/);
+  assert.match(browserApi, /https:\/\/114\.55\.130\.137\/icpc-api/);
 });

@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, Icon, Pill } from "../components/AppShell";
+import { browserApiUrl } from "../lib/browser-api";
 
 type VpProblem = { slot: string; code: string; contestId: number; index: string; title: string; rating: number; tags: string[] };
 type Contest = { id: string; handle: string; mode: string; seed: string; durationMinutes: number; targetRating: number; sourceContestId: number | null; excludedSolved: number; createdAt: string; startedAt?: number; problems: VpProblem[]; accepted?: string[] };
@@ -45,7 +46,7 @@ export default function VpPage() {
     setStatus("loading");
     setMessage("");
     try {
-      const response = await fetch("/api/vp/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle, mode, count, targetRating, durationMinutes: duration, seed: seed || undefined }) });
+      const response = await fetch(browserApiUrl("/vp/generate"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ handle, mode, count, targetRating, durationMinutes: duration, seed: seed || undefined }) });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "组卷失败");
       save(data);
@@ -67,7 +68,7 @@ export default function VpPage() {
     if (!contest) return;
     setStatus("syncing");
     try {
-      const response = await fetch(`/api/codeforces/submissions?handle=${encodeURIComponent(contest.handle)}`, { cache: "no-store" });
+      const response = await fetch(browserApiUrl(`/codeforces/submissions?handle=${encodeURIComponent(contest.handle)}`), { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "同步失败");
       const accepted = new Set<string>(contest.accepted ?? []);

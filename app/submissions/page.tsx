@@ -2,6 +2,7 @@
 
 import { FormEvent, useState } from "react";
 import { AppShell, Icon, Pill } from "../components/AppShell";
+import { browserApiUrl } from "../lib/browser-api";
 
 type Submission = { id: number; createdAt: string; code: string; contestId?: number; index: string; title: string; verdict: string; language: string; timeMs: number };
 const verdictLabel: Record<string, string> = { OK: "Accepted", WRONG_ANSWER: "Wrong answer", TIME_LIMIT_EXCEEDED: "Time limit", MEMORY_LIMIT_EXCEEDED: "Memory limit", RUNTIME_ERROR: "Runtime error", TESTING: "Testing" };
@@ -16,7 +17,7 @@ export default function SubmissionsPage() {
     event.preventDefault();
     setStatus("loading");
     try {
-      const response = await fetch(`/api/codeforces/submissions?handle=${encodeURIComponent(handle.trim())}`, { cache: "no-store" });
+      const response = await fetch(browserApiUrl(`/codeforces/submissions?handle=${encodeURIComponent(handle.trim())}`), { cache: "no-store" });
       const data = await response.json();
       if (!response.ok) throw new Error(data.error ?? "同步失败");
       setRows(data.submissions);

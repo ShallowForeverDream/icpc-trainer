@@ -53,6 +53,14 @@ test("enforces initial-password, invite, revocation, and admin boundaries", asyn
     assert.equal((await post(baseUrl, "/admin/invites", { maxUses: 1 }, memberToken)).status, 403);
     assert.equal((await post(baseUrl, "/auth/register", { email: "second@example.com", password: "MemberTest12345", inviteCode: invite.code })).status, 400);
 
+    const sharedInviteResponse = await post(baseUrl, "/admin/invites", { maxUses: 2, expiresInDays: 7 }, adminToken);
+    assert.equal(sharedInviteResponse.status, 201);
+    const sharedInvite = (await sharedInviteResponse.json()).invite;
+    assert.equal(sharedInvite.maxUses, 2);
+    assert.equal((await post(baseUrl, "/auth/register", { email: "shared-one@example.com", password: "MemberTest12345", inviteCode: sharedInvite.code })).status, 201);
+    assert.equal((await post(baseUrl, "/auth/register", { email: "shared-two@example.com", password: "MemberTest12345", inviteCode: sharedInvite.code })).status, 201);
+    assert.equal((await post(baseUrl, "/auth/register", { email: "shared-three@example.com", password: "MemberTest12345", inviteCode: sharedInvite.code })).status, 400);
+
     const revokedInviteResponse = await post(baseUrl, "/admin/invites", { maxUses: 2, expiresInDays: 7 }, adminToken);
     const revokedInvite = (await revokedInviteResponse.json()).invite;
     assert.equal((await post(baseUrl, "/admin/invites/revoke", { id: revokedInvite.id }, adminToken)).status, 200);

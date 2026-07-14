@@ -18,6 +18,7 @@ export default function AdminPage() {
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
+  const [view, setView] = useState<"invites" | "users" | "feedback">("invites");
 
   const load = useCallback(async () => {
     const auth = readAuth();
@@ -75,5 +76,32 @@ export default function AdminPage() {
     if (!response.ok) throw new Error(data.error || "操作失败");
   }
 
-  return <AppShell active="管理"><section className="admin-hero"><div><span className="eyebrow"><span className="live-dot" /> ADMIN CONTROL</span><h1>邀请码、用户与体验建议</h1><p>注册保持邀请制；用户反馈按是否影响训练效率进行整理。</p></div><div className="admin-metrics"><span><b>{users.length}</b>注册用户</span><span><b>{invites.filter((item) => item.status === "active").length}</b>有效邀请码</span><span><b>{feedback.length}</b>体验建议</span></div></section><div className="admin-grid"><form className="panel admin-create" onSubmit={createInvite}><span className="micro-label">NEW INVITATION</span><h2>生成邀请码</h2><label>最大使用次数<input type="number" min="1" max="100" value={maxUses} onChange={(event) => setMaxUses(Number(event.target.value))} /></label><label>有效天数<input type="number" min="1" max="365" value={expiresInDays} onChange={(event) => setExpiresInDays(Number(event.target.value))} /></label><button className="button button-primary">生成邀请码</button>{generated ? <div className="invite-result"><small>仅本次显示</small><code>{generated}</code><button type="button" onClick={copyCode}>复制</button></div> : null}{message ? <p className={message.includes("失败") || message.includes("失效") ? "form-error" : "form-success"}>{message}</p> : null}</form><section className="panel admin-table"><div className="panel-head"><div><span className="micro-label">INVITATIONS</span><h2>邀请码记录</h2></div></div>{loading ? <div className="loading-panel">正在加载…</div> : invites.length ? <div className="admin-list invite-admin-list">{invites.map((invite) => <div key={invite.id}><code>{invite.codePrefix}••••••••</code><span>{invite.usedCount} / {invite.maxUses} 次</span><span>{new Date(invite.expiresAt).toLocaleDateString("zh-CN")}</span><Pill>{invite.status === "active" ? "有效" : invite.status === "used" ? "已用完" : "已过期"}</Pill>{invite.status === "active" ? <button type="button" disabled={actionId === invite.id} onClick={() => void revokeInvite(invite)}>撤销</button> : <span>—</span>}</div>)}</div> : <div className="loading-panel">还没有邀请码</div>}</section></div><section className="panel users-panel"><div className="panel-head"><div><span className="micro-label">USER FEEDBACK</span><h2>体验建议</h2></div><span>{feedback.length} 条</span></div>{feedback.length ? <div className="feedback-admin-list">{feedback.map((item) => <article key={item.id}><div><Pill>{item.category}</Pill><b>{"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}</b><time>{new Date(item.createdAt).toLocaleString("zh-CN")}</time><select aria-label="反馈处理状态" value={item.status} disabled={actionId === item.id} onChange={(event) => void updateFeedbackStatus(item.id, event.target.value)}><option value="new">待处理</option><option value="reviewed">已查看</option><option value="planned">已计划</option><option value="done">已完成</option></select></div><p>{item.message}</p><small>{item.email || "匿名用户"} · {item.page}</small></article>)}</div> : <div className="loading-panel">还没有体验建议</div>}</section><section className="panel users-panel"><div className="panel-head"><div><span className="micro-label">MEMBERS</span><h2>注册用户</h2></div></div><div className="admin-list user-list">{users.map((user) => <div key={user.id}><span className="user-avatar">{user.email.slice(0, 2).toUpperCase()}</span><b>{user.email}</b><Pill>{user.role === "admin" ? "管理员" : "用户"}</Pill><span>{new Date(user.createdAt).toLocaleString("zh-CN")}</span></div>)}</div></section></AppShell>;
+  return <AppShell active="管理">
+    <section className="admin-hero">
+      <div><h1>管理</h1><p>注册、用户与反馈</p></div>
+      <div className="admin-metrics"><span><b>{users.length}</b>用户</span><span><b>{invites.filter((item) => item.status === "active").length}</b>有效邀请码</span></div>
+    </section>
+    <div className="admin-tabs" role="tablist">
+      <button className={view === "invites" ? "active" : ""} onClick={() => setView("invites")}>邀请码</button>
+      <button className={view === "users" ? "active" : ""} onClick={() => setView("users")}>用户</button>
+      <button className={view === "feedback" ? "active" : ""} onClick={() => setView("feedback")}>反馈</button>
+    </div>
+    {view === "invites" ? <div className="admin-grid">
+      <form className="panel admin-create" onSubmit={createInvite}>
+        <h2>生成邀请码</h2>
+        <label>可注册人数<input type="number" min="1" max="100" value={maxUses} onChange={(event) => setMaxUses(Number(event.target.value))} /></label>
+        <div className="invite-presets">{[1, 5, 10, 20].map((value) => <button type="button" className={maxUses === value ? "active" : ""} onClick={() => setMaxUses(value)} key={value}>{value} 次</button>)}</div>
+        <label>有效天数<input type="number" min="1" max="365" value={expiresInDays} onChange={(event) => setExpiresInDays(Number(event.target.value))} /></label>
+        <button className="button button-primary">生成</button>
+        {generated ? <div className="invite-result"><small>仅显示一次</small><code>{generated}</code><button type="button" onClick={copyCode}>复制</button></div> : null}
+        {message ? <p className={message.includes("失败") || message.includes("失效") ? "form-error" : "form-success"}>{message}</p> : null}
+      </form>
+      <section className="panel admin-table">
+        <div className="panel-head"><h2>邀请码</h2></div>
+        {loading ? <div className="loading-panel">加载中…</div> : invites.length ? <div className="admin-list invite-admin-list">{invites.map((invite) => <div key={invite.id}><code>{invite.codePrefix}••••••••</code><span>{invite.usedCount} / {invite.maxUses}</span><span>{new Date(invite.expiresAt).toLocaleDateString("zh-CN")}</span><Pill>{invite.status === "active" ? "有效" : invite.status === "used" ? "已用完" : "已过期"}</Pill>{invite.status === "active" ? <button type="button" disabled={actionId === invite.id} onClick={() => void revokeInvite(invite)}>撤销</button> : <span>—</span>}</div>)}</div> : <div className="loading-panel">暂无邀请码</div>}
+      </section>
+    </div> : null}
+    {view === "users" ? <section className="panel users-panel"><div className="panel-head"><h2>注册用户</h2></div><div className="admin-list user-list">{users.map((user) => <div key={user.id}><span className="user-avatar">{user.email.slice(0, 2).toUpperCase()}</span><b>{user.email}</b><Pill>{user.role === "admin" ? "管理员" : "用户"}</Pill><span>{new Date(user.createdAt).toLocaleDateString("zh-CN")}</span></div>)}</div></section> : null}
+    {view === "feedback" ? <section className="panel users-panel"><div className="panel-head"><h2>反馈</h2><span>{feedback.length} 条</span></div>{feedback.length ? <div className="feedback-admin-list">{feedback.map((item) => <article key={item.id}><div><Pill>{item.category}</Pill><b>{"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}</b><time>{new Date(item.createdAt).toLocaleString("zh-CN")}</time><select aria-label="反馈处理状态" value={item.status} disabled={actionId === item.id} onChange={(event) => void updateFeedbackStatus(item.id, event.target.value)}><option value="new">待处理</option><option value="reviewed">已查看</option><option value="planned">已计划</option><option value="done">已完成</option></select></div><p>{item.message}</p><small>{item.email || "匿名用户"}</small></article>)}</div> : <div className="loading-panel">暂无反馈</div>}</section> : null}
+  </AppShell>;
 }

@@ -102,7 +102,7 @@ export default function ProblemLibraryPage() {
 
   return <AppShell active="题库">
     <section className="problem-library-head">
-      <div><h1>不要刷更多题，要练对下一题。</h1><p>结合 {handle} 的 AC、WA、未完成题与训练复盘，选择当前最有训练价值的一题。</p></div>
+      <div><h1>题库</h1><p>{handle} · 按难度与标签筛选</p></div>
       <button className="button button-primary" onClick={() => void loadProblems(1, mode)} disabled={syncState === "syncing"}><Icon name="history" /> {syncState === "syncing" ? "正在匹配…" : "刷新结果"}</button>
     </section>
 
@@ -116,7 +116,7 @@ export default function ProblemLibraryPage() {
       </form>
     </section>
 
-    {profile ? <section className="recommendation-profile"><div><span>已排除</span><b>{profile.solvedCount}</b><small>道已 AC</small></div><div><span>待补题</span><b>{profile.upsolveCount ?? 0}</b><small>做错或未完成</small></div><div><span>目标 Rating</span><b>{profile.targetRating}</b><small>{(profile.weakTags ?? []).slice(0, 2).join(" · ") || "均衡训练"}</small></div><p><b>为什么这样选：</b>{profile.methodology ?? "结合公开完成记录与目标难度，优先选择未完成且处于挑战区间的题目。"}</p></section> : null}
+    {profile ? <section className="recommendation-profile"><div><span>已完成</span><b>{profile.solvedCount}</b></div><div><span>待补题</span><b>{profile.upsolveCount ?? 0}</b></div><div><span>目标 Rating</span><b>{profile.targetRating}</b><small>{(profile.weakTags ?? []).slice(0, 2).join(" · ") || "均衡"}</small></div></section> : null}
 
     <section className="panel personalized-catalog">
       <div className="panel-head"><div><h2>{resultTitle}</h2><p>{countLabel} · Rating {minRating}–{maxRating}{selectedTags.length ? ` · ${selectedTags.join(" / ")}` : ""}</p></div><span className={`catalog-live-state state-${syncState}`}><i />{syncState === "live" ? "实时题库" : syncState === "syncing" ? "加载中" : syncState === "error" ? "加载失败" : "等待筛选"}</span></div>

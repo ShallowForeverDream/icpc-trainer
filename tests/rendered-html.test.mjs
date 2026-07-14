@@ -21,18 +21,21 @@ test("renders the icpc-trainer product home", async () => {
   assert.match(html, /今日训练/);
   assert.match(html, /每日目标/);
   assert.match(html, /最近完成/);
-  assert.match(html, /为你推荐/);
-  assert.match(html, /近年 ICPC 赛后补题/);
+  assert.match(html, /推荐题目/);
+  assert.match(html, /赛后补题/);
   assert.match(html, /ICPC 山东省大学生程序设计竞赛/);
-  assert.match(html, /国内外 ICPC 赛事导航/);
+  assert.match(html, /国际赛事/);
   assert.doesNotMatch(html, /中文精选题/);
+  assert.doesNotMatch(html, /WORKSPACE|CODEFORCES API/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/);
 });
 
-test("uses a larger warm light visual system across the product", async () => {
+test("uses a concise white, pink, and violet visual system across the product", async () => {
   const styles = await readFile(new URL("app/globals.css", root), "utf8");
-  assert.match(styles, /Warm light visual system/);
-  assert.match(styles, /--paper:#fff9f2/);
+  assert.match(styles, /White, pink and violet product theme/);
+  assert.match(styles, /--paper:#fffafd/);
+  assert.match(styles, /--blue:#8557d9/);
+  assert.match(styles, /--lime:#e987b8/);
   assert.match(styles, /body\{[^}]*font-size:16px/);
   assert.match(styles, /small\{font-size:12px!important/);
   assert.match(styles, /\.dashboard-archive-section/);
@@ -131,9 +134,9 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   assert.match(page, /ShallowDream2/);
   assert.match(page, /实时榜单/);
   assert.match(page, /思维题占比/);
-  assert.match(page, /AC 优先，WA \+20 分钟/);
+  assert.match(page, /按原比赛同时间回放/);
   assert.match(page, /原比赛组合实时榜单/);
-  assert.match(page, /组合榜只保留本次已有题目/);
+  assert.match(page, /只计算本次题目/);
   assert.match(page, /pollAfterSeconds/);
   assert.match(page, /多场组合/);
   assert.match(page, /来源参考/);
@@ -144,8 +147,7 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /自由组卷/);
-  assert.match(html, /60% · 推荐/);
-  assert.match(html, /实时榜单/);
+  assert.match(html, />60%<\/option>/);
 });
 
 test("ships historical ICPC upsolving with timestamp-replayed real standings", async () => {
@@ -163,7 +165,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /2025-chengdu/);
   assert.match(catalog, /2024-nanjing/);
   assert.match(page, /同时间轴真实榜单/);
-  assert.match(page, /我的队伍实时插榜/);
+  assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /URLSearchParams\(window\.location\.search\)/);
   assert.match(route, /archiveScoreboard/);
   assert.match(scoreboard, /run\.json/);
@@ -254,9 +256,15 @@ test("ships invite-only authentication and administration", async () => {
   assert.match(auth, /\/auth\/register/);
   assert.match(auth, /\/admin\/invites/);
   assert.match(compose, /icpc-trainer-data:\/data/);
-  assert.match(login, /ACCOUNT LOGIN/);
+  assert.match(login, /继续你的训练/);
   assert.match(register, /inviteCode/);
+  assert.match(register, /需要管理员邀请码/);
+  assert.match(auth, /used_count >= invite\.max_uses/);
+  assert.match(auth, /used_count = used_count \+ 1/);
+  assert.match(auth, /min: 1, max: 100/);
   assert.match(admin, /生成邀请码/);
+  assert.match(admin, /可注册人数/);
+  assert.match(admin, /invite-presets/);
   assert.match(admin, /撤销/);
   assert.match(admin, /反馈处理状态/);
 });
@@ -283,7 +291,7 @@ test("ships a deliberate-practice loop and collects user experience feedback", a
     readFile(new URL("backend/auth.mjs", root), "utf8"),
     readFile(new URL("app/admin/page.tsx", root), "utf8"),
   ]);
-  assert.match(home, /弱项攻坚/);
+  assert.match(catalog, /弱项攻坚/);
   assert.match(home, /赛后补题/);
   assert.match(catalog, /赛场思维模式/);
   assert.match(catalog, /Boss 题/);
@@ -293,5 +301,5 @@ test("ships a deliberate-practice loop and collects user experience feedback", a
   assert.match(shell, /体验建议/);
   assert.match(auth, /CREATE TABLE IF NOT EXISTS training_events/);
   assert.match(auth, /CREATE TABLE IF NOT EXISTS feedback/);
-  assert.match(admin, /USER FEEDBACK/);
+  assert.match(admin, /反馈处理状态/);
 });

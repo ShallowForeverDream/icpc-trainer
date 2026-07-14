@@ -178,10 +178,9 @@ export default function ArchiveVpPage() {
 
   if (!session) return <AppShell active="模拟赛">
     <section className="archive-hero">
-      <div><span className="eyebrow">ICPC ARCHIVE VP</span><h1>历届补题</h1><p>选择一场全国邀请赛、省赛、区域赛或东亚区决赛。开赛后，原场每一条真实提交都会沿相同时间轴进入榜单。</p></div>
+      <div><h1>历届补题</h1><p>选择赛事，按原场时间轴 VP</p></div>
       <Link className="button button-ghost" href="/vp">返回常规 VP</Link>
     </section>
-    <section className="archive-proof"><b>不是静态最终榜</b><span>数据来自 XCPCIO 原始 <code>team.json</code> 与 <code>run.json</code></span><i>按原场时间戳重放</i><i>保留赛时封榜</i><i>我的队伍实时插榜</i></section>
     <section className="archive-filters">
       <div className="segmented">{([2026, 2025, 2024] as const).map((value) => <button key={value} className={year === value ? "active" : ""} onClick={() => setYear(value)}>{value}</button>)}</div>
       <div className="segmented">{["全部", "邀请赛", "省赛", "区域赛", "东亚决赛"].map((value) => <button key={value} className={type === value ? "active" : ""} onClick={() => setType(value)}>{value}</button>)}</div>
@@ -189,8 +188,7 @@ export default function ArchiveVpPage() {
     </section>
     <section className="archive-grid">{filteredContests.map((contest) => <article key={contest.id} className="archive-card">
       <div><span>{contest.year}</span><i>{contest.type}</i></div><h2>{contest.name}</h2><p>{contest.city} · {contest.problemCount} 题 · ICPC 赛制</p>
-      <ul><li>真实队伍与队名</li><li>逐提交时间线</li><li>最后 1 小时封榜</li></ul>
-      <button className="button button-primary" onClick={() => chooseContest(contest.id)}>进入赛前准备 →</button>
+      <button className="button button-primary" onClick={() => chooseContest(contest.id)}>开始准备</button>
     </article>)}</section>
     {!filteredContests.length ? <p className="archive-empty">当前筛选下没有赛事，请更换年份、类型或搜索词。</p> : null}
   </AppShell>;

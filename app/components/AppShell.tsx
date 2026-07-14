@@ -66,23 +66,18 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
       <aside className={`sidebar ${mobileOpen ? "mobile-open" : ""}`}>
         <Link className="brand" href="/"><span className="brand-mark"><i /><i /><i /></span><span>icpc-<em>trainer</em></span></Link>
         <nav id="primary-navigation">
-          <p>WORKSPACE</p>
           {nav.map(([label, href, icon]) => <Link key={label} href={href} onClick={() => setMobileOpen(false)} className={active === label ? "active" : ""}><Icon name={icon} /><span>{label}</span>{active === label && <i className="nav-indicator" />}</Link>)}
-          <p>NEXT</p>
-          <Link href="/extension"><Icon name="book" /><span>扩展安装指南</span></Link>
         </nav>
-        <div className="sidebar-card"><span>CF</span><div><small>CODEFORCES API</small><b>公开题库可用</b><em>● 无需 API Key</em></div></div>
         <Link className="profile-mini" href={user ? "/account" : "/login"}><span>{user ? user.email.slice(0, 2).toUpperCase() : "S2"}</span><div><b>{user ? user.email : "登录 / 注册"}</b><small>{user ? (user.role === "admin" ? "管理员账号" : "训练账号") : "邀请码注册"}</small></div><Icon name="chevron" /></Link>
       </aside>
       {mobileOpen ? <button className="sidebar-backdrop" aria-label="关闭菜单" onClick={() => setMobileOpen(false)} /> : null}
       <main>
         <header className="topbar">
           <button className="mobile-menu" onClick={() => setMobileOpen(!mobileOpen)} aria-expanded={mobileOpen} aria-controls="primary-navigation" aria-label={mobileOpen ? "关闭菜单" : "打开菜单"}>☰</button>
-          <div className="crumb"><span>icpc-trainer</span><i>/</i><b>{active}</b></div>
+          <div className="crumb"><b>{active}</b></div>
           <div className="top-actions">
-            <Link className="command-search" href="/problem"><Icon name="search" /><span>搜索题目与 Rating 题库</span><kbd>⌘ K</kbd></Link>
             <Link className="account-button" href={user ? "/account" : "/login"}>{user ? "账号" : "登录"}</Link>
-            <Link className="quick-button" href="/vp">＋ 创建 VP</Link>
+            <Link className="quick-button" href="/vp">创建 VP</Link>
           </div>
         </header>
         <div className="page-content">{children}</div>

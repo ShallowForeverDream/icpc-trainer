@@ -125,15 +125,8 @@ export default function Home() {
 
   return <AppShell active="训练台">
     <section className="training-dashboard-head">
-      <div><h1>今天，专注完成训练。</h1><p>推荐题目、完成记录与训练节奏集中在一个页面。</p></div>
-      <div><Link className="button button-primary" href="/problem?recommended=1&mode=balanced&training=1"><Icon name="play" /> 开始今日训练</Link><Link className="button button-ghost" href="/vp"><Icon name="trophy" /> 创建 VP</Link></div>
-    </section>
-
-    <section className="training-mode-strip" aria-label="训练模式">
-      <Link href="/problem?recommended=1&mode=speed&training=1"><span>25′</span><div><b>热身冲刺</b><small>练读题与实现速度</small></div><strong>→</strong></Link>
-      <Link href="/problem?recommended=1&mode=weakness&training=1"><span>弱</span><div><b>弱项攻坚</b><small>按错误记录定位短板</small></div><strong>→</strong></Link>
-      <Link href="/vp/archive"><span>赛</span><div><b>赛事补题</b><small>邀请赛、省赛与区域赛真题 VP</small></div><strong>→</strong></Link>
-      <Link href="/problem?recommended=1&mode=boss&training=1"><span>+4</span><div><b>Boss 题</b><small>挑战舒适区上方 400</small></div><strong>→</strong></Link>
+      <div><h1>今日训练</h1><p>{handle} · 目标 {goal} 题</p></div>
+      <div><Link className="button button-primary" href="/problem?recommended=1&mode=balanced&training=1"><Icon name="play" /> 开始训练</Link><Link className="button button-ghost" href="/vp"><Icon name="trophy" /> 创建 VP</Link></div>
     </section>
 
     <section className="training-overview-grid">
@@ -149,7 +142,7 @@ export default function Home() {
 
     <section className="dashboard-main-grid">
       <article className="panel dashboard-recommendations">
-        <div className="panel-head"><div><h2>为你推荐</h2><p>排除已完成题，优先补弱项；训练入口默认隐藏标签与 Rating。</p></div><button className="text-button" onClick={() => setBatch((value) => value + 1)}><Icon name="shuffle" /> 换一组</button></div>
+        <div className="panel-head"><div><h2>推荐题目</h2><p>已排除完成题</p></div><button className="text-button" onClick={() => setBatch((value) => value + 1)}><Icon name="shuffle" /> 换一组</button></div>
         <div className="problem-list">{visibleRecommendations.map((problem, index) => <div className="recommended-problem" key={problem.code}><ProblemRow problem={problem} index={index + 1} training concealMeta /><span>{problem.reason}</span></div>)}</div>
         <Link className="panel-footer-link" href="/problem?recommended=1&mode=balanced&training=1">调整训练模式、标签和目标区间 <span>→</span></Link>
       </article>
@@ -163,8 +156,8 @@ export default function Home() {
 
     <section className="dashboard-archive-section">
       <div className="dashboard-section-head">
-        <div><span className="eyebrow">ICPC ARCHIVE</span><h2>近年 ICPC 赛后补题</h2><p>按年份直接选择全国邀请赛、省赛、区域赛或东亚区决赛，进入原场提交时间轴与实时相对榜单。</p></div>
-        <Link className="button button-ghost" href="/vp/archive">打开完整赛事库 →</Link>
+        <div><h2>赛后补题</h2><p>选择赛事，按原场时间轴 VP</p></div>
+        <Link className="button button-ghost" href="/vp/archive">全部赛事 →</Link>
       </div>
       <div className="dashboard-archive-years">
         {archiveYears.map((year) => {
@@ -178,7 +171,7 @@ export default function Home() {
         })}
       </div>
       <div className="dashboard-international">
-        <div className="dashboard-international-head"><div><h3>国内外 ICPC 赛事导航</h3><p>国际场次先提供官方资料与榜单入口；拥有逐提交公开数据后会升级为站内实时回放。</p></div><span>官方来源 ↗</span></div>
+        <div className="dashboard-international-head"><div><h3>国际赛事</h3></div><span>官方来源 ↗</span></div>
         <div className="dashboard-international-years">{internationalYears.map((year) => <article key={year}><strong>{year}</strong><div>{internationalContests.filter((contest) => contest.year === year).map((contest) => <a href={contest.href} target="_blank" rel="noreferrer" key={`${contest.year}-${contest.name}`}><span><b>{contest.name}</b><small>{contest.region} · {contest.type}</small></span><em>查看资料 ↗</em></a>)}</div></article>)}</div>
       </div>
     </section>

@@ -9,6 +9,7 @@ services:
       DB_PATH: /data/icpc-trainer.sqlite
       ADMIN_EMAIL: ${ADMIN_EMAIL:-}
       ADMIN_PASSWORD: ${ADMIN_PASSWORD:-}
+      ALLOWED_ORIGINS: ${ALLOWED_ORIGINS:-https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site,https://icpc-lab-trainer.zhuj7933.chatgpt.site,http://localhost:3000,http://localhost:5173}
       TRANSLATOR_BASE_URL: http://llama:8080
       TRANSLATOR_MODEL: ${TRANSLATOR_MODEL:-qwen2.5-1.5b-instruct}
     volumes:

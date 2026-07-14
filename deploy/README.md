@@ -4,6 +4,13 @@ The production API runs in Docker on `127.0.0.1:8787`. Existing Nginx exposes it
 
 `https://114.55.130.137/icpc-api/`
 
+The public frontend is deployed from the current Sites account at:
+
+`https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site`
+
+Because Alibaba Cloud blocks unregistered hostnames, browsers call the HTTPS IP API
+directly. Keep the Sites origin in `ALLOWED_ORIGINS` when recreating the API container.
+
 The server reuses Nginx for TLS termination. The previous Java, MySQL, and
 Elasticsearch workloads are stopped but their data has not been deleted.
 

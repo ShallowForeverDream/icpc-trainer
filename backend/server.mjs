@@ -5,7 +5,7 @@ import { createStatementHandler } from "./statements.mjs";
 const PORT = Number(process.env.PORT || 8787);
 const CF_BASE = "https://codeforces.com/api";
 const USER_AGENT = "icpc-trainer-backend/0.1";
-const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-lab-trainer.zhuj7933.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
+const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site,https://icpc-lab-trainer.zhuj7933.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
 let problemCache = null;
 const submissionCache = new Map();
 let apiQueue = Promise.resolve();

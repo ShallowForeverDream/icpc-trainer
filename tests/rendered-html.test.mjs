@@ -22,8 +22,20 @@ test("renders the icpc-trainer product home", async () => {
   assert.match(html, /每日目标/);
   assert.match(html, /最近完成/);
   assert.match(html, /为你推荐/);
+  assert.match(html, /近年 ICPC 赛后补题/);
+  assert.match(html, /ICPC 山东省大学生程序设计竞赛/);
+  assert.match(html, /国内外 ICPC 赛事导航/);
   assert.doesNotMatch(html, /中文精选题/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/);
+});
+
+test("uses a larger warm light visual system across the product", async () => {
+  const styles = await readFile(new URL("app/globals.css", root), "utf8");
+  assert.match(styles, /Warm light visual system/);
+  assert.match(styles, /--paper:#fff9f2/);
+  assert.match(styles, /body\{[^}]*font-size:16px/);
+  assert.match(styles, /small\{font-size:12px!important/);
+  assert.match(styles, /\.dashboard-archive-section/);
 });
 
 test("keeps twenty readable offline statement fallback records", async () => {
@@ -118,11 +130,15 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
     readFile(new URL("app/lib/archive-scoreboard.ts", root), "utf8"),
   ]);
   assert.equal((catalog.match(/boardPath: "icpc\//g) ?? []).length, 24);
+  assert.equal((catalog.match(/boardPath: "provincial-contest\//g) ?? []).length, 2);
+  assert.match(catalog, /2026-shandong-provincial/);
+  assert.match(catalog, /type: "省赛"/);
   assert.match(catalog, /2026-wuhan-invitational/);
   assert.match(catalog, /2025-chengdu/);
   assert.match(catalog, /2024-nanjing/);
   assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /我的队伍实时插榜/);
+  assert.match(page, /URLSearchParams\(window\.location\.search\)/);
   assert.match(route, /archiveScoreboard/);
   assert.match(scoreboard, /run\.json/);
   assert.match(scoreboard, /freezeAtSeconds/);
@@ -133,7 +149,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /历届补题/);
-  assert.match(html, /ICPC 武汉邀请赛/);
+  assert.match(html, /ICPC 武汉全国邀请赛/);
+  assert.match(html, /省赛/);
 });
 
 test("ships the domestic API, cached statements, OCR, and local translation deployment", async () => {

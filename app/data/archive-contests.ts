@@ -3,7 +3,7 @@ export type ArchiveContest = {
   year: 2024 | 2025 | 2026;
   name: string;
   city: string;
-  type: "邀请赛" | "区域赛" | "东亚决赛";
+  type: "邀请赛" | "省赛" | "区域赛" | "东亚决赛";
   boardPath: string;
   problemCount: number;
   gymId?: number;
@@ -11,12 +11,14 @@ export type ArchiveContest = {
 };
 
 export const archiveContests: ArchiveContest[] = [
-  { id: "2026-shenzhen-invitational", year: 2026, name: "ICPC 深圳邀请赛", city: "深圳", type: "邀请赛", boardPath: "icpc/51st/shenzhen-invitational", problemCount: 13 },
-  { id: "2026-wuhan-invitational", year: 2026, name: "ICPC 武汉邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/51st/wuhan-invitational", problemCount: 13, qojContestId: 3799 },
-  { id: "2026-jiangxi-invitational", year: 2026, name: "ICPC 江西邀请赛", city: "南昌", type: "邀请赛", boardPath: "icpc/51st/jiangxi-invitational", problemCount: 13 },
+  { id: "2026-shenzhen-invitational", year: 2026, name: "ICPC 深圳全国邀请赛", city: "深圳", type: "邀请赛", boardPath: "icpc/51st/shenzhen-invitational", problemCount: 13 },
+  { id: "2026-wuhan-invitational", year: 2026, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/51st/wuhan-invitational", problemCount: 13, qojContestId: 3799 },
+  { id: "2026-jiangxi-invitational", year: 2026, name: "ICPC 南昌全国邀请赛暨江西省赛", city: "南昌", type: "邀请赛", boardPath: "icpc/51st/jiangxi-invitational", problemCount: 13 },
+  { id: "2026-shandong-provincial", year: 2026, name: "ICPC 山东省大学生程序设计竞赛", city: "山东", type: "省赛", boardPath: "provincial-contest/2026/shandong", problemCount: 13, qojContestId: 3767 },
 
-  { id: "2025-wuhan-invitational", year: 2025, name: "ICPC 武汉邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/50th/wuhan-invitational", problemCount: 13, qojContestId: 2025 },
-  { id: "2025-nanchang-invitational", year: 2025, name: "ICPC 南昌邀请赛暨江西省赛", city: "南昌", type: "邀请赛", boardPath: "icpc/50th/nanchang-invitational", problemCount: 13, gymId: 105911 },
+  { id: "2025-wuhan-invitational", year: 2025, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/50th/wuhan-invitational", problemCount: 13, qojContestId: 2025 },
+  { id: "2025-nanchang-invitational", year: 2025, name: "ICPC 南昌全国邀请赛暨江西省赛", city: "南昌", type: "邀请赛", boardPath: "icpc/50th/nanchang-invitational", problemCount: 13, gymId: 105911 },
+  { id: "2025-shandong-provincial", year: 2025, name: "ICPC 山东省大学生程序设计竞赛", city: "山东", type: "省赛", boardPath: "provincial-contest/2025/shandong", problemCount: 13, gymId: 105930, qojContestId: 2040 },
   { id: "2025-xian", year: 2025, name: "ICPC 区域赛西安站", city: "西安", type: "区域赛", boardPath: "icpc/50th/xian", problemCount: 13, qojContestId: 2562 },
   { id: "2025-chengdu", year: 2025, name: "ICPC 区域赛成都站", city: "成都", type: "区域赛", boardPath: "icpc/50th/chengdu", problemCount: 13, gymId: 106161, qojContestId: 2567 },
   { id: "2025-wuhan", year: 2025, name: "ICPC 区域赛武汉站", city: "武汉", type: "区域赛", boardPath: "icpc/50th/wuhan", problemCount: 13, qojContestId: 2609 },
@@ -26,9 +28,9 @@ export const archiveContests: ArchiveContest[] = [
   { id: "2025-hongkong", year: 2025, name: "ICPC 区域赛香港站", city: "香港", type: "区域赛", boardPath: "icpc/50th/hongkong", problemCount: 12 },
   { id: "2025-ecfinal", year: 2025, name: "ICPC 东亚区决赛", city: "EC-Final", type: "东亚决赛", boardPath: "icpc/50th/ecfinal", problemCount: 12, qojContestId: 3295 },
 
-  { id: "2024-xian-invitational", year: 2024, name: "ICPC 西安邀请赛", city: "西安", type: "邀请赛", boardPath: "icpc/49th/xian-invitational", problemCount: 13 },
-  { id: "2024-kunming-invitational", year: 2024, name: "ICPC 昆明邀请赛", city: "昆明", type: "邀请赛", boardPath: "icpc/49th/kunming-invitational", problemCount: 13, qojContestId: 1802 },
-  { id: "2024-wuhan-invitational", year: 2024, name: "ICPC 武汉邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/49th/wuhan-invitational", problemCount: 13 },
+  { id: "2024-xian-invitational", year: 2024, name: "ICPC 西安全国邀请赛", city: "西安", type: "邀请赛", boardPath: "icpc/49th/xian-invitational", problemCount: 13 },
+  { id: "2024-kunming-invitational", year: 2024, name: "ICPC 昆明全国邀请赛", city: "昆明", type: "邀请赛", boardPath: "icpc/49th/kunming-invitational", problemCount: 13, qojContestId: 1802 },
+  { id: "2024-wuhan-invitational", year: 2024, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/49th/wuhan-invitational", problemCount: 13 },
   { id: "2024-nanjing", year: 2024, name: "ICPC 区域赛南京站", city: "南京", type: "区域赛", boardPath: "icpc/49th/nanjing", problemCount: 13, gymId: 105484 },
   { id: "2024-hangzhou", year: 2024, name: "ICPC 区域赛杭州站", city: "杭州", type: "区域赛", boardPath: "icpc/49th/hangzhou", problemCount: 13, gymId: 105657 },
   { id: "2024-chengdu", year: 2024, name: "ICPC 区域赛成都站", city: "成都", type: "区域赛", boardPath: "icpc/49th/chengdu", problemCount: 13, gymId: 105486 },

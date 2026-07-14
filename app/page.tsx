@@ -4,6 +4,8 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { AppShell, Icon, ProblemRow } from "./components/AppShell";
+import { archiveContests } from "./data/archive-contests";
+import { internationalContests } from "./data/international-contests";
 import { apiJson } from "./lib/api-client";
 import { readTrainerPreferences, saveTrainerPreferences } from "./lib/preferences";
 import { readStoredJson, writeStoredJson } from "./lib/storage";
@@ -18,6 +20,9 @@ const fallbackRecommendations: Recommendation[] = [
   { code: "CF 1904C", title: "Array Game", rating: 1400, tags: ["greedy", "sortings"], reason: "贪心与排序巩固" },
   { code: "CF 1791F", title: "Range Update Point Query", rating: 1600, tags: ["data structures", "dsu"], reason: "数据结构专项" },
 ];
+
+const archiveYears = [2026, 2025, 2024] as const;
+const internationalYears = [2025, 2024] as const;
 
 function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
@@ -122,7 +127,7 @@ export default function Home() {
     <section className="training-mode-strip" aria-label="训练模式">
       <Link href="/problem?recommended=1&mode=speed&training=1"><span>25′</span><div><b>热身冲刺</b><small>练读题与实现速度</small></div><strong>→</strong></Link>
       <Link href="/problem?recommended=1&mode=weakness&training=1"><span>弱</span><div><b>弱项攻坚</b><small>按错误记录定位短板</small></div><strong>→</strong></Link>
-      <Link href="/problem?recommended=1&mode=upsolve&training=1"><span>{trainingSummary?.stats.unsolved ?? 0}</span><div><b>赛后补题</b><small>优先追回做错与未完成</small></div><strong>→</strong></Link>
+      <Link href="/vp/archive"><span>赛</span><div><b>赛事补题</b><small>邀请赛、省赛与区域赛真题 VP</small></div><strong>→</strong></Link>
       <Link href="/problem?recommended=1&mode=boss&training=1"><span>+4</span><div><b>Boss 题</b><small>挑战舒适区上方 400</small></div><strong>→</strong></Link>
     </section>
 
@@ -149,6 +154,28 @@ export default function Home() {
         <div className="heat-legend"><span>少</span>{[0, 1, 2, 3, 4].map((value) => <i key={value} className={`heat-${value}`} />)}<span>多</span></div>
         {trainingSummary?.dueReviews.length ? <Link className="dashboard-vp-cta review-cta" href="/problem?recommended=1&mode=review&training=1"><span><b>{trainingSummary.dueReviews.length} 题待复盘</b><small>重新独立做，检查是否真正掌握</small></span><strong>→</strong></Link> : <Link className="dashboard-vp-cta" href="/vp"><span><b>创建一场 VP</b><small>支持多人实时榜单与多场组合</small></span><strong>→</strong></Link>}
       </article>
+    </section>
+
+    <section className="dashboard-archive-section">
+      <div className="dashboard-section-head">
+        <div><span className="eyebrow">ICPC ARCHIVE</span><h2>近年 ICPC 赛后补题</h2><p>按年份直接选择全国邀请赛、省赛、区域赛或东亚区决赛，进入原场提交时间轴与实时相对榜单。</p></div>
+        <Link className="button button-ghost" href="/vp/archive">打开完整赛事库 →</Link>
+      </div>
+      <div className="dashboard-archive-years">
+        {archiveYears.map((year) => {
+          const contests = archiveContests.filter((contest) => contest.year === year);
+          return <article className="dashboard-archive-year" key={year}>
+            <header><div><strong>{year}</strong><span>{contests.length} 场可回放</span></div><small>真实榜单时间轴</small></header>
+            <div className="dashboard-contest-list">{contests.map((contest) => <Link href={`/vp/archive?contest=${contest.id}`} key={contest.id}>
+              <span className="contest-type">{contest.type}</span><span><b>{contest.name}</b><small>{contest.city} · {contest.problemCount} 题</small></span><em>开始 VP →</em>
+            </Link>)}</div>
+          </article>;
+        })}
+      </div>
+      <div className="dashboard-international">
+        <div className="dashboard-international-head"><div><h3>国内外 ICPC 赛事导航</h3><p>国际场次先提供官方资料与榜单入口；拥有逐提交公开数据后会升级为站内实时回放。</p></div><span>官方来源 ↗</span></div>
+        <div className="dashboard-international-years">{internationalYears.map((year) => <article key={year}><strong>{year}</strong><div>{internationalContests.filter((contest) => contest.year === year).map((contest) => <a href={contest.href} target="_blank" rel="noreferrer" key={`${contest.year}-${contest.name}`}><span><b>{contest.name}</b><small>{contest.region} · {contest.type}</small></span><em>查看资料 ↗</em></a>)}</div></article>)}</div>
+      </div>
     </section>
   </AppShell>;
 }

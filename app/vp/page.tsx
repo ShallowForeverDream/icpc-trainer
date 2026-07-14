@@ -1,23 +1,23 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { AppShell, Icon } from "../components/AppShell";
 import { apiJson } from "../lib/api-client";
 import { readTrainerPreferences, saveTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
 import { readStoredJson, removeStoredValue, writeStoredJson } from "../lib/storage";
 
-type VpProblem = { slot: string; code: string; contestId: number; index: string; title: string; rating: number; tags: string[] };
+type VpProblem = { slot: string; code: string; contestId: number; index: string; title: string; rating: number; tags: string[]; thinking?: boolean };
 type SourceContest = { contestId: number; problemCount: number; averageRating: number; url: string };
-type ProblemStanding = { solved: boolean; wrongAttempts: number; solvedMinutes: number | null; penalty: number };
+type ProblemStanding = { solved: boolean; wrongAttempts: number; pendingAttempts?: number; solvedMinutes: number | null; penalty: number };
 type StandingRow = { rank: number; handle: string; solved: number; penalty: number; problems: Record<string, ProblemStanding> };
-type Standings = { updatedAt: string; rows: StandingRow[] };
-type Contest = { id: string; handle: string; participants?: string[]; mode: string; seed: string; durationMinutes: number; targetRating: number; sourceContestId: number | null; sourceContests?: SourceContest[]; excludedSolved: number; createdAt: string; startedAt?: number; problems: VpProblem[]; standings?: Standings };
+type Standings = { updatedAt: string; pollAfterSeconds?: number; rows: StandingRow[] };
+type Contest = { id: string; handle: string; participants?: string[]; mode: string; seed: string; durationMinutes: number; targetRating: number; thinkingRatio?: number; thinkingCount?: number; sourceContestId: number | null; sourceContests?: SourceContest[]; excludedSolved: number; createdAt: string; startedAt?: number; problems: VpProblem[]; standings?: Standings };
 
 const STORAGE_KEY = "icpc-trainer-active-vp";
 const modeOptions = [
-  ["个性化组卷", "跨比赛按 Rating 形成难度梯度", "✦"],
+  ["自由组卷", "跨比赛形成难度梯度，默认提高思维题占比", "✦"],
   ["原场镜像", "完整复现一场历史比赛", "◫"],
   ["多场组合", "从 2–4 场历史比赛组合", "⊞"],
 ];
@@ -32,10 +32,11 @@ function isContest(value: unknown): value is Contest {
 }
 
 export default function VpPage() {
-  const [mode, setMode] = useState("个性化组卷");
+  const [mode, setMode] = useState("自由组卷");
   const [duration, setDuration] = useState(180);
   const [count, setCount] = useState(10);
   const [targetRating, setTargetRating] = useState(1600);
+  const [thinkingRatio, setThinkingRatio] = useState(0.6);
   const [participantText, setParticipantText] = useState("ShallowDream2");
   const [seed, setSeed] = useState("");
   const [contest, setContest] = useState<Contest | null>(null);
@@ -60,11 +61,12 @@ export default function VpPage() {
   useEffect(() => {
     if (!contest?.startedAt) return;
     void syncStandings(true);
+    const pollMs = Math.max(15, contest.standings?.pollAfterSeconds ?? Math.ceil((contest.participants?.length ?? 1) * 2.5)) * 1000;
     const timer = window.setInterval(() => {
       if (Date.now() < contest.startedAt! + contest.durationMinutes * 60_000) void syncStandings(true);
-    }, 30_000);
+    }, pollMs);
     return () => window.clearInterval(timer);
-  }, [contest?.id, contest?.startedAt]); // eslint-disable-line react-hooks/exhaustive-deps
+  }, [contest?.id, contest?.startedAt, contest?.participants?.length]); // eslint-disable-line react-hooks/exhaustive-deps
 
   const participants = useMemo(() => [...new Set(participantText.split(/[\s,;]+/).map((item) => item.trim()).filter(Boolean))], [participantText]);
   const remaining = useMemo(() => {
@@ -88,7 +90,7 @@ export default function VpPage() {
     setStatus("loading");
     setMessage("");
     try {
-      const data = await apiJson<Contest>("/vp/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants, handle: participants[0], mode, count, targetRating, durationMinutes: duration, seed: seed || undefined }), signal: controller.signal }, 30_000);
+      const data = await apiJson<Contest>("/vp/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants, handle: participants[0], mode, count, targetRating, thinkingRatio, durationMinutes: duration, seed: seed || undefined }), signal: controller.signal }, 30_000);
       if (!isContest(data)) throw new Error("组卷服务返回了无效比赛");
       save(data);
       setSeed(data.seed);
@@ -129,9 +131,11 @@ export default function VpPage() {
 
   if (contest) {
     const rows: StandingRow[] = contest.standings?.rows ?? (contest.participants ?? [contest.handle]).map((handle, index) => ({ rank: index + 1, handle, solved: 0, penalty: 0, problems: {} as Record<string, ProblemStanding> }));
+    const myRow = rows.find((row) => row.handle.toLowerCase() === contest.handle.toLowerCase()) ?? rows[0];
+    const pollSeconds = contest.standings?.pollAfterSeconds ?? Math.max(15, Math.ceil((contest.participants?.length ?? 1) * 2.5));
     return <AppShell active="模拟赛">
       <section className="contest-room-head">
-        <div><span className="eyebrow"><span className="live-dot" /> {contest.startedAt ? "实时比赛" : "比赛已生成"}</span><h1>{contest.mode} · {contest.problems.length} 题</h1><p>{(contest.participants ?? [contest.handle]).join(" / ")} · Seed <code>{contest.seed}</code> · 已排除 {contest.excludedSolved} 道历史 AC</p></div>
+        <div><span className="eyebrow"><span className="live-dot" /> {contest.startedAt ? "实时比赛" : "比赛已生成"}</span><h1>{contest.mode} · {contest.problems.length} 题</h1><p>{(contest.participants ?? [contest.handle]).join(" / ")} · {contest.thinkingCount ?? contest.problems.filter((problem) => problem.thinking).length} 道思维题 · 已排除 {contest.excludedSolved} 道历史 AC · Seed <code>{contest.seed}</code></p></div>
         <div className="contest-clock"><small>{contest.startedAt ? "剩余时间" : "比赛时长"}</small><b>{timeLabel}</b><span>{rows[0]?.solved ?? 0} AC · {rows.length} 位参赛者</span></div>
       </section>
       <section className="contest-actions">
@@ -139,13 +143,14 @@ export default function VpPage() {
         <button className="button button-ghost" onClick={() => save(null)}>结束并重新组卷</button>
         {message ? <span className={status === "error" ? "form-error" : ""}>{message}</span> : null}
       </section>
+      <section className="vp-rule-strip"><b>实时榜单规则</b><span>仅统计点击开始后的提交</span><span>AC 数优先，罚时更少者优先</span><span>WA +20 分钟，CE 不罚时</span><span>{pollSeconds} 秒自动刷新，评测中显示 ?</span></section>
       {contest.startedAt && contest.sourceContests?.length ? <section className="contest-sources"><span>来源参考</span>{contest.sourceContests.map((source) => <a key={source.contestId} href={source.url} target="_blank" rel="noreferrer">CF {source.contestId} · {source.problemCount} 题 · 均分 {source.averageRating} ↗</a>)}</section> : null}
       <section className="contest-live-layout">
         <div className="contest-problem-grid">{contest.problems.map((problem) => {
-          const leaderState = rows[0]?.problems?.[`${problem.contestId}${problem.index}`];
-          return <article className={`contest-problem-card ${leaderState?.solved ? "accepted" : ""}`} key={problem.code}><span>{problem.slot}</span><div><small>{contest.startedAt ? problem.code : "START 后显示来源"}</small><h2>{contest.startedAt ? problem.title : `Problem ${problem.slot}`}</h2>{contest.startedAt ? <p>{problem.rating} · {problem.tags.slice(0, 3).join(" / ")}</p> : null}</div><strong>{leaderState?.solved ? `+${leaderState.wrongAttempts}` : leaderState?.wrongAttempts ? `-${leaderState.wrongAttempts}` : "—"}</strong>{contest.startedAt ? <a href={`/problem/${problem.contestId}${problem.index}`}>打开 →</a> : null}</article>;
+          const myState = myRow?.problems?.[`${problem.contestId}${problem.index}`];
+          return <article className={`contest-problem-card ${myState?.solved ? "accepted" : ""}`} key={problem.code}><span>{problem.slot}</span><div><small>{contest.startedAt ? problem.code : "START 后显示来源"}</small><h2>{contest.startedAt ? problem.title : `Problem ${problem.slot}`}</h2>{contest.startedAt ? <p>{problem.rating} · {problem.thinking ? "思维题" : "综合题"} · {problem.tags.slice(0, 3).join(" / ")}</p> : null}</div><strong>{myState?.solved ? `+${myState.wrongAttempts}` : myState?.pendingAttempts ? `?${myState.pendingAttempts}` : myState?.wrongAttempts ? `-${myState.wrongAttempts}` : "—"}</strong>{contest.startedAt ? <a href={`/problem/${problem.contestId}${problem.index}`}>打开 →</a> : null}</article>;
         })}</div>
-        <article className="panel live-standings"><div className="panel-head"><div><h2>实时榜单</h2><p>每 30 秒读取 Codeforces 公开提交</p></div><span className="live-dot" /></div><div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{rows.map((row) => <div className="standings-row" key={row.handle}><strong>{row.rank}</strong><b>{row.handle}</b><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div></article>
+        <article className="panel live-standings" style={{ "--problem-count": contest.problems.length } as CSSProperties}><div className="panel-head"><div><h2>实时榜单</h2><p>{contest.standings ? `${new Date(contest.standings.updatedAt).toLocaleTimeString("zh-CN")} 已同步 · ${pollSeconds} 秒自动刷新` : "比赛开始后立即读取 Codeforces 公开提交"}</p></div><span className="live-dot" /></div><div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{rows.map((row) => <div className={`standings-row${row.handle.toLowerCase() === contest.handle.toLowerCase() ? " mine" : ""}`} key={row.handle}><strong>{row.rank}</strong><b>{row.handle}</b><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.pendingAttempts ? "pending" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.pendingAttempts ? `?${state.pendingAttempts}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div></article>
       </section>
     </AppShell>;
   }
@@ -156,10 +161,10 @@ export default function VpPage() {
     <section className="vp-builder simplified-vp-builder">
       <div className="builder-main">
         <div className="builder-section"><div><h2>比赛模式</h2><p>不同模式都会排除主 Handle 已 AC 的题目。</p></div><div className="mode-grid three-modes">{modeOptions.map(([name, description, icon]) => <button key={name} className={mode === name ? "active" : ""} onClick={() => setMode(name)}><b>{icon}</b><span><strong>{name}</strong><small>{description}</small></span><i>{mode === name ? "●" : "○"}</i></button>)}</div></div>
-        <div className="builder-section"><div><h2>规模与难度</h2><p>原场镜像会优先匹配接近题量和目标 Rating 的历史比赛。</p></div><div className="vp-inline-settings"><label>比赛时长<div className="segmented">{[[120, "2 小时"], [180, "3 小时"], [300, "5 小时"]].map(([value, label]) => <button type="button" key={value} className={duration === value ? "active" : ""} onClick={() => setDuration(Number(value))}>{label}</button>)}</div></label><label>题目数量<div className="counter"><button type="button" onClick={() => setCount(Math.max(5, count - 1))}>−</button><strong>{count}</strong><button type="button" onClick={() => setCount(Math.min(13, count + 1))}>＋</button></div></label><label>目标 Rating<select value={targetRating} onChange={(event) => setTargetRating(Number(event.target.value))}>{[1200, 1400, 1600, 1800, 2000, 2200].map((value) => <option key={value}>{value}</option>)}</select></label></div></div>
+        <div className="builder-section"><div><h2>规模与难度</h2><p>自由组卷默认让约 60% 的题目侧重观察、构造、数学与贪心，同时保持 Rating 梯度和题源多样性。</p></div><div className="vp-inline-settings"><label>比赛时长<div className="segmented">{[[120, "2 小时"], [180, "3 小时"], [300, "5 小时"]].map(([value, label]) => <button type="button" key={value} className={duration === value ? "active" : ""} onClick={() => setDuration(Number(value))}>{label}</button>)}</div></label><label>题目数量<div className="counter"><button type="button" onClick={() => setCount(Math.max(5, count - 1))}>−</button><strong>{count}</strong><button type="button" onClick={() => setCount(Math.min(13, count + 1))}>＋</button></div></label><label>目标 Rating<select value={targetRating} onChange={(event) => setTargetRating(Number(event.target.value))}>{[1200, 1400, 1600, 1800, 2000, 2200].map((value) => <option key={value}>{value}</option>)}</select></label><label>思维题占比<select value={thinkingRatio} disabled={mode !== "自由组卷"} onChange={(event) => setThinkingRatio(Number(event.target.value))}><option value={0.4}>40% · 均衡</option><option value={0.6}>60% · 推荐</option><option value={0.8}>80% · 强思维</option></select></label></div></div>
         <div className="builder-section"><div><h2>参赛者与复现</h2><p>第一位 Handle 用于排除已完成题目；所有 Handle 都会进入实时榜单。</p></div><div className="form-grid vp-participant-form"><label>Codeforces Handles（逗号分隔）<textarea value={participantText} onChange={(event) => setParticipantText(event.target.value)} placeholder="ShallowDream2, teammate" /></label><label>随机 Seed（可留空）<input value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="自动生成" /></label></div></div>
       </div>
-      <aside className="builder-summary"><h2>{mode}</h2><div className="summary-time"><b>{duration / 60}</b><span>小时</span><i>·</i><b>{count}</b><span>题</span></div><div className="difficulty-curve">{Array.from({ length: Math.min(10, count) }, (_, index) => <i key={index} style={{ height: `${25 + index * 7}%` }}><span>{String.fromCharCode(65 + index)}</span></i>)}</div><div className="summary-list"><p><Icon name="check" /> 主账号：{participants[0] || "未填写"}</p><p><Icon name="check" /> {participants.length} 位参赛者进入实时榜单</p><p><Icon name="check" /> 20 分钟错误罚时</p><p><Icon name="check" /> 提供历史比赛来源参考</p></div><button className="create-contest" onClick={() => void generateContest()} disabled={status === "loading"}>{status === "loading" ? "正在同步并组卷…" : "生成比赛 →"}</button>{message ? <small className="summary-foot form-error">{message}</small> : null}</aside>
+      <aside className="builder-summary"><h2>{mode}</h2><div className="summary-time"><b>{duration / 60}</b><span>小时</span><i>·</i><b>{count}</b><span>题</span></div><div className="difficulty-curve">{Array.from({ length: Math.min(10, count) }, (_, index) => <i key={index} style={{ height: `${25 + index * 7}%` }}><span>{String.fromCharCode(65 + index)}</span></i>)}</div><div className="summary-list"><p><Icon name="check" /> 主账号：{participants[0] || "未填写"}</p><p><Icon name="check" /> {participants.length} 位参赛者进入实时榜单</p>{mode === "自由组卷" ? <p><Icon name="check" /> 预计至少 {Math.round(count * thinkingRatio)} 道思维题</p> : null}<p><Icon name="check" /> WA +20 分钟，CE 不罚时</p><p><Icon name="check" /> 15–30 秒自动刷新榜单</p></div><button className="create-contest" onClick={() => void generateContest()} disabled={status === "loading"}>{status === "loading" ? "正在同步并组卷…" : "生成比赛 →"}</button>{message ? <small className="summary-foot form-error">{message}</small> : null}</aside>
     </section>
   </AppShell>;
 }

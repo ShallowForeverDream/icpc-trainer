@@ -3,7 +3,7 @@ import { getUserSubmissions } from "../../../lib/codeforces";
 
 type StandingsProblem = { contestId: number; index: string };
 type StandingsRequest = { participants?: string[]; handle?: string; startedAt?: number; durationMinutes?: number; problems?: StandingsProblem[] };
-type StandingState = { solved: boolean; wrongAttempts: number; solvedMinutes: number | null; penalty: number };
+type StandingState = { solved: boolean; wrongAttempts: number; pendingAttempts: number; solvedMinutes: number | null; penalty: number };
 type StandingRow = { handle: string; solved: number; penalty: number; problems: Record<string, StandingState>; rank: number };
 
 export async function POST(request: NextRequest) {
@@ -25,13 +25,14 @@ export async function POST(request: NextRequest) {
     const problemKeys = new Set(problems.map((problem) => `${problem.contestId}${problem.index}`));
     const rows: StandingRow[] = [];
     for (const handle of participants) {
-      const submissions = await getUserSubmissions(handle, 1000);
-      const states = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, { solved: false, wrongAttempts: 0, solvedMinutes: null as number | null, penalty: 0 }]));
+      const submissions = await getUserSubmissions(handle, 1000, 15_000);
+      const states = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, { solved: false, wrongAttempts: 0, pendingAttempts: 0, solvedMinutes: null as number | null, penalty: 0 }]));
       for (const submission of submissions.filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= endSeconds && problemKeys.has(`${item.problem.contestId}${item.problem.index}`)).sort((a, b) => a.creationTimeSeconds - b.creationTimeSeconds)) {
         const state = states.get(`${submission.problem.contestId}${submission.problem.index}`);
         if (!state || state.solved) continue;
-        if (submission.verdict === "OK") { state.solved = true; state.solvedMinutes = Math.floor((submission.creationTimeSeconds - startSeconds) / 60); state.penalty = state.solvedMinutes + state.wrongAttempts * 20; }
-        else if (!["COMPILATION_ERROR", "SKIPPED", "TESTING"].includes(submission.verdict ?? "")) state.wrongAttempts += 1;
+        if (submission.verdict === "OK") { state.solved = true; state.pendingAttempts = 0; state.solvedMinutes = Math.floor((submission.creationTimeSeconds - startSeconds) / 60); state.penalty = state.solvedMinutes + state.wrongAttempts * 20; }
+        else if (submission.verdict === "TESTING") state.pendingAttempts += 1;
+        else if (!["COMPILATION_ERROR", "SKIPPED"].includes(submission.verdict ?? "")) state.wrongAttempts += 1;
       }
       const solved = [...states.values()].filter((state) => state.solved).length;
       const penalty = [...states.values()].reduce((sum, state) => sum + state.penalty, 0);
@@ -39,7 +40,7 @@ export async function POST(request: NextRequest) {
     }
     rows.sort((a, b) => b.solved - a.solved || a.penalty - b.penalty || a.handle.localeCompare(b.handle));
     rows.forEach((row, index) => { row.rank = index && rows[index - 1].solved === row.solved && rows[index - 1].penalty === row.penalty ? rows[index - 1].rank : index + 1; });
-    return NextResponse.json({ updatedAt: new Date().toISOString(), startedAt, durationMinutes, rows });
+    return NextResponse.json({ updatedAt: new Date().toISOString(), startedAt, durationMinutes, pollAfterSeconds: Math.max(15, Math.ceil(participants.length * 2.5)), rows });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "榜单同步失败" }, { status: 502 });
   }

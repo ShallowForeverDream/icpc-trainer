@@ -1,7 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getProblemset, getUserSubmissions, publicProblem, type CodeforcesProblem } from "../../../lib/codeforces";
 
-type GenerateRequest = { handle?: string; participants?: string[]; mode?: string; count?: number; targetRating?: number; durationMinutes?: number; seed?: string };
+type GenerateRequest = { handle?: string; participants?: string[]; mode?: string; count?: number; targetRating?: number; thinkingRatio?: number; durationMinutes?: number; seed?: string };
+
+const THINKING_TAGS = new Set(["constructive algorithms", "greedy", "math", "number theory", "combinatorics", "games", "bitmasks", "two pointers", "binary search", "brute force", "probabilities", "meet-in-the-middle", "ternary search"]);
+
+function isThinkingProblem(problem: CodeforcesProblem) {
+  return problem.tags.some((tag) => THINKING_TAGS.has(tag));
+}
 
 function hashSeed(value: string) {
   let hash = 2166136261;
@@ -31,6 +37,40 @@ function pickRandomSet(pool: CodeforcesProblem[], count: number, target: number,
     if (!chosen) break;
     selected.push(chosen);
     used.add(`${chosen.contestId}${chosen.index}`);
+  }
+  return selected;
+}
+
+function pickThinkingSet(pool: CodeforcesProblem[], count: number, target: number, thinkingRatio: number, random: () => number) {
+  const selected: CodeforcesProblem[] = [];
+  const used = new Set<string>();
+  const contestUsage = new Map<number, number>();
+  const tagUsage = new Map<string, number>();
+  const thinkingTarget = Math.min(count, Math.max(0, Math.round(count * thinkingRatio)));
+  let thinkingPicked = 0;
+  for (let index = 0; index < count; index++) {
+    const desired = Math.round((target - 500 + (count === 1 ? 0 : index * 1000 / (count - 1))) / 100) * 100;
+    const remaining = count - index;
+    const scheduledThinking = Math.floor((index + 1) * thinkingTarget / count) > Math.floor(index * thinkingTarget / count);
+    const mustPickThinking = thinkingPicked < thinkingTarget && (scheduledThinking || thinkingTarget - thinkingPicked >= remaining);
+    const candidates = pool.filter((problem) => !used.has(`${problem.contestId}${problem.index}`));
+    const thinkingCandidates = mustPickThinking ? candidates.filter(isThinkingProblem) : [];
+    const candidatePool = thinkingCandidates.length ? thinkingCandidates : candidates;
+    candidatePool.sort((left, right) => {
+      const score = (problem: CodeforcesProblem) => Math.abs((problem.rating ?? target) - desired)
+        + (contestUsage.get(problem.contestId ?? 0) ?? 0) * 90
+        + problem.tags.reduce((sum, tag) => sum + (tagUsage.get(tag) ?? 0) * 14, 0)
+        - (thinkingPicked < thinkingTarget && isThinkingProblem(problem) ? 24 : 0);
+      return score(left) - score(right);
+    });
+    const window = candidatePool.slice(0, Math.min(16, candidatePool.length));
+    const chosen = window[Math.floor(random() * window.length)];
+    if (!chosen) break;
+    selected.push(chosen);
+    used.add(`${chosen.contestId}${chosen.index}`);
+    if (chosen.contestId) contestUsage.set(chosen.contestId, (contestUsage.get(chosen.contestId) ?? 0) + 1);
+    for (const tag of chosen.tags) tagUsage.set(tag, (tagUsage.get(tag) ?? 0) + 1);
+    if (isThinkingProblem(chosen)) thinkingPicked += 1;
   }
   return selected;
 }
@@ -77,6 +117,7 @@ export async function POST(request: NextRequest) {
     const handle = participants[0];
     const count = Math.max(5, Math.min(13, Number(body.count) || 10));
     const targetRating = Math.max(800, Math.min(3000, Number(body.targetRating) || 1600));
+    const thinkingRatio = Math.max(0.4, Math.min(0.8, Number(body.thinkingRatio) || 0.6));
     const durationMinutes = Math.max(60, Math.min(300, Number(body.durationMinutes) || 180));
     const seed = (body.seed ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 64);
     const random = randomFromSeed(seed);
@@ -100,7 +141,7 @@ export async function POST(request: NextRequest) {
       selected = combined.selected;
       sourceContestIds = combined.contestIds;
     } else {
-      selected = pickRandomSet(pool, count, targetRating, random);
+      selected = pickThinkingSet(pool, count, targetRating, thinkingRatio, random);
     }
     if (selected.length < 5) return NextResponse.json({ error: "可用题目不足，请调整组卷条件" }, { status: 422 });
 
@@ -113,15 +154,17 @@ export async function POST(request: NextRequest) {
       id: `vp-${hashSeed(`${seed}:${handle}`).toString(16)}`,
       handle,
       participants,
-      mode: body.mode === "原场镜像" ? "原场镜像" : body.mode === "多场组合" ? "多场组合" : "个性化组卷",
+      mode: body.mode === "原场镜像" ? "原场镜像" : body.mode === "多场组合" ? "多场组合" : "自由组卷",
       seed,
       durationMinutes,
       targetRating,
+      thinkingRatio,
+      thinkingCount: selected.filter(isThinkingProblem).length,
       sourceContestId,
       sourceContests,
       excludedSolved: solved.size,
       createdAt: new Date().toISOString(),
-      problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem) })),
+      problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem), thinking: isThinkingProblem(problem) })),
     });
   } catch (error) {
     return NextResponse.json({ error: error instanceof Error ? error.message : "VP 生成失败" }, { status: 502 });

@@ -22,7 +22,7 @@ type ApiPayload<T> = { status: "OK" | "FAILED"; comment?: string; result?: T };
 
 const globalCache = globalThis as typeof globalThis & {
   __icpcProblems?: { expiresAt: number; staleUntil: number; value: CodeforcesProblem[] };
-  __icpcSubmissions?: Map<string, { expiresAt: number; staleUntil: number; count: number; value: CodeforcesSubmission[] }>;
+  __icpcSubmissions?: Map<string, { expiresAt: number; staleUntil: number; fetchedAt: number; count: number; value: CodeforcesSubmission[] }>;
   __icpcQueue?: Promise<unknown>;
   __icpcLastCall?: number;
   __icpcQueueDepth?: number;
@@ -76,12 +76,13 @@ export async function getProblemset(): Promise<CodeforcesProblem[]> {
   }
 }
 
-export async function getUserSubmissions(handle: string, count = 1000): Promise<CodeforcesSubmission[]> {
+export async function getUserSubmissions(handle: string, count = 1000, maxAgeMs = 60_000): Promise<CodeforcesSubmission[]> {
   const cache = globalCache.__icpcSubmissions ??= new Map();
   const key = handle.toLowerCase();
   const requestedCount = Math.max(1, Math.min(1000, Math.round(count) || 100));
   const cached = cache.get(key);
-  if (cached && cached.expiresAt > Date.now() && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
+  const requestedMaxAge = Math.max(5_000, Math.min(60_000, Math.round(maxAgeMs) || 60_000));
+  if (cached && Date.now() - cached.fetchedAt <= requestedMaxAge && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
   const fetchedCount = Math.max(requestedCount, cached?.count ?? 0);
   try {
     const base = backendBase();
@@ -93,7 +94,8 @@ export async function getUserSubmissions(handle: string, count = 1000): Promise<
       value = payload.submissions ?? [];
     } else value = await throttledFetch<CodeforcesSubmission[]>("user.status", new URLSearchParams({ handle, from: "1", count: String(fetchedCount) }));
     if (!Array.isArray(value)) throw new Error("提交数据格式无效");
-    cache.set(key, { expiresAt: Date.now() + 60 * 1000, staleUntil: Date.now() + 10 * 60 * 1000, count: fetchedCount, value });
+    const fetchedAt = Date.now();
+    cache.set(key, { expiresAt: fetchedAt + 60 * 1000, staleUntil: fetchedAt + 10 * 60 * 1000, fetchedAt, count: fetchedCount, value });
     while (cache.size > 128) cache.delete(cache.keys().next().value!);
     return value.slice(0, requestedCount);
   } catch (error) {

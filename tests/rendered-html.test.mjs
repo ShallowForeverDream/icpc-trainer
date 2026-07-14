@@ -107,19 +107,33 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   ]);
   assert.match(route, /getUserSubmissions/);
   assert.match(route, /pickRandomSet/);
+  assert.match(route, /pickThinkingSet/);
+  assert.match(route, /THINKING_TAGS/);
+  assert.match(route, /thinkingRatio/);
   assert.match(route, /pickMirror/);
   assert.match(route, /pickCombined/);
   assert.match(route, /sourceContests/);
   assert.match(standingsRoute, /wrongAttempts/);
+  assert.match(standingsRoute, /pendingAttempts/);
+  assert.match(standingsRoute, /15_000/);
   assert.match(standingsRoute, /penalty/);
   assert.match(recommendationRoute, /targetRating/);
   assert.match(page, /ShallowDream2/);
   assert.match(page, /实时榜单/);
+  assert.match(page, /思维题占比/);
+  assert.match(page, /WA \+20 分钟，CE 不罚时/);
+  assert.match(page, /pollAfterSeconds/);
   assert.match(page, /多场组合/);
   assert.match(page, /来源参考/);
   assert.match(catalog, /个性化推荐/);
   assert.match(catalog, /目标 Rating/);
   assert.match(catalog, /selectedTags/);
+  const response = await render("/vp");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /自由组卷/);
+  assert.match(html, /60% · 推荐/);
+  assert.match(html, /实时榜单/);
 });
 
 test("ships historical ICPC upsolving with timestamp-replayed real standings", async () => {
@@ -169,6 +183,9 @@ test("ships the domestic API, cached statements, OCR, and local translation depl
   assert.match(backend, /\/codeforces\/problems/);
   assert.match(backend, /\/codeforces\/recommendations/);
   assert.match(backend, /\/vp\/standings/);
+  assert.match(backend, /pickThinkingSet/);
+  assert.match(backend, /thinkingCount/);
+  assert.match(backend, /pendingAttempts/);
   assert.match(backend, /createStatementHandler/);
   assert.match(statements, /problem_statements/);
   assert.match(statements, /statement_assets/);

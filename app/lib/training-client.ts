@@ -1,6 +1,6 @@
 import { authFetch } from "./auth-client";
 import { apiFetch } from "./api-client";
-import { readStoredString, writeStoredString } from "./storage";
+import { getDeviceId } from "./device-id";
 
 export type TrainingOutcome = "independent" | "hinted" | "editorial" | "unsolved";
 export type TrainingDifficulty = "easy" | "right" | "hard";
@@ -22,16 +22,8 @@ export type TrainingSummary = {
   recent: TrainingEvent[];
 };
 
-const CLIENT_ID_KEY = "icpc-trainer-client-id";
-
 export function getTrainingClientId() {
-  if (typeof window === "undefined") return "";
-  let value = readStoredString(CLIENT_ID_KEY);
-  if (!value) {
-    value = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `device_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-    writeStoredString(CLIENT_ID_KEY, value);
-  }
-  return value;
+  return getDeviceId();
 }
 
 export async function saveTrainingEvent(input: {

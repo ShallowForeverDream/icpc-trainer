@@ -7,8 +7,9 @@ import { AppShell, Icon, ProblemRow } from "./components/AppShell";
 import { archiveContests } from "./data/archive-contests";
 import { internationalContests } from "./data/international-contests";
 import { apiJson } from "./lib/api-client";
-import { readTrainerPreferences, saveTrainerPreferences } from "./lib/preferences";
-import { readStoredJson, writeStoredJson } from "./lib/storage";
+import { readTrainerPreferences, saveTrainerPreferences, syncTrainerPreferences } from "./lib/preferences";
+import { loadPersistentJson, savePersistentJson } from "./lib/persistent-state";
+import { readStoredJson } from "./lib/storage";
 import { getTrainingClientId, loadTrainingSummary, type TrainingSummary } from "./lib/training-client";
 
 type Recommendation = { code: string; title: string; titleZh?: string; rating: number; tags: string[]; reason?: string };
@@ -47,10 +48,14 @@ export default function Home() {
     const preferences = readTrainerPreferences();
     setHandle(preferences.codeforcesHandle);
     setGoal(preferences.dailyGoal);
+    void syncTrainerPreferences().then((remote) => { setHandle(remote.codeforcesHandle); setGoal(remote.dailyGoal); });
     const saved = readStoredJson<{ activity?: Record<string, number> }>("icpc-trainer-dashboard", {});
     if (saved.activity && typeof saved.activity === "object") {
       setManualActivity(Object.fromEntries(Object.entries(saved.activity).filter(([key, value]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && Number.isInteger(value) && value >= 0 && value <= 100)));
     }
+    void loadPersistentJson<{ activity?: Record<string, number> }>("dashboard", "icpc-trainer-dashboard", saved).then((remote) => {
+      if (remote.activity && typeof remote.activity === "object") setManualActivity(Object.fromEntries(Object.entries(remote.activity).filter(([key, value]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && Number.isInteger(value) && value >= 0 && value <= 100)));
+    });
     const clientId = getTrainingClientId();
     const controller = new AbortController();
     Promise.allSettled([
@@ -111,7 +116,7 @@ export default function Home() {
     setGoal(nextGoal);
     setManualActivity(nextActivity);
     try { saveTrainerPreferences({ codeforcesHandle: handle, dailyGoal: nextGoal }); } catch (error) { setSyncError(error instanceof Error ? error.message : "训练目标未能保存"); }
-    if (!writeStoredJson("icpc-trainer-dashboard", { activity: nextActivity })) setSyncError("浏览器无法保存训练记录");
+    void savePersistentJson("dashboard", "icpc-trainer-dashboard", { activity: nextActivity }).then((saved) => { if (!saved) setSyncError("训练记录未能保存"); });
   }
 
   function recordProblem() {

@@ -1,4 +1,5 @@
 import { readStoredJson, writeStoredJson } from "./storage";
+import { loadPersistentJson, savePersistentJson } from "./persistent-state";
 
 const PREFERENCES_KEY = "icpc-trainer-preferences-v1";
 const LEGACY_DASHBOARD_KEY = "icpc-trainer-dashboard";
@@ -35,6 +36,10 @@ export function readTrainerPreferences() {
   return { ...defaultTrainerPreferences, dailyGoal };
 }
 
+export function syncTrainerPreferences() {
+  return loadPersistentJson("preferences", PREFERENCES_KEY, readTrainerPreferences(), isPreferences);
+}
+
 export function saveTrainerPreferences(input: Pick<TrainerPreferences, "codeforcesHandle" | "dailyGoal">) {
   const preferences: TrainerPreferences = {
     version: 1,
@@ -43,6 +48,7 @@ export function saveTrainerPreferences(input: Pick<TrainerPreferences, "codeforc
   };
   if (!validCodeforcesHandle(preferences.codeforcesHandle)) throw new Error("请输入有效的 Codeforces Handle");
   if (!writeStoredJson(PREFERENCES_KEY, preferences)) throw new Error("浏览器无法保存训练偏好");
+  void savePersistentJson("preferences", PREFERENCES_KEY, preferences);
   window.dispatchEvent(new CustomEvent("icpc-preferences-change", { detail: preferences }));
   return preferences;
 }

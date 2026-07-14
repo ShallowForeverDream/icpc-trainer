@@ -139,7 +139,7 @@ function requireAdmin(request) {
   return user;
 }
 
-function optionalUser(request) {
+export function optionalAuthenticateRequest(request) {
   if (!bearerToken(request)) return null;
   try { return authenticateRequest(request); } catch { return null; }
 }
@@ -357,7 +357,7 @@ export function createAuthHandler({ json, readBody, clientIp }) {
         const message = String(body.message || "").trim();
         const page = String(body.page || "/").trim().slice(0, 200);
         if (message.length < 8 || message.length > 2000) throw new AuthError(400, "建议请填写 8–2000 个字符");
-        const user = optionalUser(request);
+        const user = optionalAuthenticateRequest(request);
         const createdAt = now();
         const result = db.prepare("INSERT INTO feedback (user_id, client_id, category, rating, message, page, created_at) VALUES (?, ?, ?, ?, ?, ?, ?)").run(user?.id || null, clientId, category, rating, message, page, createdAt);
         json(response, 201, { id: Number(result.lastInsertRowid), ok: true });

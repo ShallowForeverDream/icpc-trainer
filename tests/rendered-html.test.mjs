@@ -179,9 +179,11 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(html, /省赛/);
 });
 
-test("ships the domestic API, cached statements, OCR, and local translation deployment", async () => {
-  const [backend, statements, compose, dockerfile, nginx, browserApi, worker] = await Promise.all([
+test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {
+  const [backend, persistence, persistentClient, statements, compose, dockerfile, nginx, browserApi, worker] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
+    readFile(new URL("backend/persistence.mjs", root), "utf8"),
+    readFile(new URL("app/lib/persistent-state.ts", root), "utf8"),
     readFile(new URL("backend/statements.mjs", root), "utf8"),
     readFile(new URL("backend/compose.yaml", root), "utf8"),
     readFile(new URL("backend/Dockerfile", root), "utf8"),
@@ -201,6 +203,20 @@ test("ships the domestic API, cached statements, OCR, and local translation depl
   assert.match(backend, /contest\.standings/);
   assert.match(backend, /buildOriginalVpRows/);
   assert.match(backend, /CF_STANDINGS_CACHE_DIR/);
+  assert.doesNotMatch(backend, /const submissionCache = new Map/);
+  assert.doesNotMatch(backend, /const contestStandingsCache = new Map/);
+  assert.match(backend, /writeRuntimeCache\("contest-standings"/);
+  assert.match(backend, /persistVpSession/);
+  assert.match(backend, /writeVpSnapshot/);
+  assert.match(backend, /\/vp\/sessions\/active/);
+  assert.match(backend, /\/state/);
+  assert.match(persistence, /CREATE TABLE IF NOT EXISTS runtime_cache/);
+  assert.match(persistence, /CREATE TABLE IF NOT EXISTS personal_state/);
+  assert.match(persistence, /CREATE TABLE IF NOT EXISTS vp_sessions/);
+  assert.match(persistence, /CREATE TABLE IF NOT EXISTS vp_standing_snapshots/);
+  assert.match(persistence, /gzipSync/);
+  assert.match(persistentClient, /loadPersistentJson/);
+  assert.match(persistentClient, /authFetch/);
   assert.match(backend, /selectedProblems/);
   assert.match(backend, /createStatementHandler/);
   assert.match(statements, /problem_statements/);

@@ -5,8 +5,9 @@ import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import { archiveContests, archiveProblemUrl, findArchiveContest } from "../../data/archive-contests";
+import { clearPersistentJson, loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
 import { readTrainerPreferences } from "../../lib/preferences";
-import { readStoredJson, removeStoredValue, writeStoredJson } from "../../lib/storage";
+import { readStoredJson } from "../../lib/storage";
 
 type ProblemState = { solved: boolean; wrongAttempts: number; pendingAttempts: number; solvedMinutes: number | null };
 type StandingRow = { rank: number; teamId: string; name: string; organization: string; groups: string[]; solved: number; penalty: number; lastSolvedMinutes: number | null; problems: Record<string, ProblemState>; mine?: boolean };
@@ -59,17 +60,20 @@ export default function ArchiveVpPage() {
     if (requestedContest) {
       const next: Session = { contestId: requestedContest.id, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {} };
       setSession(next);
-      if (!writeStoredJson(STORAGE_KEY, next)) setMessage("浏览器无法保存本场补题进度");
+      void savePersistentJson("archive-vp", STORAGE_KEY, next).then((savedOk) => { if (!savedOk) setMessage("本场补题进度未能持久保存"); });
       window.history.replaceState({}, "", window.location.pathname);
-    } else if (saved) setSession(saved);
+    } else {
+      if (saved) setSession(saved);
+      void loadPersistentJson<Session | null>("archive-vp", STORAGE_KEY, saved, (value): value is Session | null => value === null || isSession(value)).then((remote) => { if (remote) setSession(remote); });
+    }
     return () => scoreboardRequest.current?.abort();
   }, []);
 
   const saveSession = useCallback((next: Session | null) => {
     setSession(next);
     if (next) {
-      if (!writeStoredJson(STORAGE_KEY, next)) setMessage("浏览器无法保存本场补题进度");
-    } else removeStoredValue(STORAGE_KEY);
+      void savePersistentJson("archive-vp", STORAGE_KEY, next).then((savedOk) => { if (!savedOk) setMessage("本场补题进度未能持久保存"); });
+    } else void clearPersistentJson("archive-vp", STORAGE_KEY);
   }, []);
 
   const duration = scoreboard?.durationSeconds ?? 5 * 60 * 60;

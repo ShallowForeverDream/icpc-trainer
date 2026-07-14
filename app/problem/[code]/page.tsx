@@ -8,6 +8,7 @@ import { AppShell, Icon } from "../../components/AppShell";
 import { findCuratedProblem } from "../../data/problems";
 import { findImportedStatement } from "../../data/problem-statements";
 import { apiJson } from "../../lib/api-client";
+import { loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
 import { readTrainerPreferences } from "../../lib/preferences";
 import { readStoredJson, readStoredString, removeStoredValue, writeStoredJson, writeStoredString } from "../../lib/storage";
 import { saveTrainingEvent, type TrainingDifficulty, type TrainingOutcome } from "../../lib/training-client";
@@ -37,6 +38,7 @@ type DisplayProblem = {
 
 type StatementLanguage = "original" | "chinese";
 type ThinkingRecord = { startedAt?: number | null; note?: string; hintLevel?: number; difficulty?: TrainingDifficulty };
+type PersistentProblemState = { draft: string; thinking: ThinkingRecord };
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.length <= 500 && value.every((item) => typeof item === "string" && item.length <= 40);
@@ -49,6 +51,12 @@ function isThinkingRecord(value: unknown): value is ThinkingRecord {
     && (item.note === undefined || typeof item.note === "string")
     && (item.hintLevel === undefined || Number.isInteger(item.hintLevel))
     && (item.difficulty === undefined || ["easy", "right", "hard"].includes(item.difficulty));
+}
+
+function isPersistentProblemState(value: unknown): value is PersistentProblemState {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<PersistentProblemState>;
+  return typeof item.draft === "string" && item.draft.length <= 200_000 && isThinkingRecord(item.thinking);
 }
 
 const initialCode = `#include <bits/stdc++.h>
@@ -237,14 +245,29 @@ export default function ProblemDetailPage() {
     setProblem((current) => ({ ...current, title: title || current.title }));
   }, [statement?.title]);
 
-  useEffect(() => { setCode(readStoredString(`icpc-trainer-draft:${requestedCode}`, initialCode)); }, [requestedCode]);
   useEffect(() => {
-    const timeout = window.setTimeout(() => writeStoredString(`icpc-trainer-draft:${requestedCode}`, code), 300);
+    const draft = readStoredString(`icpc-trainer-draft:${requestedCode}`, initialCode);
+    const thinking = readStoredJson<ThinkingRecord>(`icpc-trainer-thinking:${requestedCode}`, {}, isThinkingRecord);
+    setCode(draft);
+    void loadPersistentJson(`problem:${requestedCode}`, `icpc-trainer-problem:${requestedCode}`, { draft, thinking }, isPersistentProblemState).then((remote) => {
+      setCode(remote.draft);
+      setThinkingNote(remote.thinking.note?.slice(0, 10_000) ?? "");
+      setHintLevel(Math.min(3, Math.max(0, Number(remote.thinking.hintLevel) || 0)));
+      setDifficulty(remote.thinking.difficulty && ["easy", "right", "hard"].includes(remote.thinking.difficulty) ? remote.thinking.difficulty : "right");
+    });
+  }, [requestedCode]);
+  useEffect(() => {
+    const timeout = window.setTimeout(() => {
+      writeStoredString(`icpc-trainer-draft:${requestedCode}`, code);
+      const thinking = readStoredJson<ThinkingRecord>(`icpc-trainer-thinking:${requestedCode}`, {}, isThinkingRecord);
+      void savePersistentJson(`problem:${requestedCode}`, `icpc-trainer-problem:${requestedCode}`, { draft: code, thinking });
+    }, 500);
     return () => window.clearTimeout(timeout);
   }, [code, requestedCode]);
   useEffect(() => {
-    const favorites = readStoredJson<string[]>("icpc-trainer-favorites", [], isStringArray);
-    setFavorite(favorites.includes(problem.code));
+    const local = readStoredJson<string[]>("icpc-trainer-favorites", [], isStringArray);
+    setFavorite(local.includes(problem.code));
+    void loadPersistentJson("favorites", "icpc-trainer-favorites", local, isStringArray).then((favorites) => setFavorite(favorites.includes(problem.code)));
   }, [problem.code]);
 
   useEffect(() => {
@@ -272,10 +295,12 @@ export default function ProblemDetailPage() {
     if (!trainingMode) return;
     const timeout = window.setTimeout(() => {
       const previous = readStoredJson<ThinkingRecord>(`icpc-trainer-thinking:${requestedCode}`, {}, isThinkingRecord);
-      writeStoredJson(`icpc-trainer-thinking:${requestedCode}`, { ...previous, startedAt: sessionStartedAt, note: thinkingNote.slice(0, 10_000), hintLevel, difficulty });
+      const thinking = { ...previous, startedAt: sessionStartedAt, note: thinkingNote.slice(0, 10_000), hintLevel, difficulty };
+      writeStoredJson(`icpc-trainer-thinking:${requestedCode}`, thinking);
+      void savePersistentJson(`problem:${requestedCode}`, `icpc-trainer-problem:${requestedCode}`, { draft: code, thinking });
     }, 400);
     return () => window.clearTimeout(timeout);
-  }, [difficulty, hintLevel, requestedCode, sessionStartedAt, thinkingNote, trainingMode]);
+  }, [code, difficulty, hintLevel, requestedCode, sessionStartedAt, thinkingNote, trainingMode]);
 
   useEffect(() => {
     const receive = (event: MessageEvent) => {
@@ -293,7 +318,7 @@ export default function ProblemDetailPage() {
   function toggleFavorite() {
     const favorites = new Set<string>(readStoredJson<string[]>("icpc-trainer-favorites", [], isStringArray));
     if (favorites.has(problem.code)) favorites.delete(problem.code); else favorites.add(problem.code);
-    writeStoredJson("icpc-trainer-favorites", [...favorites].slice(0, 500));
+    void savePersistentJson("favorites", "icpc-trainer-favorites", [...favorites].slice(0, 500));
     setFavorite(favorites.has(problem.code));
   }
 
@@ -306,11 +331,11 @@ export default function ProblemDetailPage() {
       setStatement(local);
       setLanguage("chinese");
       setStatementError("");
-      setStatementAction("中文题面已保存到当前设备，正在尝试同步共享缓存");
+      setStatementAction("中文题面已生成，正在写入服务器数据库");
       try {
         const next = await submitBrowserTranslation(requestedCode, translated.chineseHtml, translated.images);
         setStatement(next);
-        setStatementAction(next.cacheScope === "device" ? "中文题面已保存到当前设备" : "中文题面已保存并同步");
+        setStatementAction(next.cacheScope === "device" ? "中文题面已保存到当前设备" : "中文题面已持久保存到服务器数据库");
       } catch {
         setStatementAction("中文题面已保存到当前设备；登录后可同步共享缓存");
       }
@@ -349,6 +374,7 @@ export default function ProblemDetailPage() {
       await saveTrainingEvent({ handle: readTrainerPreferences().codeforcesHandle, code: requestedCode, outcome, durationMinutes: Math.max(1, Math.round(elapsedSeconds / 60)), hintLevel, difficulty, reflection: thinkingNote });
       setTrainingState("saved");
       removeStoredValue(`icpc-trainer-thinking:${requestedCode}`);
+      void savePersistentJson(`problem:${requestedCode}`, `icpc-trainer-problem:${requestedCode}`, { draft: code, thinking: {} });
     } catch { setTrainingState("error"); }
   }
 

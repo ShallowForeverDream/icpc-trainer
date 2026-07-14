@@ -4,7 +4,8 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { AppShell, Icon } from "../components/AppShell";
-import { apiJson } from "../lib/api-client";
+import { authFetch } from "../lib/auth-client";
+import { getDeviceId } from "../lib/device-id";
 import { readTrainerPreferences, saveTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
 import { readStoredJson, removeStoredValue, writeStoredJson } from "../lib/storage";
 
@@ -21,6 +22,13 @@ const modeOptions = [
   ["原场镜像", "完整复现一场历史比赛", "◫"],
   ["多场组合", "从 2–4 场历史比赛组合", "⊞"],
 ];
+
+async function vpJson<T>(path: string, init: RequestInit = {}, timeoutMs = 30_000) {
+  const response = await authFetch(path, init, timeoutMs);
+  const data = await response.json().catch(() => ({})) as T & { error?: string };
+  if (!response.ok) throw new Error(data.error || `请求失败（${response.status}）`);
+  return data;
+}
 
 function isContest(value: unknown): value is Contest {
   if (!value || typeof value !== "object") return false;
@@ -51,6 +59,9 @@ export default function VpPage() {
     setParticipantText(preferences.codeforcesHandle);
     const saved = readStoredJson<Contest | null>(STORAGE_KEY, null, (value): value is Contest | null => value === null || isContest(value));
     if (saved) { setContest(saved); setParticipantText((saved.participants ?? [saved.handle]).join(", ")); }
+    void vpJson<{ session: Contest | null }>(`/vp/sessions/active?clientId=${encodeURIComponent(getDeviceId())}`, { cache: "no-store" }).then(({ session }) => {
+      if (session && isContest(session)) { save(session); setParticipantText((session.participants ?? [session.handle]).join(", ")); }
+    }).catch(() => undefined);
     return () => { generateRequest.current?.abort(); standingsRequest.current?.abort(); };
   }, []);
   useEffect(() => {
@@ -90,7 +101,7 @@ export default function VpPage() {
     setStatus("loading");
     setMessage("");
     try {
-      const data = await apiJson<Contest>("/vp/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants, handle: participants[0], mode, count, targetRating, thinkingRatio, durationMinutes: duration, seed: seed || undefined }), signal: controller.signal }, 30_000);
+      const data = await vpJson<Contest>("/vp/generate", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), participants, handle: participants[0], mode, count, targetRating, thinkingRatio, durationMinutes: duration, seed: seed || undefined }), signal: controller.signal }, 30_000);
       if (!isContest(data)) throw new Error("组卷服务返回了无效比赛");
       save(data);
       setSeed(data.seed);
@@ -106,8 +117,16 @@ export default function VpPage() {
 
   function startContest() {
     if (!contest || contest.startedAt) return;
-    save({ ...contest, startedAt: Date.now() });
-    setNow(Date.now());
+    const startedAt = Date.now();
+    save({ ...contest, startedAt });
+    setNow(startedAt);
+    void vpJson<{ session: Contest }>("/vp/sessions/start", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), id: contest.id, startedAt }) }).then(({ session }) => { if (isContest(session)) save(session); }).catch(() => setMessage("比赛已在本机开始，但服务器暂时未能保存开始时间"));
+  }
+
+  function finishContest() {
+    if (!contest) return;
+    void vpJson("/vp/sessions/finish", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), id: contest.id }) }).catch(() => undefined);
+    save(null);
   }
 
   async function syncStandings(silent = false) {
@@ -116,9 +135,9 @@ export default function VpPage() {
     const controller = new AbortController();
     standingsRequest.current = controller;
     if (!silent) setStatus("syncing");
-    if (!contest.standings) setMessage("正在加载并合并各题原比赛榜单，首次约需 30–90 秒，完成后会自动缓存…");
+    if (!contest.standings) setMessage("正在加载并合并各题原比赛榜单；首次完成后会写入服务器数据库…");
     try {
-      const data = await apiJson<Standings>("/vp/standings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants: contest.participants?.length ? contest.participants : [contest.handle], startedAt: contest.startedAt, durationMinutes: contest.durationMinutes, problems: contest.problems.map(({ contestId, index, slot }) => ({ contestId, index, slot })) }), signal: controller.signal }, 120_000);
+      const data = await vpJson<Standings>("/vp/standings", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), vpId: contest.id, participants: contest.participants?.length ? contest.participants : [contest.handle], startedAt: contest.startedAt, durationMinutes: contest.durationMinutes, problems: contest.problems.map(({ contestId, index, slot }) => ({ contestId, index, slot })) }), signal: controller.signal }, 120_000);
       if (!Array.isArray(data.rows)) throw new Error("榜单服务返回了无效数据");
       save({ ...contest, standings: data });
       setMessage(`已合并 ${data.sourceBoards?.length ?? 0} 场原榜、${data.originalTeams ?? 0} 支原参赛队`);
@@ -142,7 +161,7 @@ export default function VpPage() {
       </section>
       <section className="contest-actions">
         {!contest.startedAt ? <button className="button button-primary" onClick={startContest}><Icon name="play" /> 开始比赛</button> : <button className="button button-primary" onClick={() => void syncStandings(false)} disabled={status === "syncing"}><Icon name="history" /> {status === "syncing" ? "同步中…" : "立即刷新榜单"}</button>}
-        <button className="button button-ghost" onClick={() => save(null)}>结束并重新组卷</button>
+        <button className="button button-ghost" onClick={finishContest}>结束并重新组卷</button>
         {message ? <span className={status === "error" ? "form-error" : ""}>{message}</span> : null}
       </section>
       <section className="vp-rule-strip"><b>原场组合榜规则</b><span>各题按其原比赛相同用时回放</span><span>组合榜只保留本次已有题目</span><span>相同 Handle 跨比赛合并成绩</span><span>AC 优先，WA +20 分钟</span><span>当前 VP 队伍实时插入排名</span></section>
@@ -152,7 +171,7 @@ export default function VpPage() {
           const myState = myRow?.problems?.[`${problem.contestId}${problem.index}`];
           return <article className={`contest-problem-card ${myState?.solved ? "accepted" : ""}`} key={problem.code}><span>{problem.slot}</span><div><small>{contest.startedAt ? problem.code : "START 后显示来源"}</small><h2>{contest.startedAt ? problem.title : `Problem ${problem.slot}`}</h2>{contest.startedAt ? <p>{problem.rating} · {problem.thinking ? "思维题" : "综合题"} · {problem.tags.slice(0, 3).join(" / ")}</p> : null}</div><strong>{myState?.solved ? `+${myState.wrongAttempts}` : myState?.pendingAttempts ? `?${myState.pendingAttempts}` : myState?.wrongAttempts ? `-${myState.wrongAttempts}` : "—"}</strong>{contest.startedAt ? <a href={`/problem/${problem.contestId}${problem.index}`}>打开 →</a> : null}</article>;
         })}</div>
-        <article className="panel live-standings" style={{ "--problem-count": contest.problems.length } as CSSProperties}><div className="panel-head"><div><h2>原比赛组合实时榜单</h2><p>{contest.standings ? `${new Date(contest.standings.updatedAt).toLocaleTimeString("zh-CN")} 已同步 · ${contest.standings.sourceBoards?.length ?? 0} 场 · ${contest.standings.originalTeams ?? 0} 支原队伍 · ${pollSeconds} 秒刷新` : "首次开始会读取每道题所属比赛的原榜，完成后自动缓存"}</p></div><span className="live-dot" /></div>{contest.standings?.sourceBoards?.length ? <div className="combined-board-sources">{contest.standings.sourceBoards.map((source) => <span key={source.contestId}><b>CF {source.contestId}</b> · {source.selectedProblems.join("/")} · {source.sampledTeams} 队</span>)}</div> : null}<div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者 / 原队伍</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{rows.map((row) => <div className={`standings-row${row.mine ? " mine" : ""}`} key={row.id}><strong>{row.rank}</strong><span className="standing-party"><b>{row.handle}</b><small>{row.mine ? "当前 VP" : `原比赛${row.sourceCount && row.sourceCount > 1 ? ` · 合并 ${row.sourceCount} 场` : ""}`}</small></span><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.pendingAttempts ? "pending" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.pendingAttempts ? `?${state.pendingAttempts}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div></article>
+        <article className="panel live-standings" style={{ "--problem-count": contest.problems.length } as CSSProperties}><div className="panel-head"><div><h2>原比赛组合实时榜单</h2><p>{contest.standings ? `${new Date(contest.standings.updatedAt).toLocaleTimeString("zh-CN")} 已同步 · ${contest.standings.sourceBoards?.length ?? 0} 场 · ${contest.standings.originalTeams ?? 0} 支原队伍 · ${pollSeconds} 秒刷新` : "首次开始会读取每道题所属比赛的原榜，完成后持久写入数据库"}</p></div><span className="live-dot" /></div>{contest.standings?.sourceBoards?.length ? <div className="combined-board-sources">{contest.standings.sourceBoards.map((source) => <span key={source.contestId}><b>CF {source.contestId}</b> · {source.selectedProblems.join("/")} · {source.sampledTeams} 队</span>)}</div> : null}<div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者 / 原队伍</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{rows.map((row) => <div className={`standings-row${row.mine ? " mine" : ""}`} key={row.id}><strong>{row.rank}</strong><span className="standing-party"><b>{row.handle}</b><small>{row.mine ? "当前 VP" : `原比赛${row.sourceCount && row.sourceCount > 1 ? ` · 合并 ${row.sourceCount} 场` : ""}`}</small></span><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.pendingAttempts ? "pending" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.pendingAttempts ? `?${state.pendingAttempts}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div></article>
       </section>
     </AppShell>;
   }

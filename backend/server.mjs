@@ -1,33 +1,38 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
-import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { readFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { createAuthHandler, getTrainingSignals } from "./auth.mjs";
+import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } from "./auth.mjs";
 import { createStatementHandler } from "./statements.mjs";
-import { HttpError, boundedInteger, createWindowLimiter, pruneMap, publicError, readJsonBody } from "./http-utils.mjs";
+import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
+import {
+  finishVpSession,
+  ownerKeys,
+  persistVpSession,
+  persistenceStats,
+  readActiveVpSession,
+  readPersonalState,
+  readRuntimeCache,
+  readVpSession,
+  readVpSnapshot,
+  runtimeCacheStats,
+  standingSnapshotKey,
+  startVpSession,
+  writePersonalState,
+  writeRuntimeCache,
+  writeVpSnapshot,
+} from "./persistence.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const CF_BASE = "https://codeforces.com/api";
 const USER_AGENT = "icpc-trainer-backend/0.1";
 const CF_STANDINGS_CACHE_DIR = join(dirname(process.env.DB_PATH || "./data/icpc-trainer.sqlite"), "cf-standings");
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
-let problemCache = null;
-let problemFetch = null;
-const submissionCache = new Map();
-const contestStandingsCache = new Map();
 const inFlightCodeforces = new Map();
-const SUBMISSION_CACHE_LIMIT = 256;
-const CONTEST_STANDINGS_CACHE_LIMIT = 64;
 let apiQueue = Promise.resolve();
 let lastApiCall = 0;
 let apiQueueDepth = 0;
 const requestLimiter = createWindowLimiter({ windowMs: 60_000, limit: 90, maxEntries: 4096 });
-
-function setBoundedCache(map, key, value, maxEntries, isExpired) {
-  map.delete(key);
-  map.set(key, value);
-  pruneMap(map, isExpired, maxEntries);
-}
 
 const json = (response, status, value, extra = {}) => {
   response.writeHead(status, {
@@ -84,20 +89,16 @@ function codeforces(method, params) {
 }
 
 async function getProblemset() {
-  if (problemCache && problemCache.expiresAt > Date.now()) return problemCache.value;
-  if (!problemFetch) {
-    problemFetch = codeforces("problemset.problems", new URLSearchParams({ lang: "en" }))
-      .then((result) => {
-        if (!Array.isArray(result?.problems)) throw new HttpError(502, "Codeforces 题库响应无效");
-        problemCache = { expiresAt: Date.now() + 30 * 60_000, staleUntil: Date.now() + 24 * 60 * 60_000, value: result.problems };
-        return result.problems;
-      })
-      .finally(() => { problemFetch = null; });
-  }
+  const cached = readRuntimeCache("problemset", "all");
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
   try {
-    return await problemFetch;
+    const result = await codeforces("problemset.problems", new URLSearchParams({ lang: "en" }));
+    if (!Array.isArray(result?.problems)) throw new HttpError(502, "Codeforces 题库响应无效");
+    const now = Date.now();
+    writeRuntimeCache("problemset", "all", result.problems, { itemCount: result.problems.length, fetchedAt: now, expiresAt: now + 30 * 60_000, staleUntil: now + 24 * 60 * 60_000, maxEntries: 1 });
+    return result.problems;
   } catch (error) {
-    if (problemCache?.value?.length && problemCache.staleUntil > Date.now()) return problemCache.value;
+    if (Array.isArray(cached?.value) && cached.staleUntil > Date.now()) return cached.value;
     throw error;
   }
 }
@@ -106,17 +107,17 @@ async function getSubmissions(handle, count = 1000, maxAgeMs = 60_000) {
   const key = handle.toLowerCase();
   const requestedCount = boundedInteger(count, { min: 1, max: 1000, fallback: 100 });
   const requestedMaxAge = boundedInteger(maxAgeMs, { min: 5_000, max: 60_000, fallback: 60_000 });
-  const cached = submissionCache.get(key);
-  if (cached && Date.now() - cached.fetchedAt <= requestedMaxAge && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
+  const cached = readRuntimeCache("submissions", key);
+  if (cached && Date.now() - cached.fetchedAt <= requestedMaxAge && cached.itemCount >= requestedCount) return cached.value.slice(0, requestedCount);
   try {
-    const fetchedCount = Math.max(requestedCount, cached?.count || 0);
+    const fetchedCount = Math.max(requestedCount, cached?.itemCount || 0);
     const value = await codeforces("user.status", new URLSearchParams({ handle, from: "1", count: String(fetchedCount) }));
     if (!Array.isArray(value)) throw new HttpError(502, "Codeforces 提交记录响应无效");
     const fetchedAt = Date.now();
-    setBoundedCache(submissionCache, key, { expiresAt: fetchedAt + 60_000, staleUntil: fetchedAt + 10 * 60_000, fetchedAt, count: fetchedCount, value }, SUBMISSION_CACHE_LIMIT, (entry) => entry.staleUntil <= fetchedAt);
+    writeRuntimeCache("submissions", key, value, { itemCount: fetchedCount, fetchedAt, expiresAt: fetchedAt + 60_000, staleUntil: fetchedAt + 10 * 60_000, maxEntries: 500 });
     return value.slice(0, requestedCount);
   } catch (error) {
-    if (cached && cached.staleUntil > Date.now() && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
+    if (cached && cached.staleUntil > Date.now() && cached.itemCount >= requestedCount) return cached.value.slice(0, requestedCount);
     throw error;
   }
 }
@@ -124,7 +125,8 @@ async function getSubmissions(handle, count = 1000, maxAgeMs = 60_000) {
 async function getContestStandings(contestId) {
   const normalizedId = boundedInteger(contestId, { min: 1, max: 10_000_000, fallback: 0 });
   if (!normalizedId) throw new HttpError(400, "原比赛编号无效");
-  const cached = contestStandingsCache.get(normalizedId);
+  const cacheKey = String(normalizedId);
+  let cached = readRuntimeCache("contest-standings", cacheKey);
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   const cachePath = join(CF_STANDINGS_CACHE_DIR, `${normalizedId}.json`);
   if (!cached) {
@@ -133,7 +135,9 @@ async function getContestStandings(contestId) {
       if (persisted?.value?.contest && Array.isArray(persisted.value.problems) && Array.isArray(persisted.value.rows)) {
         const now = Date.now();
         persisted.value.rows = persisted.value.rows.slice(0, 500);
-        setBoundedCache(contestStandingsCache, normalizedId, { expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, value: persisted.value }, CONTEST_STANDINGS_CACHE_LIMIT, (entry) => entry.staleUntil <= now);
+        writeRuntimeCache("contest-standings", cacheKey, persisted.value, { itemCount: persisted.value.rows.length, fetchedAt: Number(persisted.cachedAt) || now, expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, maxEntries: 512 });
+        cached = readRuntimeCache("contest-standings", cacheKey);
+        void unlink(cachePath).catch(() => undefined);
         return persisted.value;
       }
     } catch { /* Cache miss. */ }
@@ -143,13 +147,7 @@ async function getContestStandings(contestId) {
     if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new HttpError(502, "原比赛榜单数据无效");
     value.rows = value.rows.slice(0, 500);
     const now = Date.now();
-    setBoundedCache(contestStandingsCache, normalizedId, { expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, value }, CONTEST_STANDINGS_CACHE_LIMIT, (entry) => entry.staleUntil <= now);
-    try {
-      await mkdir(CF_STANDINGS_CACHE_DIR, { recursive: true });
-      const temporary = `${cachePath}.${randomUUID()}.tmp`;
-      await writeFile(temporary, JSON.stringify({ cachedAt: now, value }), "utf8");
-      await rename(temporary, cachePath);
-    } catch { /* Memory cache remains usable when disk persistence fails. */ }
+    writeRuntimeCache("contest-standings", cacheKey, value, { itemCount: value.rows.length, fetchedAt: now, expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, maxEntries: 512 });
     return value;
   } catch (error) {
     if (cached && cached.staleUntil > Date.now()) return cached.value;
@@ -445,7 +443,19 @@ const readBody = (request) => readJsonBody(request, { maxBytes: 64 * 1024 });
 const handleAuth = createAuthHandler({ json, readBody, clientIp });
 const handleStatements = createStatementHandler({ json, clientIp });
 
-async function generateVp(body) {
+function requestOwners(request, clientIdValue, { allowGuest = false } = {}) {
+  try { return ownerKeys(optionalAuthenticateRequest(request), clientIdValue, { allowGuest }); }
+  catch (error) { throw new HttpError(400, error instanceof Error ? error.message : "设备标识无效"); }
+}
+
+function personalStateKey(value) {
+  const key = String(value || "").trim();
+  if (["preferences", "dashboard", "favorites", "active-vp", "archive-vp"].includes(key)) return key;
+  if (/^problem:\d{1,7}[A-Z][0-9]?$/.test(key)) return key;
+  throw new HttpError(400, "个人数据类型无效");
+}
+
+async function generateVp(body, ownerKey) {
   const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
   const handle = participants[0];
   const count = boundedInteger(body.count, { min: 5, max: 13, fallback: 10 });
@@ -480,7 +490,9 @@ async function generateVp(body) {
   });
   void Promise.allSettled(sourceContestIds.map((contestId) => getContestStandings(contestId)));
   const mode = body.mode === "原场镜像" ? "原场镜像" : body.mode === "多场组合" ? "多场组合" : "自由组卷";
-  return { id: `vp-${hashSeed(`${seed}:${handle}`).toString(16)}`, handle, participants, mode, seed, durationMinutes, targetRating, thinkingRatio, thinkingCount: selected.filter(isThinkingProblem).length, sourceContestId, sourceContests, excludedSolved: solved.size, createdAt: new Date().toISOString(), problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem), thinking: isThinkingProblem(problem) })) };
+  const contest = { id: `vp-${randomUUID()}`, handle, participants, mode, seed, durationMinutes, targetRating, thinkingRatio, thinkingCount: selected.filter(isThinkingProblem).length, sourceContestId, sourceContests, excludedSolved: solved.size, createdAt: new Date().toISOString(), problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem), thinking: isThinkingProblem(problem) })) };
+  persistVpSession(ownerKey, contest);
+  return contest;
 }
 
 function vpProblemKey(problem) {
@@ -560,7 +572,7 @@ async function buildCurrentVpRows(participants, problems, startedAt, durationMin
   });
 }
 
-async function buildVpStandings(body) {
+async function buildVpStandings(body, ownerKey) {
   const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
   const startedAt = Number(body.startedAt);
   const durationMinutes = boundedInteger(body.durationMinutes, { min: 60, max: 600, fallback: 180 });
@@ -568,6 +580,13 @@ async function buildVpStandings(body) {
   const problems = Array.isArray(body.problems) ? body.problems.slice(0, 20).filter((item) => Number(item?.contestId) && /^[A-Z][0-9]?$/.test(String(item?.index || ""))).map((item, index) => ({ contestId: Number(item.contestId), index: String(item.index), slot: String(item.slot || String.fromCharCode(65 + index)) })) : [];
   if (!problems.length) throw new HttpError(400, "比赛题目为空");
   const elapsedSeconds = Math.max(0, Math.min(durationMinutes * 60, Math.floor((Date.now() - startedAt) / 1000)));
+  const pollAfterSeconds = Math.max(15, Math.ceil(participants.length * 2.5));
+  const sessionId = typeof body.vpId === "string" && /^vp-[a-f0-9-]{16,64}$/i.test(body.vpId) ? body.vpId : null;
+  if (sessionId && !readVpSession(sessionId, ownerKey)) throw new HttpError(404, "VP 记录不存在或不属于当前账号");
+  const snapshotKey = sessionId ? `session:${sessionId}` : standingSnapshotKey({ participants, startedAt, durationMinutes, problems });
+  const elapsedBucket = Math.floor(elapsedSeconds / pollAfterSeconds);
+  const cachedSnapshot = readVpSnapshot(snapshotKey, elapsedBucket);
+  if (cachedSnapshot) return { ...cachedSnapshot.value, cacheHit: true };
   const contestIds = [...new Set(problems.map((problem) => problem.contestId))];
   const [sourceResults, currentRows] = await Promise.all([
     Promise.allSettled(contestIds.map((contestId) => getContestStandings(contestId))),
@@ -584,18 +603,20 @@ async function buildVpStandings(body) {
   });
   const visible = rows.slice(0, 120);
   for (const row of currentRows) if (!visible.some((item) => item.id === row.id)) visible.push(row);
-  return {
+  const result = {
     updatedAt: new Date().toISOString(),
     startedAt,
     durationMinutes,
     elapsedSeconds,
-    pollAfterSeconds: Math.max(15, Math.ceil(participants.length * 2.5)),
+    pollAfterSeconds,
     totalRows: rows.length,
     originalTeams: originalRows.length,
     unavailableContestIds,
     sourceBoards: sourceBoards.map((source) => ({ contestId: source.contest.id, name: source.contest.name, selectedProblems: problems.filter((problem) => problem.contestId === source.contest.id).map((problem) => problem.slot), sampledTeams: source.rows.length })),
     rows: visible,
   };
+  writeVpSnapshot(snapshotKey, sessionId, elapsedBucket, result);
+  return result;
 }
 
 const server = http.createServer(async (request, response) => {
@@ -618,6 +639,7 @@ const server = http.createServer(async (request, response) => {
   if (url.pathname === "/health") {
     if (request.method !== "GET") return json(response, 405, { error: "Method not allowed", requestId }, { Allow: "GET" });
     const memory = process.memoryUsage();
+    const caches = runtimeCacheStats();
     return json(response, 200, {
       status: "ok",
       service: "icpc-trainer-api",
@@ -628,12 +650,13 @@ const server = http.createServer(async (request, response) => {
         heapTotalMiB: Math.round(memory.heapTotal / 1024 / 1024),
       },
       caches: {
-        submissions: submissionCache.size,
-        submissionsLimit: SUBMISSION_CACHE_LIMIT,
-        contestStandings: contestStandingsCache.size,
-        contestStandingsLimit: CONTEST_STANDINGS_CACHE_LIMIT,
+        storage: "sqlite",
+        problemsets: caches.problemset || 0,
+        submissions: caches.submissions || 0,
+        contestStandings: caches["contest-standings"] || 0,
         codeforcesInFlight: inFlightCodeforces.size,
       },
+      persistence: persistenceStats(),
     });
   }
   const rate = requestLimiter(clientIp(request));
@@ -643,6 +666,38 @@ const server = http.createServer(async (request, response) => {
   try {
     if (await handleAuth(request, response, url)) return;
     if (await handleStatements(request, response, url)) return;
+    if (request.method === "GET" && url.pathname === "/state") {
+      const key = personalStateKey(url.searchParams.get("key"));
+      const owners = requestOwners(request, url.searchParams.get("clientId"));
+      return json(response, 200, readPersonalState(owners, key));
+    }
+    if (request.method === "POST" && url.pathname === "/state") {
+      const body = await readBody(request);
+      const key = personalStateKey(body.key);
+      const owners = requestOwners(request, body.clientId);
+      writePersonalState(owners.primary, key, body.value ?? null);
+      return json(response, 200, { ok: true, updatedAt: new Date().toISOString() });
+    }
+    if (request.method === "GET" && url.pathname === "/vp/sessions/active") {
+      const owners = requestOwners(request, url.searchParams.get("clientId"), { allowGuest: true });
+      let session = readActiveVpSession(owners.primary);
+      if (!session && owners.fallback) {
+        session = readActiveVpSession(owners.fallback);
+        if (session) persistVpSession(owners.primary, session);
+      }
+      return json(response, 200, { session });
+    }
+    if (request.method === "POST" && url.pathname === "/vp/sessions/start") {
+      const body = await readBody(request);
+      const owners = requestOwners(request, body.clientId, { allowGuest: true });
+      const session = startVpSession(String(body.id || ""), owners.primary, body.startedAt);
+      return session ? json(response, 200, { session }) : json(response, 404, { error: "VP 记录不存在或不属于当前账号" });
+    }
+    if (request.method === "POST" && url.pathname === "/vp/sessions/finish") {
+      const body = await readBody(request);
+      const owners = requestOwners(request, body.clientId, { allowGuest: true });
+      return finishVpSession(String(body.id || ""), owners.primary) ? json(response, 200, { ok: true }) : json(response, 404, { error: "VP 记录不存在或不属于当前账号" });
+    }
     if (request.method === "GET" && url.pathname === "/problemset") return json(response, 200, { problems: await getProblemset() }, { "Cache-Control": "public, max-age=600" });
     if (request.method === "GET" && url.pathname === "/codeforces/problems") {
       const all = await getProblemset();
@@ -675,8 +730,16 @@ const server = http.createServer(async (request, response) => {
       const submissions = (await getSubmissions(handle, 100)).map(publicSubmission);
       return json(response, 200, { source: "codeforces", handle, syncedAt: new Date().toISOString(), submissions });
     }
-    if (request.method === "POST" && url.pathname === "/vp/generate") return json(response, 200, await generateVp(await readBody(request)));
-    if (request.method === "POST" && url.pathname === "/vp/standings") return json(response, 200, await buildVpStandings(await readBody(request)));
+    if (request.method === "POST" && url.pathname === "/vp/generate") {
+      const body = await readBody(request);
+      const owners = requestOwners(request, body.clientId, { allowGuest: true });
+      return json(response, 200, await generateVp(body, owners.primary));
+    }
+    if (request.method === "POST" && url.pathname === "/vp/standings") {
+      const body = await readBody(request);
+      const owners = requestOwners(request, body.clientId, { allowGuest: true });
+      return json(response, 200, await buildVpStandings(body, owners.primary));
+    }
     return json(response, 404, { error: "Not found", requestId });
   } catch (error) {
     const exposed = publicError(error, "服务暂时不可用，请稍后重试");

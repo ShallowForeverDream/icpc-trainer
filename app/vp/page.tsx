@@ -1,10 +1,12 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
 import { AppShell, Icon } from "../components/AppShell";
-import { browserApiUrl } from "../lib/browser-api";
+import { apiJson } from "../lib/api-client";
+import { readTrainerPreferences, saveTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
+import { readStoredJson, removeStoredValue, writeStoredJson } from "../lib/storage";
 
 type VpProblem = { slot: string; code: string; contestId: number; index: string; title: string; rating: number; tags: string[] };
 type SourceContest = { contestId: number; problemCount: number; averageRating: number; url: string };
@@ -20,6 +22,15 @@ const modeOptions = [
   ["多场组合", "从 2–4 场历史比赛组合", "⊞"],
 ];
 
+function isContest(value: unknown): value is Contest {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<Contest>;
+  return typeof item.id === "string" && typeof item.handle === "string" && validCodeforcesHandle(item.handle)
+    && Number.isFinite(item.durationMinutes) && Number(item.durationMinutes) >= 60 && Number(item.durationMinutes) <= 600
+    && Array.isArray(item.problems) && item.problems.length >= 5 && item.problems.length <= 20
+    && item.problems.every((problem) => Number.isInteger(problem?.contestId) && /^[A-Z][0-9]?$/.test(String(problem?.index || "")));
+}
+
 export default function VpPage() {
   const [mode, setMode] = useState("个性化组卷");
   const [duration, setDuration] = useState(180);
@@ -31,10 +42,15 @@ export default function VpPage() {
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "syncing">("idle");
   const [message, setMessage] = useState("");
   const [now, setNow] = useState(Date.now());
+  const generateRequest = useRef<AbortController | null>(null);
+  const standingsRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) try { setContest(JSON.parse(saved)); } catch { localStorage.removeItem(STORAGE_KEY); }
+    const preferences = readTrainerPreferences();
+    setParticipantText(preferences.codeforcesHandle);
+    const saved = readStoredJson<Contest | null>(STORAGE_KEY, null, (value): value is Contest | null => value === null || isContest(value));
+    if (saved) { setContest(saved); setParticipantText((saved.participants ?? [saved.handle]).join(", ")); }
+    return () => { generateRequest.current?.abort(); standingsRequest.current?.abort(); };
   }, []);
   useEffect(() => {
     if (!contest?.startedAt) return;
@@ -44,7 +60,9 @@ export default function VpPage() {
   useEffect(() => {
     if (!contest?.startedAt) return;
     void syncStandings(true);
-    const timer = window.setInterval(() => void syncStandings(true), 30_000);
+    const timer = window.setInterval(() => {
+      if (Date.now() < contest.startedAt! + contest.durationMinutes * 60_000) void syncStandings(true);
+    }, 30_000);
     return () => window.clearInterval(timer);
   }, [contest?.id, contest?.startedAt]); // eslint-disable-line react-hooks/exhaustive-deps
 
@@ -57,21 +75,28 @@ export default function VpPage() {
 
   function save(next: Contest | null) {
     setContest(next);
-    if (next) localStorage.setItem(STORAGE_KEY, JSON.stringify(next)); else localStorage.removeItem(STORAGE_KEY);
+    if (next) {
+      if (!writeStoredJson(STORAGE_KEY, next)) setMessage("浏览器无法保存本场 VP，刷新页面后进度可能丢失");
+    } else removeStoredValue(STORAGE_KEY);
   }
 
   async function generateContest() {
-    if (!participants.length) { setStatus("error"); setMessage("至少输入一个 Codeforces Handle"); return; }
+    if (!participants.length || participants.length > 12 || participants.some((item) => !validCodeforcesHandle(item))) { setStatus("error"); setMessage("请输入 1–12 个有效的 Codeforces Handle"); return; }
+    generateRequest.current?.abort();
+    const controller = new AbortController();
+    generateRequest.current = controller;
     setStatus("loading");
     setMessage("");
     try {
-      const response = await fetch(browserApiUrl("/vp/generate"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants, handle: participants[0], mode, count, targetRating, durationMinutes: duration, seed: seed || undefined }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "组卷失败");
+      const data = await apiJson<Contest>("/vp/generate", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants, handle: participants[0], mode, count, targetRating, durationMinutes: duration, seed: seed || undefined }), signal: controller.signal }, 30_000);
+      if (!isContest(data)) throw new Error("组卷服务返回了无效比赛");
       save(data);
       setSeed(data.seed);
+      const preferences = readTrainerPreferences();
+      saveTrainerPreferences({ ...preferences, codeforcesHandle: participants[0] });
       setStatus("idle");
     } catch (error) {
+      if (controller.signal.aborted) return;
       setMessage(error instanceof Error ? error.message : "组卷失败");
       setStatus("error");
     }
@@ -85,21 +110,25 @@ export default function VpPage() {
 
   async function syncStandings(silent = false) {
     if (!contest?.startedAt) return;
+    standingsRequest.current?.abort();
+    const controller = new AbortController();
+    standingsRequest.current = controller;
     if (!silent) setStatus("syncing");
     try {
-      const response = await fetch(browserApiUrl("/vp/standings"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants: contest.participants?.length ? contest.participants : [contest.handle], startedAt: contest.startedAt, durationMinutes: contest.durationMinutes, problems: contest.problems.map(({ contestId, index }) => ({ contestId, index })) }) });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "榜单同步失败");
+      const data = await apiJson<Standings>("/vp/standings", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ participants: contest.participants?.length ? contest.participants : [contest.handle], startedAt: contest.startedAt, durationMinutes: contest.durationMinutes, problems: contest.problems.map(({ contestId, index }) => ({ contestId, index })) }), signal: controller.signal }, 45_000);
+      if (!Array.isArray(data.rows)) throw new Error("榜单服务返回了无效数据");
       save({ ...contest, standings: data });
       setMessage(`榜单更新于 ${new Date(data.updatedAt).toLocaleTimeString("zh-CN")}`);
       setStatus("idle");
     } catch (error) {
+      if (controller.signal.aborted) return;
       if (!silent) { setMessage(error instanceof Error ? error.message : "榜单同步失败"); setStatus("error"); }
+      else setMessage("自动刷新失败，已保留上次榜单；可点击“立即刷新榜单”重试");
     }
   }
 
   if (contest) {
-    const rows = contest.standings?.rows ?? (contest.participants ?? [contest.handle]).map((handle, index) => ({ rank: index + 1, handle, solved: 0, penalty: 0, problems: {} }));
+    const rows: StandingRow[] = contest.standings?.rows ?? (contest.participants ?? [contest.handle]).map((handle, index) => ({ rank: index + 1, handle, solved: 0, penalty: 0, problems: {} as Record<string, ProblemStanding> }));
     return <AppShell active="模拟赛">
       <section className="contest-room-head">
         <div><span className="eyebrow"><span className="live-dot" /> {contest.startedAt ? "实时比赛" : "比赛已生成"}</span><h1>{contest.mode} · {contest.problems.length} 题</h1><p>{(contest.participants ?? [contest.handle]).join(" / ")} · Seed <code>{contest.seed}</code> · 已排除 {contest.excludedSolved} 道历史 AC</p></div>

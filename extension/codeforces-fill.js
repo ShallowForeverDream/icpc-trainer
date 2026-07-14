@@ -1,6 +1,10 @@
 (async () => {
   const { pendingSubmission } = await chrome.storage.local.get("pendingSubmission");
   if (!pendingSubmission || Date.now() - pendingSubmission.createdAt > 30 * 60 * 1000) return;
+  if (!Number.isInteger(pendingSubmission.contestId) || !/^[A-Z][0-9]?$/.test(pendingSubmission.index) || typeof pendingSubmission.sourceCode !== "string" || !pendingSubmission.sourceCode.trim() || pendingSubmission.sourceCode.length > 500_000) {
+    await chrome.storage.local.remove("pendingSubmission");
+    return;
+  }
   const source = document.querySelector('textarea[name="source"]');
   const problem = document.querySelector('select[name="submittedProblemIndex"]');
   const language = document.querySelector('select[name="programTypeId"]');
@@ -19,9 +23,8 @@
   source.scrollIntoView({ behavior: "smooth", block: "center" });
   source.style.outline = "3px solid #b8f23e";
   await chrome.storage.local.remove("pendingSubmission");
-  if (pendingSubmission.autoSubmit) {
-    await new Promise((resolve) => setTimeout(resolve, 500));
-    const submit = source.form?.querySelector('input[type="submit"], button[type="submit"]');
-    if (submit instanceof HTMLElement) submit.click();
-  }
+  const notice = document.createElement("div");
+  notice.textContent = "icpc-trainer 已填入代码。请检查题号、语言和代码后，手动点击 Submit。";
+  notice.style.cssText = "margin:12px 0;padding:12px 14px;border:1px solid #9bc53d;background:#f5ffe3;color:#24320d;font-weight:600;border-radius:6px";
+  source.insertAdjacentElement("beforebegin", notice);
 })();

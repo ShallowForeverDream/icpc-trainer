@@ -1,4 +1,5 @@
 import { browserApiUrl } from "./browser-api";
+import { authFetch } from "./auth-client";
 import katex from "katex";
 
 export type StatementImage = {
@@ -29,21 +30,109 @@ export type CachedStatement = {
   images: StatementImage[];
   status: "importing" | "source_required" | "model_downloading" | "translating" | "ready_original" | "ready" | string;
   message: string | null;
+  cacheScope?: "shared" | "device";
   updatedAt: string;
 };
 
 type StatementPayload = { statement?: CachedStatement; error?: string };
 
-async function statementRequest(path: string, init?: RequestInit) {
-  const response = await fetch(browserApiUrl(path), init);
+const DEVICE_TRANSLATION_PREFIX = "icpc-trainer-device-translation:";
+
+function statementSignature(statement: Pick<CachedStatement, "code" | "originalHtml">) {
+  const source = `${statement.code}:${statement.originalHtml || ""}`;
+  let hash = 2166136261;
+  for (let index = 0; index < source.length; index += 1) hash = Math.imul(hash ^ source.charCodeAt(index), 16777619);
+  return (hash >>> 0).toString(16);
+}
+
+function clearDeviceTranslation(code: string) {
+  try { localStorage.removeItem(`${DEVICE_TRANSLATION_PREFIX}${code}`); } catch { /* storage may be unavailable */ }
+}
+
+function saveDeviceTranslation(statement: CachedStatement) {
+  if (!statement.chineseHtml || statement.chineseHtml.length > 1_500_000) return;
+  try {
+    localStorage.setItem(`${DEVICE_TRANSLATION_PREFIX}${statement.code}`, JSON.stringify({
+      chineseHtml: statement.chineseHtml,
+      images: statement.images,
+      signature: statementSignature(statement),
+      savedAt: Date.now(),
+    }));
+  } catch {
+    // Private browsing and full storage quotas should not break statement reading.
+  }
+}
+
+export function cacheBrowserTranslation(
+  statement: CachedStatement,
+  chineseHtml: string,
+  images: StatementImage[],
+): CachedStatement {
+  const preview: CachedStatement = {
+    ...statement,
+    chineseHtml,
+    images,
+    status: "ready_preview",
+    message: "中文题面已保存在当前设备",
+    cacheScope: "device",
+    revalidating: false,
+  };
+  saveDeviceTranslation(preview);
+  return preview;
+}
+
+function withDeviceTranslation(statement: CachedStatement) {
+  if (statement.translationCurrent) {
+    clearDeviceTranslation(statement.code);
+    return statement;
+  }
+  try {
+    const raw = localStorage.getItem(`${DEVICE_TRANSLATION_PREFIX}${statement.code}`);
+    if (!raw) return statement;
+    const cached = JSON.parse(raw) as { chineseHtml?: string; images?: StatementImage[]; signature?: string; savedAt?: number };
+    if (!cached.chineseHtml || cached.signature !== statementSignature(statement) || Date.now() - Number(cached.savedAt || 0) > 30 * 24 * 60 * 60_000) {
+      clearDeviceTranslation(statement.code);
+      return statement;
+    }
+    return {
+      ...statement,
+      chineseHtml: cached.chineseHtml,
+      images: Array.isArray(cached.images) ? cached.images : statement.images,
+      revalidating: false,
+      status: "ready_preview",
+      message: "正在显示当前设备保存的中文译文；服务器译文完成后会自动替换",
+      cacheScope: "device" as const,
+    };
+  } catch {
+    clearDeviceTranslation(statement.code);
+    return statement;
+  }
+}
+
+async function statementRequest(path: string, init?: RequestInit, authenticated = false) {
+  const controller = new AbortController();
+  const timeout = window.setTimeout(() => controller.abort(), init?.method === "POST" ? 35_000 : 20_000);
+  let response: Response;
+  try {
+    const requestInit = { ...init, signal: init?.signal || controller.signal };
+    response = authenticated ? await authFetch(path, requestInit, init?.method === "POST" ? 35_000 : 20_000) : await fetch(browserApiUrl(path), requestInit);
+  } catch (error) {
+    if (error instanceof DOMException && error.name === "AbortError") throw new Error("题面服务响应超时，请稍后重试");
+    throw error;
+  } finally {
+    window.clearTimeout(timeout);
+  }
   const payload = await response.json().catch(() => ({})) as StatementPayload;
-  if (!response.ok && response.status !== 202) throw new Error(payload.error || `题面服务 HTTP ${response.status}`);
+  if (!response.ok && response.status !== 202) {
+    if (response.status === 401) throw new Error("请先登录后使用浏览器扩展或本地翻译");
+    throw new Error(payload.error || `题面服务 HTTP ${response.status}`);
+  }
   if (!payload.statement) throw new Error(payload.error || "题面服务没有返回数据");
   return payload.statement;
 }
 
-export function loadStatement(code: string) {
-  return statementRequest(`/codeforces/statements?code=${encodeURIComponent(code)}`, { cache: "no-store" });
+export async function loadStatement(code: string) {
+  return withDeviceTranslation(await statementRequest(`/codeforces/statements?code=${encodeURIComponent(code)}`, { cache: "no-store" }));
 }
 
 export function importStatementSource(code: string, sourceUrl: string, html: string) {
@@ -51,11 +140,11 @@ export function importStatementSource(code: string, sourceUrl: string, html: str
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ code, sourceUrl, html }),
-  });
+  }, true);
 }
 
-export function submitBrowserTranslation(code: string, chineseHtml: string, images: StatementImage[]) {
-  return statementRequest("/codeforces/statements/translation", {
+export async function submitBrowserTranslation(code: string, chineseHtml: string, images: StatementImage[]) {
+  const statement = await statementRequest("/codeforces/statements/translation", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({
@@ -63,7 +152,10 @@ export function submitBrowserTranslation(code: string, chineseHtml: string, imag
       chineseHtml,
       imageTranslations: images.filter((image) => image.ocrZh).map(({ sourceUrl, ocrZh }) => ({ sourceUrl, ocrZh })),
     }),
-  });
+  }, true);
+  if (statement.cacheScope === "device") saveDeviceTranslation(statement);
+  else clearDeviceTranslation(statement.code);
+  return statement;
 }
 
 type ExtensionResult = { ok?: boolean; html?: string; url?: string; error?: string };
@@ -73,7 +165,7 @@ export function fetchStatementViaExtension(url: string, timeoutMs = 15_000) {
     const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
     const timeout = window.setTimeout(() => {
       window.removeEventListener("message", onMessage);
-      reject(new Error("未检测到浏览器扩展；请安装或更新至 v0.3 后重试"));
+      reject(new Error("未检测到浏览器扩展；请安装或更新至 v0.4 后重试"));
     }, timeoutMs);
 
     function onMessage(event: MessageEvent) {
@@ -193,7 +285,7 @@ function restoreFormulaText(translated: string, formulas: Array<{ placeholder: s
   for (const { placeholder, formula } of formulas) {
     const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
     if (!flexiblePlaceholder.test(restored)) throw new Error(`浏览器翻译未保留公式占位符 ${placeholder}`);
-    restored = restored.replace(flexiblePlaceholder, formula);
+    restored = restored.replace(flexiblePlaceholder, () => formula);
   }
   return restored;
 }

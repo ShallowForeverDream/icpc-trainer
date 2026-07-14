@@ -1,40 +1,39 @@
 import http from "node:http";
+import { randomUUID } from "node:crypto";
 import { createAuthHandler, getTrainingSignals } from "./auth.mjs";
 import { createStatementHandler } from "./statements.mjs";
+import { HttpError, boundedInteger, createWindowLimiter, pruneMap, publicError, readJsonBody } from "./http-utils.mjs";
 
 const PORT = Number(process.env.PORT || 8787);
 const CF_BASE = "https://codeforces.com/api";
 const USER_AGENT = "icpc-trainer-backend/0.1";
-const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site,https://icpc-lab-trainer.zhuj7933.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
+const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
 let problemCache = null;
+let problemFetch = null;
 const submissionCache = new Map();
+const inFlightCodeforces = new Map();
 let apiQueue = Promise.resolve();
 let lastApiCall = 0;
-const requestWindows = new Map();
+let apiQueueDepth = 0;
+const requestLimiter = createWindowLimiter({ windowMs: 60_000, limit: 90, maxEntries: 4096 });
 
 const json = (response, status, value, extra = {}) => {
-  response.writeHead(status, { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store", "X-Content-Type-Options": "nosniff", ...extra });
+  response.writeHead(status, {
+    "Content-Type": "application/json; charset=utf-8",
+    "Cache-Control": "no-store",
+    "X-Content-Type-Options": "nosniff",
+    "Cross-Origin-Resource-Policy": "cross-origin",
+    ...extra,
+  });
   response.end(JSON.stringify(value));
 };
 
 function clientIp(request) {
-  const forwarded = String(request.headers["x-real-ip"] || request.headers["x-forwarded-for"] || "").split(",")[0].trim();
-  return forwarded || request.socket.remoteAddress || "unknown";
+  const realIp = String(request.headers["x-real-ip"] || "").trim();
+  return realIp || request.socket.remoteAddress || "unknown";
 }
 
-function allowRequest(request) {
-  const ip = clientIp(request);
-  const now = Date.now();
-  const state = requestWindows.get(ip);
-  if (!state || now - state.startedAt > 60_000) {
-    requestWindows.set(ip, { startedAt: now, count: 1 });
-    return true;
-  }
-  state.count += 1;
-  return state.count <= 90;
-}
-
-async function codeforces(method, params) {
+async function runCodeforces(method, params) {
   const previous = apiQueue;
   let release;
   apiQueue = new Promise((resolve) => { release = resolve; });
@@ -44,31 +43,69 @@ async function codeforces(method, params) {
     if (wait) await new Promise((resolve) => setTimeout(resolve, wait));
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 30_000);
-    const response = await fetch(`${CF_BASE}/${method}?${params}`, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
-    clearTimeout(timeout);
-    const payload = await response.json();
-    lastApiCall = Date.now();
-    if (!response.ok || payload.status !== "OK") throw new Error(payload.comment || `Codeforces HTTP ${response.status}`);
-    return payload.result;
+    try {
+      lastApiCall = Date.now();
+      const response = await fetch(`${CF_BASE}/${method}?${params}`, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" }, signal: controller.signal });
+      const payload = await response.json().catch(() => null);
+      if (!response.ok || payload?.status !== "OK") throw new HttpError(502, "Codeforces 暂时不可用，请稍后重试", { expose: true });
+      return payload.result;
+    } finally {
+      clearTimeout(timeout);
+    }
   } finally {
     release();
   }
 }
 
+function codeforces(method, params) {
+  const key = `${method}?${params}`;
+  const current = inFlightCodeforces.get(key);
+  if (current) return current;
+  if (apiQueueDepth >= 40) throw new HttpError(503, "Codeforces 同步队列繁忙，请稍后重试", { expose: true });
+  apiQueueDepth += 1;
+  const job = runCodeforces(method, params).finally(() => {
+    apiQueueDepth -= 1;
+    inFlightCodeforces.delete(key);
+  });
+  inFlightCodeforces.set(key, job);
+  return job;
+}
+
 async function getProblemset() {
   if (problemCache && problemCache.expiresAt > Date.now()) return problemCache.value;
-  const result = await codeforces("problemset.problems", new URLSearchParams({ lang: "en" }));
-  problemCache = { expiresAt: Date.now() + 30 * 60_000, value: result.problems };
-  return result.problems;
+  if (!problemFetch) {
+    problemFetch = codeforces("problemset.problems", new URLSearchParams({ lang: "en" }))
+      .then((result) => {
+        if (!Array.isArray(result?.problems)) throw new HttpError(502, "Codeforces 题库响应无效");
+        problemCache = { expiresAt: Date.now() + 30 * 60_000, staleUntil: Date.now() + 24 * 60 * 60_000, value: result.problems };
+        return result.problems;
+      })
+      .finally(() => { problemFetch = null; });
+  }
+  try {
+    return await problemFetch;
+  } catch (error) {
+    if (problemCache?.value?.length && problemCache.staleUntil > Date.now()) return problemCache.value;
+    throw error;
+  }
 }
 
 async function getSubmissions(handle, count = 1000) {
-  const key = `${handle.toLowerCase()}:${count}`;
+  const key = handle.toLowerCase();
+  const requestedCount = boundedInteger(count, { min: 1, max: 1000, fallback: 100 });
   const cached = submissionCache.get(key);
-  if (cached && cached.expiresAt > Date.now()) return cached.value;
-  const value = await codeforces("user.status", new URLSearchParams({ handle, from: "1", count: String(count) }));
-  submissionCache.set(key, { expiresAt: Date.now() + 60_000, value });
-  return value;
+  if (cached && cached.expiresAt > Date.now() && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
+  try {
+    const fetchedCount = Math.max(requestedCount, cached?.count || 0);
+    const value = await codeforces("user.status", new URLSearchParams({ handle, from: "1", count: String(fetchedCount) }));
+    if (!Array.isArray(value)) throw new HttpError(502, "Codeforces 提交记录响应无效");
+    submissionCache.set(key, { expiresAt: Date.now() + 60_000, staleUntil: Date.now() + 10 * 60_000, count: fetchedCount, value });
+    if (submissionCache.size > 256) pruneMap(submissionCache, (entry) => entry.staleUntil <= Date.now(), 256);
+    return value.slice(0, requestedCount);
+  } catch (error) {
+    if (cached && cached.staleUntil > Date.now() && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
+    throw error;
+  }
 }
 
 function hashSeed(value) {
@@ -114,7 +151,7 @@ function validHandle(value) {
 function normalizeParticipants(value, fallback = "ShallowDream2") {
   const source = Array.isArray(value) ? value : String(value || fallback).split(/[\s,;]+/);
   const handles = [...new Set(source.map((item) => String(item).trim()).filter(Boolean))].slice(0, 12);
-  if (!handles.length || handles.some((handle) => !validHandle(handle))) throw new Error("参赛 Handle 列表无效");
+  if (!handles.length || handles.some((handle) => !validHandle(handle))) throw new HttpError(400, "参赛 Handle 列表无效");
   return handles;
 }
 
@@ -133,13 +170,13 @@ function percentile(values, ratio) {
 
 async function recommendProblems(url) {
   const handle = (url.searchParams.get("handle") || "ShallowDream2").trim();
-  if (!validHandle(handle)) throw new Error("Codeforces Handle 无效");
-  const min = Math.max(800, Number(url.searchParams.get("min")) || 1200);
-  const max = Math.min(3500, Math.max(min, Number(url.searchParams.get("max")) || 1800));
-  const limit = Math.min(40, Math.max(6, Number(url.searchParams.get("limit")) || 20));
-  const query = (url.searchParams.get("q") || "").trim().toLowerCase();
+  if (!validHandle(handle)) throw new HttpError(400, "Codeforces Handle 无效");
+  const min = boundedInteger(url.searchParams.get("min"), { min: 800, max: 3500, fallback: 1200 });
+  const max = Math.max(min, boundedInteger(url.searchParams.get("max"), { min: 800, max: 3500, fallback: 1800 }));
+  const limit = boundedInteger(url.searchParams.get("limit"), { min: 6, max: 40, fallback: 20 });
+  const query = (url.searchParams.get("q") || "").trim().toLowerCase().slice(0, 120);
   const mode = ["balanced", "weakness", "upsolve", "speed", "boss", "review"].includes(url.searchParams.get("mode")) ? url.searchParams.get("mode") : "balanced";
-  const clientId = (url.searchParams.get("clientId") || "").trim();
+  const clientId = (url.searchParams.get("clientId") || "").trim().slice(0, 80);
   const requestedTags = [...new Set((url.searchParams.get("tags") || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))].slice(0, 8);
   const [problemset, submissions] = await Promise.all([getProblemset(), getSubmissions(handle, 1000)]);
   const training = getTrainingSignals(clientId, handle);
@@ -290,26 +327,16 @@ function pickCombined(pool, desiredCount, target, random) {
   return { selected: [...selected, ...rest].sort((a, b) => (a.rating || 0) - (b.rating || 0)), contestIds: chosenGroups.map((item) => item.contestId) };
 }
 
-async function readBody(request) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of request) {
-    size += chunk.length;
-    if (size > 64 * 1024) throw new Error("Request body too large");
-    chunks.push(chunk);
-  }
-  return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}");
-}
-
+const readBody = (request) => readJsonBody(request, { maxBytes: 64 * 1024 });
 const handleAuth = createAuthHandler({ json, readBody, clientIp });
 const handleStatements = createStatementHandler({ json, clientIp });
 
 async function generateVp(body) {
   const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
   const handle = participants[0];
-  const count = Math.max(5, Math.min(13, Number(body.count) || 10));
-  const targetRating = Math.max(800, Math.min(3000, Number(body.targetRating) || 1600));
-  const durationMinutes = Math.max(60, Math.min(300, Number(body.durationMinutes) || 180));
+  const count = boundedInteger(body.count, { min: 5, max: 13, fallback: 10 });
+  const targetRating = boundedInteger(body.targetRating, { min: 800, max: 3000, fallback: 1600 });
+  const durationMinutes = boundedInteger(body.durationMinutes, { min: 60, max: 300, fallback: 180 });
   const seed = String(body.seed || `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 64);
   const random = randomFromSeed(seed);
   const [problemset, submissions] = await Promise.all([getProblemset(), getSubmissions(handle, 1000)]);
@@ -320,17 +347,17 @@ async function generateVp(body) {
   let sourceContestIds = [];
   if (body.mode === "原场镜像") {
     const mirror = pickMirror(pool, count, targetRating, random);
-    if (!mirror) throw new Error("没有找到符合条件的历史比赛");
+    if (!mirror) throw new HttpError(422, "没有找到符合条件的历史比赛");
     selected = mirror.problems;
     sourceContestId = mirror.contestId;
     sourceContestIds = [mirror.contestId];
   } else if (body.mode === "多场组合") {
     const combined = pickCombined(pool, count, targetRating, random);
-    if (!combined) throw new Error("没有找到足够的历史比赛用于组合");
+    if (!combined) throw new HttpError(422, "没有找到足够的历史比赛用于组合");
     selected = combined.selected;
     sourceContestIds = combined.contestIds;
   } else selected = pickRandomSet(pool, count, targetRating, random);
-  if (selected.length < 5) throw new Error("可用题目不足，请调整组卷条件");
+  if (selected.length < 5) throw new HttpError(422, "可用题目不足，请调整组卷条件");
   if (!sourceContestIds.length) sourceContestIds = [...new Set(selected.map((problem) => problem.contestId))];
   const sourceContests = sourceContestIds.map((contestId) => {
     const sourceProblems = selected.filter((problem) => problem.contestId === contestId);
@@ -343,10 +370,10 @@ async function generateVp(body) {
 async function buildVpStandings(body) {
   const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
   const startedAt = Number(body.startedAt);
-  const durationMinutes = Math.max(60, Math.min(600, Number(body.durationMinutes) || 180));
-  if (!Number.isFinite(startedAt) || startedAt <= 0) throw new Error("比赛尚未开始");
+  const durationMinutes = boundedInteger(body.durationMinutes, { min: 60, max: 600, fallback: 180 });
+  if (!Number.isFinite(startedAt) || startedAt <= 0 || startedAt > Date.now() + 60_000) throw new HttpError(400, "比赛开始时间无效");
   const problems = Array.isArray(body.problems) ? body.problems.slice(0, 20).filter((item) => Number(item?.contestId) && /^[A-Z][0-9]?$/.test(String(item?.index || ""))) : [];
-  if (!problems.length) throw new Error("比赛题目为空");
+  if (!problems.length) throw new HttpError(400, "比赛题目为空");
   const startSeconds = Math.floor(startedAt / 1000);
   const endSeconds = startSeconds + durationMinutes * 60;
   const problemKeys = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, problem]));
@@ -379,21 +406,33 @@ async function buildVpStandings(body) {
 }
 
 const server = http.createServer(async (request, response) => {
+  const requestId = randomUUID();
+  response.setHeader("X-Request-Id", requestId);
+  response.setHeader("Referrer-Policy", "no-referrer");
+  response.setHeader("X-Frame-Options", "DENY");
+  if (String(request.url || "").length > 4096) return json(response, 414, { error: "请求地址过长", requestId });
   const url = new URL(request.url || "/", `http://${request.headers.host || "localhost"}`);
   const origin = String(request.headers.origin || "");
   if (ALLOWED_ORIGINS.has(origin)) {
     response.setHeader("Access-Control-Allow-Origin", origin);
     response.setHeader("Access-Control-Allow-Methods", "GET, POST, OPTIONS");
     response.setHeader("Access-Control-Allow-Headers", "Content-Type, Authorization");
+    response.setHeader("Access-Control-Expose-Headers", "X-Request-Id, Retry-After");
+    response.setHeader("Access-Control-Max-Age", "600");
     response.setHeader("Vary", "Origin");
   }
   if (request.method === "OPTIONS") return response.writeHead(ALLOWED_ORIGINS.has(origin) ? 204 : 403).end();
-  if (url.pathname === "/health") return json(response, 200, { status: "ok", service: "icpc-trainer-api", uptime: Math.round(process.uptime()) });
-  if (!allowRequest(request)) return json(response, 429, { error: "请求过于频繁" });
+  if (url.pathname === "/health") return request.method === "GET"
+    ? json(response, 200, { status: "ok", service: "icpc-trainer-api", uptime: Math.round(process.uptime()) })
+    : json(response, 405, { error: "Method not allowed", requestId }, { Allow: "GET" });
+  const rate = requestLimiter(clientIp(request));
+  response.setHeader("RateLimit-Limit", "90");
+  response.setHeader("RateLimit-Remaining", String(rate.remaining));
+  if (!rate.allowed) return json(response, 429, { error: "请求过于频繁", requestId }, { "Retry-After": String(rate.retryAfterSeconds) });
   try {
     if (await handleAuth(request, response, url)) return;
     if (await handleStatements(request, response, url)) return;
-    if (request.method === "GET" && url.pathname === "/problemset") return json(response, 200, { problems: await getProblemset() });
+    if (request.method === "GET" && url.pathname === "/problemset") return json(response, 200, { problems: await getProblemset() }, { "Cache-Control": "public, max-age=600" });
     if (request.method === "GET" && url.pathname === "/codeforces/problems") {
       const all = await getProblemset();
       const scope = url.searchParams.get("scope") || "all";
@@ -402,12 +441,12 @@ const server = http.createServer(async (request, response) => {
         const problem = all.find((item) => `${item.contestId}${item.index}`.toLowerCase() === code);
         return problem ? json(response, 200, { source: "codeforces", problem: publicProblem(problem) }) : json(response, 404, { error: "题目不存在" });
       }
-      const min = Math.max(800, Number(url.searchParams.get("min")) || 800);
-      const max = Math.min(3500, Number(url.searchParams.get("max")) || 3500);
-      const page = Math.max(1, Number(url.searchParams.get("page")) || 1);
-      const limit = Math.min(100, Math.max(20, Number(url.searchParams.get("limit")) || 60));
-      const query = (url.searchParams.get("q") || "").trim().toLowerCase();
-      const tags = [...new Set((url.searchParams.get("tags") || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))];
+      const min = boundedInteger(url.searchParams.get("min"), { min: 800, max: 3500, fallback: 800 });
+      const max = Math.max(min, boundedInteger(url.searchParams.get("max"), { min: 800, max: 3500, fallback: 3500 }));
+      const page = boundedInteger(url.searchParams.get("page"), { min: 1, max: 10_000, fallback: 1 });
+      const limit = boundedInteger(url.searchParams.get("limit"), { min: 20, max: 100, fallback: 60 });
+      const query = (url.searchParams.get("q") || "").trim().toLowerCase().slice(0, 120);
+      const tags = [...new Set((url.searchParams.get("tags") || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))].slice(0, 8);
       const filtered = all.filter((problem) => problem.type === "PROGRAMMING" && problem.contestId && problem.rating && problem.rating >= min && problem.rating <= max && !problem.tags.includes("interactive") && (!tags.length || tags.some((tag) => problem.tags.includes(tag))) && (!query || `${problem.contestId}${problem.index} ${problem.name} ${problem.tags.join(" ")}`.toLowerCase().includes(query))).sort((a, b) => (a.rating || 0) - (b.rating || 0) || (b.contestId || 0) - (a.contestId || 0) || a.index.localeCompare(b.index));
       const offset = (page - 1) * limit;
       return json(response, 200, { source: "codeforces", page, total: filtered.length, problems: filtered.slice(offset, offset + limit).map(publicProblem) }, { "Cache-Control": "public, max-age=600" });
@@ -415,7 +454,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "GET" && url.pathname === "/codeforces/recommendations") return json(response, 200, await recommendProblems(url), { "Cache-Control": "private, max-age=60" });
     if (request.method === "GET" && url.pathname === "/submissions/raw") {
       const handle = (url.searchParams.get("handle") || "").trim();
-      const count = Math.min(1000, Math.max(1, Number(url.searchParams.get("count")) || 100));
+      const count = boundedInteger(url.searchParams.get("count"), { min: 1, max: 1000, fallback: 100 });
       if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) return json(response, 400, { error: "Handle 无效" });
       return json(response, 200, { submissions: await getSubmissions(handle, count) });
     }
@@ -427,11 +466,28 @@ const server = http.createServer(async (request, response) => {
     }
     if (request.method === "POST" && url.pathname === "/vp/generate") return json(response, 200, await generateVp(await readBody(request)));
     if (request.method === "POST" && url.pathname === "/vp/standings") return json(response, 200, await buildVpStandings(await readBody(request)));
-    return json(response, 404, { error: "Not found" });
+    return json(response, 404, { error: "Not found", requestId });
   } catch (error) {
-    console.error(new Date().toISOString(), request.method, url.pathname, error);
-    return json(response, 502, { error: error instanceof Error ? error.message : "Upstream failure" });
+    const exposed = publicError(error, "服务暂时不可用，请稍后重试");
+    if (exposed.status >= 500) console.error(new Date().toISOString(), requestId, request.method, url.pathname, error);
+    return json(response, exposed.status, { error: exposed.message, requestId });
   }
 });
 
+server.requestTimeout = 70_000;
+server.headersTimeout = 15_000;
+server.keepAliveTimeout = 5_000;
+server.maxRequestsPerSocket = 1_000;
+server.on("clientError", (_error, socket) => {
+  if (socket.writable) socket.end("HTTP/1.1 400 Bad Request\r\nConnection: close\r\n\r\n");
+});
 server.listen(PORT, "0.0.0.0", () => console.log(`icpc-trainer-api listening on ${PORT}`));
+
+function shutdown(signal) {
+  console.log(`${signal}: closing icpc-trainer-api`);
+  server.close(() => process.exit(0));
+  setTimeout(() => process.exit(1), 10_000).unref();
+}
+
+process.once("SIGTERM", () => shutdown("SIGTERM"));
+process.once("SIGINT", () => shutdown("SIGINT"));

@@ -52,6 +52,9 @@ test("ships readable Chinese fallbacks and a QOJ-like cached statement reader", 
   assert.match(statementClient, /window\.Translator/);
   assert.match(statementClient, /katex\.render/);
   assert.match(statementClient, /tex-span/);
+  assert.match(statementClient, /cacheBrowserTranslation/);
+  assert.match(detailPage, /中文题面已保存到当前设备/);
+  assert.match(detailPage, /中文翻译正在排队重试/);
   const response = await render("/problem/2176C");
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -62,17 +65,24 @@ test("ships readable Chinese fallbacks and a QOJ-like cached statement reader", 
 });
 
 test("ships a constrained Manifest V3 statement and submit bridge", async () => {
-  const [manifestText, background] = await Promise.all([
+  const [manifestText, background, bridge, fill] = await Promise.all([
     readFile(new URL("extension/manifest.json", root), "utf8"),
     readFile(new URL("extension/background.js", root), "utf8"),
+    readFile(new URL("extension/trainer-bridge.js", root), "utf8"),
+    readFile(new URL("extension/codeforces-fill.js", root), "utf8"),
   ]);
   const manifest = JSON.parse(manifestText);
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.host_permissions.includes("https://codeforces.com/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "0.3.0");
+  assert.equal(manifest.version, "0.4.0");
+  assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
+  assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
   assert.match(background, /problem-statement/);
+  assert.match(bridge, /ICPC_TRAINER_SUBMIT_RESULT/);
+  assert.doesNotMatch(`${background}\n${bridge}\n${fill}`, /autoSubmit/);
+  assert.doesNotMatch(fill, /submitButton|\.click\s*\(/);
 });
 
 test("ships live multiplayer VP generation, combined contests, and standings", async () => {
@@ -117,6 +127,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(scoreboard, /run\.json/);
   assert.match(scoreboard, /freezeAtSeconds/);
   assert.match(scoreboard, /pendingAttempts/);
+  assert.match(scoreboard, /inFlight/);
+  assert.match(scoreboard, /staleUntil/);
   const response = await render("/vp/archive");
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -125,13 +137,14 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
 });
 
 test("ships the domestic API, cached statements, OCR, and local translation deployment", async () => {
-  const [backend, statements, compose, dockerfile, nginx, browserApi] = await Promise.all([
+  const [backend, statements, compose, dockerfile, nginx, browserApi, worker] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
     readFile(new URL("backend/statements.mjs", root), "utf8"),
     readFile(new URL("backend/compose.yaml", root), "utf8"),
     readFile(new URL("backend/Dockerfile", root), "utf8"),
     readFile(new URL("deploy/nginx-icpc-trainer.conf", root), "utf8"),
     readFile(new URL("app/lib/browser-api.ts", root), "utf8"),
+    readFile(new URL("worker/index.ts", root), "utf8"),
   ]);
   assert.match(backend, /\/vp\/generate/);
   assert.match(backend, /\/submissions\/raw/);
@@ -146,12 +159,19 @@ test("ships the domestic API, cached statements, OCR, and local translation depl
   assert.match(statements, /TRANSLATOR_MODEL/);
   assert.match(statements, /stale-while-revalidate/);
   assert.match(statements, /translateBatch/);
+  assert.match(statements, /TRANSLATION_VERSION = 22/);
+  assert.match(statements, /edge\.microsoft\.com\/translate\/auth/);
+  assert.match(statements, /json_schema/);
+  assert.match(statements, /processedBlocks/);
   assert.match(compose, /127\.0\.0\.1:8787:8787/);
   assert.match(compose, /ggml-org\/llama\.cpp:server/);
+  assert.match(compose, /condition: service_healthy/);
   assert.match(dockerfile, /tesseract-ocr/);
   assert.match(nginx, /\/icpc-api\//);
   assert.match(nginx, /114\.55\.130\.137/);
   assert.match(browserApi, /https:\/\/114\.55\.130\.137\/icpc-api/);
+  assert.match(worker, /X-Frame-Options/);
+  assert.match(worker, /Permissions-Policy/);
 });
 
 test("ships invite-only authentication and administration", async () => {
@@ -171,6 +191,21 @@ test("ships invite-only authentication and administration", async () => {
   assert.match(login, /ACCOUNT LOGIN/);
   assert.match(register, /inviteCode/);
   assert.match(admin, /生成邀请码/);
+  assert.match(admin, /撤销/);
+  assert.match(admin, /反馈处理状态/);
+});
+
+test("uses one validated training profile across dashboard, catalog, submissions, and VP", async () => {
+  const [preferences, home, catalog, submissions, vp] = await Promise.all([
+    readFile(new URL("app/lib/preferences.ts", root), "utf8"),
+    readFile(new URL("app/page.tsx", root), "utf8"),
+    readFile(new URL("app/problem/page.tsx", root), "utf8"),
+    readFile(new URL("app/submissions/page.tsx", root), "utf8"),
+    readFile(new URL("app/vp/page.tsx", root), "utf8"),
+  ]);
+  assert.match(preferences, /validCodeforcesHandle/);
+  assert.match(preferences, /dailyGoal/);
+  for (const source of [home, catalog, submissions, vp]) assert.match(source, /readTrainerPreferences/);
 });
 
 test("ships a deliberate-practice loop and collects user experience feedback", async () => {

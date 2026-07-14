@@ -2,9 +2,11 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from "next/link";
-import { type CSSProperties, useCallback, useEffect, useMemo, useState } from "react";
+import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import { archiveContests, archiveProblemUrl, findArchiveContest } from "../../data/archive-contests";
+import { readTrainerPreferences } from "../../lib/preferences";
+import { readStoredJson, removeStoredValue, writeStoredJson } from "../../lib/storage";
 
 type ProblemState = { solved: boolean; wrongAttempts: number; pendingAttempts: number; solvedMinutes: number | null };
 type StandingRow = { rank: number; teamId: string; name: string; organization: string; groups: string[]; solved: number; penalty: number; lastSolvedMinutes: number | null; problems: Record<string, ProblemState>; mine?: boolean };
@@ -24,6 +26,14 @@ type Session = { contestId: string; startedAt?: number; reveal: boolean; group: 
 
 const STORAGE_KEY = "icpc-trainer-archive-vp";
 
+function isSession(value: unknown): value is Session {
+  if (!value || typeof value !== "object") return false;
+  const item = value as Partial<Session>;
+  if (typeof item.contestId !== "string" || !findArchiveContest(item.contestId) || typeof item.reveal !== "boolean" || typeof item.group !== "string" || item.group.length > 100 || typeof item.myTeam !== "string" || item.myTeam.length > 80 || !item.attempts || typeof item.attempts !== "object") return false;
+  if (item.startedAt !== undefined && (!Number.isFinite(item.startedAt) || Number(item.startedAt) <= 0)) return false;
+  return Object.entries(item.attempts).length <= 26 && Object.entries(item.attempts).every(([slot, attempt]) => /^[A-Z]$/.test(slot) && Number.isInteger(attempt?.wrong) && attempt.wrong >= 0 && attempt.wrong <= 100 && (attempt.solvedAt === undefined || Number.isFinite(attempt.solvedAt)));
+}
+
 function clock(seconds: number) {
   const value = Math.max(0, Math.floor(seconds));
   return `${String(Math.floor(value / 3600)).padStart(2, "0")}:${String(Math.floor(value % 3600 / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
@@ -39,17 +49,20 @@ export default function ArchiveVpPage() {
   const [message, setMessage] = useState("");
   const [now, setNow] = useState(0);
   const [teamQuery, setTeamQuery] = useState("");
+  const scoreboardRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
     setNow(Date.now());
-    const saved = localStorage.getItem(STORAGE_KEY);
-    if (saved) try { setSession(JSON.parse(saved)); } catch { localStorage.removeItem(STORAGE_KEY); }
+    const saved = readStoredJson<Session | null>(STORAGE_KEY, null, (value): value is Session | null => value === null || isSession(value));
+    if (saved) setSession(saved);
+    return () => scoreboardRequest.current?.abort();
   }, []);
 
   const saveSession = useCallback((next: Session | null) => {
     setSession(next);
-    if (next) localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
-    else localStorage.removeItem(STORAGE_KEY);
+    if (next) {
+      if (!writeStoredJson(STORAGE_KEY, next)) setMessage("浏览器无法保存本场补题进度");
+    } else removeStoredValue(STORAGE_KEY);
   }, []);
 
   const duration = scoreboard?.durationSeconds ?? 5 * 60 * 60;
@@ -58,20 +71,25 @@ export default function ArchiveVpPage() {
 
   const refresh = useCallback(async (silent = false) => {
     if (!session) return;
+    scoreboardRequest.current?.abort();
+    const controller = new AbortController();
+    scoreboardRequest.current = controller;
     if (!silent) setStatus("loading");
     try {
       const knownDuration = scoreboard?.durationSeconds ?? 5 * 60 * 60;
       const currentElapsed = session.startedAt ? Math.min(knownDuration, Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000))) : 0;
       const params = new URLSearchParams({ id: session.contestId, elapsed: String(currentElapsed), group: session.group, reveal: session.reveal ? "1" : "0" });
-      const response = await fetch(`/api/archive/scoreboard?${params}`, { cache: "no-store" });
+      const timeout = window.setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), 25_000);
+      const response = await fetch(`/api/archive/scoreboard?${params}`, { cache: "no-store", signal: controller.signal }).finally(() => window.clearTimeout(timeout));
       const data = await response.json() as ScoreboardPayload;
       if (!response.ok) throw new Error(data.error || "真实榜单读取失败");
       setScoreboard(data);
       setStatus("idle");
       setMessage(`已同步 ${data.rows.length} 支队伍、${data.contest.runCount} 条原场提交`);
     } catch (error) {
+      if (controller.signal.aborted && scoreboardRequest.current !== controller) return;
       if (!silent) setStatus("error");
-      setMessage(error instanceof Error ? error.message : "真实榜单读取失败");
+      setMessage(silent ? "自动同步失败，已保留上次榜单；可手动重试" : error instanceof Error ? error.message : "真实榜单读取失败");
     }
   }, [scoreboard, session]);
 
@@ -133,7 +151,7 @@ export default function ArchiveVpPage() {
   }, [combinedRows, teamQuery]);
 
   function chooseContest(contestId: string) {
-    saveSession({ contestId, reveal: false, group: "all", myTeam: "ShallowDream2", attempts: {} });
+    saveSession({ contestId, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {} });
     setScoreboard(null);
   }
 
@@ -178,7 +196,7 @@ export default function ArchiveVpPage() {
     </section>
     <div className="archive-timeline"><i style={{ width: `${progress}%` }} /><span className="freeze-marker" style={{ left: `${(scoreboard?.freezeAtSeconds || duration * .8) / duration * 100}%` }}>封榜</span></div>
     <section className="contest-actions archive-actions">
-      {!session.startedAt ? <button className="button button-primary" onClick={() => { const startedAt = Date.now(); saveSession({ ...session, startedAt }); setNow(startedAt); }}>开始 5 小时 VP</button> : <button className="button button-primary" onClick={() => void refresh()} disabled={status === "loading"}>{status === "loading" ? "同步中…" : "立即同步原场榜"}</button>}
+      {!session.startedAt ? <button className="button button-primary" onClick={() => { const startedAt = Date.now(); saveSession({ ...session, startedAt }); setNow(startedAt); }}>开始 VP</button> : <button className="button button-primary" onClick={() => void refresh()} disabled={status === "loading"}>{status === "loading" ? "同步中…" : "立即同步原场榜"}</button>}
       {finished && !session.reveal ? <button className="button button-primary reveal-button" onClick={() => saveSession({ ...session, reveal: true })}>比赛结束 · 揭榜</button> : null}
       {session.reveal ? <button className="button button-ghost" onClick={() => saveSession({ ...session, reveal: false })}>恢复封榜视图</button> : null}
       <a className="button button-ghost" href={scoreboard?.contest.boardUrl} target="_blank" rel="noreferrer">核对 XCPCIO 原榜 ↗</a>

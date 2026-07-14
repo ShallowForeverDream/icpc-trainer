@@ -2,10 +2,14 @@ import { createHash, randomBytes, scryptSync, timingSafeEqual } from "node:crypt
 import { mkdirSync } from "node:fs";
 import { dirname } from "node:path";
 import { DatabaseSync } from "node:sqlite";
+import { HttpError, boundedInteger, createWindowLimiter, publicError } from "./http-utils.mjs";
 
 const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const SESSION_TTL = 30 * 24 * 60 * 60 * 1000;
-const loginAttempts = new Map();
+const loginLimiter = createWindowLimiter({ windowMs: 15 * 60_000, limit: 10, maxEntries: 2048 });
+const loginIpLimiter = createWindowLimiter({ windowMs: 15 * 60_000, limit: 30, maxEntries: 2048 });
+const registrationLimiter = createWindowLimiter({ windowMs: 60 * 60_000, limit: 20, maxEntries: 2048 });
+const feedbackLimiter = createWindowLimiter({ windowMs: 60 * 60_000, limit: 12, maxEntries: 2048 });
 
 mkdirSync(dirname(DB_PATH), { recursive: true });
 const db = new DatabaseSync(DB_PATH);
@@ -68,9 +72,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback(created_at DESC);
 `);
 
-class AuthError extends Error {
-  constructor(status, message) { super(message); this.status = status; }
-}
+class AuthError extends HttpError {}
 
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 const now = () => Date.now();
@@ -93,10 +95,16 @@ function passwordRecord(password) {
 }
 
 function passwordMatches(password, salt, expectedHex) {
-  const actual = scryptSync(String(password || ""), salt, 64);
-  const expected = Buffer.from(expectedHex, "hex");
-  return actual.length === expected.length && timingSafeEqual(actual, expected);
+  try {
+    const actual = scryptSync(String(password || ""), String(salt || ""), 64);
+    const expected = Buffer.from(String(expectedHex || ""), "hex");
+    return actual.length === expected.length && timingSafeEqual(actual, expected);
+  } catch {
+    return false;
+  }
 }
+
+const DUMMY_PASSWORD = passwordRecord(randomBytes(24).toString("base64url"));
 
 function publicUser(user) {
   return { id: Number(user.id), email: user.email, role: user.role, mustChangePassword: Boolean(user.must_change_password), createdAt: new Date(user.created_at).toISOString() };
@@ -107,6 +115,7 @@ function createSession(user) {
   const createdAt = now();
   db.prepare("DELETE FROM sessions WHERE expires_at <= ?").run(createdAt);
   db.prepare("INSERT INTO sessions (token_hash, user_id, expires_at, created_at) VALUES (?, ?, ?, ?)").run(sha256(token), user.id, createdAt + SESSION_TTL, createdAt);
+  db.prepare("DELETE FROM sessions WHERE user_id = ? AND id NOT IN (SELECT id FROM sessions WHERE user_id = ? ORDER BY created_at DESC LIMIT 10)").run(user.id, user.id);
   return { token, expiresAt: new Date(createdAt + SESSION_TTL).toISOString(), user: publicUser(user) };
 }
 
@@ -115,7 +124,7 @@ function bearerToken(request) {
   return header.startsWith("Bearer ") ? header.slice(7).trim() : "";
 }
 
-function requireUser(request) {
+export function authenticateRequest(request) {
   const token = bearerToken(request);
   if (!token) throw new AuthError(401, "请先登录");
   const user = db.prepare(`SELECT users.* FROM sessions JOIN users ON users.id = sessions.user_id WHERE sessions.token_hash = ? AND sessions.expires_at > ?`).get(sha256(token), now());
@@ -124,14 +133,15 @@ function requireUser(request) {
 }
 
 function requireAdmin(request) {
-  const user = requireUser(request);
+  const user = authenticateRequest(request);
   if (user.role !== "admin") throw new AuthError(403, "仅管理员可访问");
+  if (user.must_change_password) throw new AuthError(403, "请先在账号中心修改初始密码");
   return user;
 }
 
 function optionalUser(request) {
   if (!bearerToken(request)) return null;
-  try { return requireUser(request); } catch { return null; }
+  try { return authenticateRequest(request); } catch { return null; }
 }
 
 function normalizeClientId(value) {
@@ -204,18 +214,14 @@ export function getTrainingSignals(clientIdValue, handleValue) {
 }
 
 function checkLoginLimit(ip, email) {
+  const ipResult = loginIpLimiter(ip);
+  if (!ipResult.allowed) throw new AuthError(429, `登录尝试过多，请 ${Math.ceil(ipResult.retryAfterSeconds / 60)} 分钟后重试`);
   const key = `${ip}:${email}`;
-  const current = now();
-  const state = loginAttempts.get(key);
-  if (!state || current - state.startedAt > 15 * 60_000) {
-    loginAttempts.set(key, { startedAt: current, count: 1 });
-    return;
-  }
-  state.count += 1;
-  if (state.count > 10) throw new AuthError(429, "登录尝试过多，请 15 分钟后重试");
+  const result = loginLimiter(key);
+  if (!result.allowed) throw new AuthError(429, `登录尝试过多，请 ${Math.ceil(result.retryAfterSeconds / 60)} 分钟后重试`);
 }
 
-function clearLoginLimit(ip, email) { loginAttempts.delete(`${ip}:${email}`); }
+function clearLoginLimit(ip, email) { loginLimiter.reset(`${ip}:${email}`); }
 
 function inviteCode() {
   const alphabet = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -234,7 +240,7 @@ function bootstrapAdmin() {
   const password = validatePassword(configuredPassword);
   const record = passwordRecord(password);
   db.prepare("INSERT INTO users (email, password_hash, password_salt, role, must_change_password, created_at) VALUES (?, ?, ?, 'admin', 1, ?)").run(email, record.hash, record.salt, now());
-  console.log(`bootstrap admin created: ${email}`);
+  console.log("bootstrap admin created");
 }
 
 bootstrapAdmin();
@@ -244,6 +250,8 @@ export function createAuthHandler({ json, readBody, clientIp }) {
     if (!url.pathname.startsWith("/auth/") && !url.pathname.startsWith("/admin/") && !url.pathname.startsWith("/training/") && url.pathname !== "/feedback") return false;
     try {
       if (request.method === "POST" && url.pathname === "/auth/register") {
+        const registrationRate = registrationLimiter(clientIp(request));
+        if (!registrationRate.allowed) throw new AuthError(429, `注册尝试过多，请 ${Math.ceil(registrationRate.retryAfterSeconds / 60)} 分钟后重试`);
         const body = await readBody(request);
         const email = normalizeEmail(body.email);
         const password = validatePassword(body.password);
@@ -276,14 +284,17 @@ export function createAuthHandler({ json, readBody, clientIp }) {
         const email = normalizeEmail(body.email);
         checkLoginLimit(clientIp(request), email);
         const user = db.prepare("SELECT * FROM users WHERE email = ?").get(email);
-        if (!user || !passwordMatches(body.password, user.password_salt, user.password_hash)) throw new AuthError(401, "邮箱或密码错误");
+        const validPassword = user
+          ? passwordMatches(body.password, user.password_salt, user.password_hash)
+          : passwordMatches(body.password, DUMMY_PASSWORD.salt, DUMMY_PASSWORD.hash);
+        if (!user || !validPassword) throw new AuthError(401, "邮箱或密码错误");
         clearLoginLimit(clientIp(request), email);
         json(response, 200, createSession(user));
         return true;
       }
 
       if (request.method === "GET" && url.pathname === "/auth/me") {
-        json(response, 200, { user: publicUser(requireUser(request)) });
+        json(response, 200, { user: publicUser(authenticateRequest(request)) });
         return true;
       }
 
@@ -295,10 +306,11 @@ export function createAuthHandler({ json, readBody, clientIp }) {
       }
 
       if (request.method === "POST" && url.pathname === "/auth/change-password") {
-        const user = requireUser(request);
+        const user = authenticateRequest(request);
         const body = await readBody(request);
         if (!passwordMatches(body.currentPassword, user.password_salt, user.password_hash)) throw new AuthError(400, "当前密码不正确");
         const newPassword = validatePassword(body.newPassword);
+        if (passwordMatches(newPassword, user.password_salt, user.password_hash)) throw new AuthError(400, "新密码不能与当前密码相同");
         const record = passwordRecord(newPassword);
         db.prepare("UPDATE users SET password_hash = ?, password_salt = ?, must_change_password = 0 WHERE id = ?").run(record.hash, record.salt, user.id);
         db.prepare("DELETE FROM sessions WHERE user_id = ? AND token_hash != ?").run(user.id, sha256(bearerToken(request)));
@@ -336,6 +348,8 @@ export function createAuthHandler({ json, readBody, clientIp }) {
       }
 
       if (request.method === "POST" && url.pathname === "/feedback") {
+        const feedbackRate = feedbackLimiter(clientIp(request));
+        if (!feedbackRate.allowed) throw new AuthError(429, "本小时反馈提交过多，请稍后再试");
         const body = await readBody(request);
         const clientId = normalizeClientId(body.clientId);
         const category = String(body.category || "体验建议").trim().slice(0, 40);
@@ -374,8 +388,8 @@ export function createAuthHandler({ json, readBody, clientIp }) {
       if (request.method === "POST" && url.pathname === "/admin/invites") {
         const admin = requireAdmin(request);
         const body = await readBody(request);
-        const maxUses = Math.max(1, Math.min(100, Number(body.maxUses) || 1));
-        const expiresInDays = Math.max(1, Math.min(365, Number(body.expiresInDays) || 7));
+        const maxUses = boundedInteger(body.maxUses, { min: 1, max: 100, fallback: 1 });
+        const expiresInDays = boundedInteger(body.expiresInDays, { min: 1, max: 365, fallback: 7 });
         const code = inviteCode();
         const createdAt = now();
         const expiresAt = createdAt + expiresInDays * 24 * 60 * 60 * 1000;
@@ -384,11 +398,35 @@ export function createAuthHandler({ json, readBody, clientIp }) {
         return true;
       }
 
+      if (request.method === "POST" && url.pathname === "/admin/invites/revoke") {
+        requireAdmin(request);
+        const body = await readBody(request);
+        const id = boundedInteger(body.id, { min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 0 });
+        if (!id) throw new AuthError(400, "邀请码记录无效");
+        const result = db.prepare("UPDATE invites SET expires_at = ? WHERE id = ? AND expires_at > ? AND used_count < max_uses").run(now(), id, now());
+        if (!result.changes) throw new AuthError(404, "邀请码不存在或已经失效");
+        json(response, 200, { ok: true });
+        return true;
+      }
+
+      if (request.method === "POST" && url.pathname === "/admin/feedback/status") {
+        requireAdmin(request);
+        const body = await readBody(request);
+        const id = boundedInteger(body.id, { min: 1, max: Number.MAX_SAFE_INTEGER, fallback: 0 });
+        const status = String(body.status || "");
+        if (!id || !["new", "reviewed", "planned", "done"].includes(status)) throw new AuthError(400, "反馈状态无效");
+        const result = db.prepare("UPDATE feedback SET status = ? WHERE id = ?").run(status, id);
+        if (!result.changes) throw new AuthError(404, "反馈不存在");
+        json(response, 200, { ok: true });
+        return true;
+      }
+
       json(response, 404, { error: "Not found" });
     } catch (error) {
-      const status = error instanceof AuthError ? error.status : 500;
+      const exposed = publicError(error, "账号服务暂时不可用");
+      const status = exposed.status;
       if (status === 500) console.error(new Date().toISOString(), request.method, url.pathname, error);
-      json(response, status, { error: error instanceof Error ? error.message : "账号服务异常" });
+      json(response, status, { error: exposed.message });
     }
     return true;
   };

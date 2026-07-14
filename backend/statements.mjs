@@ -6,19 +6,25 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { DatabaseSync } from "node:sqlite";
 import { load } from "cheerio";
+import { authenticateRequest } from "./auth.mjs";
+import { HttpError, createWindowLimiter, pruneMap, publicError, readJsonBody } from "./http-utils.mjs";
 import { datasetRowToStatement, normalizeStatementCode, parseCodeforcesStatement, sanitizeStatementHtml } from "./statement-parser.mjs";
 
 const execFileAsync = promisify(execFile);
 const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
-const TRANSLATION_VERSION = 11;
-const USER_AGENT = "icpc-trainer-statement-importer/0.3 (+https://icpc-lab-trainer.zhuj7933.chatgpt.site)";
+const TRANSLATION_VERSION = 22;
+const FAST_TRANSLATOR_AUTH_URL = "https://edge.microsoft.com/translate/auth";
+const FAST_TRANSLATOR_URL = "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=zh-Hans";
+const USER_AGENT = "icpc-trainer-statement-importer/0.4 (+https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site)";
 const importJobs = new Map();
 const recentTranslationAttempts = new Map();
-const importWindows = new Map();
+const queuedTranslations = new Set();
+const importLimiter = createWindowLimiter({ windowMs: 60 * 60_000, limit: 120, maxEntries: 2048 });
 let translationQueue = Promise.resolve();
-let modelReadyPromise = null;
+let fastTranslatorToken = "";
+let fastTranslatorTokenExpiresAt = 0;
 
 mkdirSync(dirname(DB_PATH), { recursive: true });
 const db = new DatabaseSync(DB_PATH);
@@ -57,6 +63,43 @@ if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => 
 const now = () => Date.now();
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
 
+function isCodeforcesUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && /(^|\.)codeforces\.(com|org)$/.test(url.hostname.toLowerCase());
+  } catch {
+    return false;
+  }
+}
+
+async function fetchCodeforcesResource(value, options = {}, maxRedirects = 3) {
+  let url = String(value);
+  for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
+    if (!isCodeforcesUrl(url)) throw new HttpError(400, "Codeforces 资源地址无效");
+    const response = await fetch(url, { ...options, redirect: "manual" });
+    if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+    const location = response.headers.get("location");
+    if (!location || redirect === maxRedirects) throw new HttpError(502, "Codeforces 资源重定向异常");
+    url = new URL(location, url).href;
+  }
+  throw new HttpError(502, "Codeforces 资源重定向过多");
+}
+
+async function readLimitedBuffer(response, maxBytes) {
+  const declared = Number(response.headers.get("content-length") || 0);
+  if (Number.isFinite(declared) && declared > maxBytes) throw new HttpError(413, "远程资源大小超出限制");
+  const chunks = [];
+  let size = 0;
+  if (!response.body) return Buffer.alloc(0);
+  for await (const chunk of response.body) {
+    const buffer = Buffer.from(chunk);
+    size += buffer.length;
+    if (size > maxBytes) throw new HttpError(413, "远程资源大小超出限制");
+    chunks.push(buffer);
+  }
+  return Buffer.concat(chunks);
+}
+
 function statementRow(code) {
   return db.prepare("SELECT * FROM problem_statements WHERE code = ?").get(code);
 }
@@ -92,7 +135,34 @@ function publicStatement(row) {
     images: safeImages(row.images_json),
     status: row.status,
     message: row.error || null,
+    cacheScope: "shared",
     updatedAt: new Date(row.updated_at).toISOString(),
+  };
+}
+
+function formulaCounts(html) {
+  const counts = new Map();
+  for (const match of String(html || "").matchAll(/\${3}[\s\S]*?\${3}/g)) counts.set(match[0], (counts.get(match[0]) || 0) + 1);
+  return counts;
+}
+
+function formulasMatch(sourceHtml, translatedHtml) {
+  const source = formulaCounts(sourceHtml);
+  const translated = formulaCounts(translatedHtml);
+  return source.size === translated.size && [...source].every(([formula, count]) => translated.get(formula) === count);
+}
+
+function deviceTranslationPreview(row, chineseHtml, images) {
+  return {
+    ...publicStatement(row),
+    chineseHtml,
+    images,
+    translationVersion: 0,
+    translationCurrent: false,
+    revalidating: false,
+    status: "ready_preview",
+    message: "浏览器本地译文仅保存在当前设备；服务器译文完成后会自动替换",
+    cacheScope: "device",
   };
 }
 
@@ -135,14 +205,13 @@ async function fetchText(url, timeoutMs = 25_000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
   try {
-    const response = await fetch(url, {
-      redirect: "follow",
+    const response = await fetchCodeforcesResource(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" },
       signal: controller.signal,
     });
-    const text = await response.text();
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
-    return { text, finalUrl: response.url };
+    const buffer = await readLimitedBuffer(response, 4 * 1024 * 1024);
+    return { text: buffer.toString("utf8"), finalUrl: response.url };
   } finally {
     clearTimeout(timeout);
   }
@@ -155,11 +224,14 @@ async function fetchDatasetRow(parsed) {
     try {
       const controller = new AbortController();
       const timeout = setTimeout(() => controller.abort(), 18_000);
-      const response = await fetch(`https://datasets-server.huggingface.co/filter?dataset=open-r1/codeforces&config=default&split=${split}&length=1&where=${where}`, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
-      clearTimeout(timeout);
-      if (!response.ok) continue;
-      const payload = await response.json();
-      if (payload.rows?.[0]?.row) return payload.rows[0].row;
+      try {
+        const response = await fetch(`https://datasets-server.huggingface.co/filter?dataset=open-r1/codeforces&config=default&split=${split}&length=1&where=${where}`, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
+        if (!response.ok) continue;
+        const payload = await response.json();
+        if (payload.rows?.[0]?.row) return payload.rows[0].row;
+      } finally {
+        clearTimeout(timeout);
+      }
     } catch {
       // Continue to the next split or the browser extension fallback.
     }
@@ -169,6 +241,10 @@ async function fetchDatasetRow(parsed) {
 
 async function importOriginal(parsed) {
   if (importJobs.has(parsed.code)) return importJobs.get(parsed.code);
+  if (importJobs.size >= 32) {
+    setStatus(parsed.code, "source_required", "题面导入队列繁忙，请稍后重试或使用浏览器扩展");
+    return null;
+  }
   const job = (async () => {
     setStatus(parsed.code, "importing");
     const urls = [
@@ -180,7 +256,7 @@ async function importOriginal(parsed) {
         const page = await fetchText(url);
         const document = parseCodeforcesStatement(page.text, page.finalUrl, parsed.code);
         saveOriginal(document);
-        queueTranslation(parsed.code);
+        if (!queueTranslation(parsed.code)) setStatus(parsed.code, "ready_original", "原题面已就绪；中文翻译将在稍后开始");
         return document;
       } catch {
         // Codeforces may challenge datacenter IPs. The extension and dataset fallbacks handle this.
@@ -190,7 +266,7 @@ async function importOriginal(parsed) {
     if (row) {
       const document = datasetRowToStatement(row, parsed.code);
       saveOriginal(document);
-      queueTranslation(parsed.code);
+      if (!queueTranslation(parsed.code)) setStatus(parsed.code, "ready_original", "原题面已就绪；中文翻译将在稍后开始");
       return document;
     }
     setStatus(parsed.code, "source_required", "需要浏览器扩展读取 Codeforces 原题面");
@@ -214,29 +290,118 @@ async function translatorFetch(path, options = {}, timeoutMs = 120_000) {
   }
 }
 
-async function ensureTranslationModel(code) {
-  if (!TRANSLATOR_BASE_URL) throw new Error("未配置本地中文翻译模型");
-  if (modelReadyPromise) return modelReadyPromise;
-  modelReadyPromise = (async () => {
-    setStatus(code, "model_downloading", `首次使用正在下载或载入本地翻译模型 ${TRANSLATOR_MODEL}`);
-    for (let attempt = 0; attempt < 180; attempt += 1) {
-      try {
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8_000);
-        const response = await fetch(`${TRANSLATOR_BASE_URL}/health`, { signal: controller.signal });
-        clearTimeout(timeout);
-        if (response.ok) return true;
-      } catch {
-        // llama.cpp downloads and loads the GGUF model during its first start.
-      }
-      await new Promise((resolve) => setTimeout(resolve, 10_000));
-    }
-    throw new Error("本地翻译模型启动超时");
-  })().catch((error) => {
-    modelReadyPromise = null;
-    throw error;
+async function fetchWithTimeout(url, options = {}, timeoutMs = 15_000) {
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  try {
+    return await fetch(url, { ...options, signal: controller.signal });
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function fastTranslatorAccessToken(forceRefresh = false) {
+  if (!forceRefresh && fastTranslatorToken && now() < fastTranslatorTokenExpiresAt) return fastTranslatorToken;
+  const response = await fetchWithTimeout(FAST_TRANSLATOR_AUTH_URL, {
+    headers: { "User-Agent": USER_AGENT, Accept: "text/plain" },
+  }, 12_000);
+  const token = (await response.text()).trim();
+  if (!response.ok || token.length < 100) throw new Error(`快速翻译鉴权 HTTP ${response.status}`);
+  fastTranslatorToken = token;
+  // Edge translator tokens are short lived. Refresh conservatively instead of
+  // decoding or persisting the bearer token.
+  fastTranslatorTokenExpiresAt = now() + 8 * 60_000;
+  return token;
+}
+
+function applySourceGlossary(value) {
+  const replacements = [
+    [/\bgreatest common divisor\b/gi, "最大公约数"],
+    [/\bleast common multiple\b/gi, "最小公倍数"],
+    [/\bconnected components?\b/gi, "连通块"],
+    [/\bpositive integers?\b/gi, "正整数"],
+    [/\btest cases?\b/gi, "测试用例"],
+    [/\bsubsequences?\b/gi, "子序列"],
+    [/\bsubarrays?\b/gi, "子数组"],
+    [/\bpermutations?\b/gi, "排列"],
+    [/\binversions?\b/gi, "逆序"],
+    [/\b(?:index|indices)\b/gi, "下标"],
+    [/\bsegments?\b/gi, "区间"],
+    [/\boperations?\b/gi, "操作"],
+    [/\b(?:query|queries)\b/gi, "询问"],
+    [/\b(?:vertex|vertices)\b/gi, "顶点"],
+    [/\bedges?\b/gi, "边"],
+    [/\bintegers?\b/gi, "整数"],
+    [/\bsequences?\b/gi, "序列"],
+    [/\bdistinct\b/gi, "互不相同"],
+    [/\bat most\b/gi, "至多"],
+    [/\bat least\b/gi, "至少"],
+  ];
+  return replacements.reduce((text, [pattern, replacement]) => text.replace(pattern, replacement), value);
+}
+
+async function translateFastBatch(texts, retry = true) {
+  const literalMaps = [];
+  const formulaMaps = [];
+  const input = texts.map((text) => {
+    const formulas = [];
+    const locallyNumbered = text.replace(/ICPCMATH\d+END/g, (original) => {
+      const local = `ICPCMATH${formulas.length}END`;
+      formulas.push({ local, original });
+      return local;
+    });
+    const literals = [];
+    const masked = locallyNumbered.replace(/\b(?:YES|NO)\b/g, (literal) => {
+      const placeholder = `ICPCLITERAL${literals.length}END`;
+      literals.push({ placeholder, literal });
+      return placeholder;
+    });
+    literalMaps.push(literals);
+    formulaMaps.push(formulas);
+    return applySourceGlossary(masked);
   });
-  return modelReadyPromise;
+  const token = await fastTranslatorAccessToken(!retry);
+  const response = await fetchWithTimeout(FAST_TRANSLATOR_URL, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${token}`,
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "User-Agent": USER_AGENT,
+    },
+    body: JSON.stringify(input.map((Text) => ({ Text }))),
+  }, 25_000);
+  if (response.status === 401 && retry) {
+    fastTranslatorToken = "";
+    fastTranslatorTokenExpiresAt = 0;
+    return translateFastBatch(texts, false);
+  }
+  const payload = await response.json().catch(() => null);
+  if (!response.ok || !Array.isArray(payload) || payload.length !== texts.length) throw new Error(`快速翻译 HTTP ${response.status}`);
+  return texts.map((source, index) => {
+    let translated = String(payload[index]?.translations?.[0]?.text || "").trim();
+    if (!translated) return null;
+    for (let formulaIndex = 0; formulaIndex < formulaMaps[index].length; formulaIndex += 1) {
+      const { local } = formulaMaps[index][formulaIndex];
+      const flexible = new RegExp(local.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "gi");
+      if ([...translated.matchAll(flexible)].length !== 1) return null;
+      translated = translated.replace(flexible, () => `ICPCRESTORE${formulaIndex}END`);
+    }
+    for (let formulaIndex = 0; formulaIndex < formulaMaps[index].length; formulaIndex += 1) {
+      translated = translated.replace(`ICPCRESTORE${formulaIndex}END`, () => formulaMaps[index][formulaIndex].original);
+    }
+    const placeholders = [...new Set(source.match(/ICPCMATH\d+END/g) || [])];
+    for (const placeholder of placeholders) {
+      const flexible = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "gi");
+      if ([...translated.matchAll(flexible)].length !== 1) return null;
+    }
+    for (const { placeholder, literal } of literalMaps[index]) {
+      const flexible = new RegExp(placeholder.replace("ICPCLITERAL", "ICPC\\s*LITERAL\\s*").replace("END", "\\s*END"), "gi");
+      if ([...translated.matchAll(flexible)].length !== 1) return null;
+      translated = translated.replace(flexible, () => literal);
+    }
+    return polishChinese(translated);
+  });
 }
 
 async function translateChunk(texts) {
@@ -275,6 +440,11 @@ async function translateChunk(texts) {
     let result = String(payload.choices?.[0]?.message?.content || "").trim();
     result = result.replace(/^```(?:text|markdown)?\s*/i, "").replace(/\s*```$/, "").replace(/^(?:译文|翻译)[:：]\s*/i, "").trim();
     if ((result.startsWith('"') && result.endsWith('"')) || (result.startsWith("“") && result.endsWith("”"))) result = result.slice(1, -1).trim();
+    // Every real formula is replaced with an ICPCMATH placeholder before the
+    // model sees this text. Any dollar fences returned here are therefore
+    // model-authored decoration; remove only the fences before restoring the
+    // exact source formulas.
+    result = result.replaceAll("$$$", "");
     return result;
   }
 
@@ -318,10 +488,27 @@ async function translateChunk(texts) {
 
 function polishChinese(value) {
   return String(value)
+    .replace(/^你会得到/, "给定")
+    .replace(/^给你/, "给定")
     .replaceAll("阵列", "数组")
+    .replaceAll("置换", "排列")
+    .replaceAll("排列组合", "排列")
+    .replaceAll("反演", "逆序")
+    .replaceAll("倒装", "逆序")
     .replaceAll("键入", "输入")
     .replaceAll("索引", "下标")
+    .replaceAll("指标", "下标")
     .replaceAll("测试案例", "测试用例")
+    .replaceAll("测试事例", "测试用例")
+    .replaceAll("命题运算", "操作")
+    .replaceAll("打印", "输出")
+    .replaceAll("互换", "交换")
+    .replaceAll("解决方案", "答案")
+    .replaceAll("下标的对", "下标对")
+    .replace(/(ICPCMATH\d+END)\s*元素/g, "$1 个元素")
+    .replace(/排列是从(ICPCMATH\d+END)到(ICPCMATH\d+END)的(ICPCMATH\d+END)\s*个元素组成的数组/g, "排列是由$3个取值在$1到$2之间的元素组成的数组")
+    .replace(/存在(ICPCMATH\d+END)逆序/g, "有$1个逆序")
+    .replace(/存在(\$\$\$[\s\S]*?\$\$\$)逆序/g, "有$1个逆序")
     .replaceAll("金币", "硬币")
     .replaceAll("袋中会空掉", "袋子会被清空")
     .replace(/硬币总金额/g, "硬币面值总和")
@@ -331,6 +518,10 @@ function polishChinese(value) {
     .replace(/您/g, "你")
     .replace(/\s+([，。；：！？])/g, "$1")
     .trim();
+}
+
+function escapeHtml(value) {
+  return String(value).replaceAll("&", "&amp;").replaceAll("<", "&lt;").replaceAll(">", "&gt;").replaceAll('"', "&quot;").replaceAll("'", "&#039;");
 }
 
 async function translateTexts(texts) {
@@ -350,15 +541,30 @@ async function translateTexts(texts) {
   if (current.length) batches.push(current);
 
   for (const batch of batches) {
-    if (batch.length === 1) {
-      translated.push(...await translateChunk(batch));
-      continue;
-    }
     try {
-      translated.push(...await translateBatch(batch));
+      // The fast translator is much less prone to adding explanations or
+      // malformed JSON than a tiny local generative model, and normally
+      // finishes an entire statement in seconds. Formula placeholders are
+      // still verified before accepting every item.
+      const results = await translateFastBatch(batch);
+      for (let index = 0; index < batch.length; index += 1) {
+        if (results[index]) translated.push(results[index]);
+        else translated.push(...await translateChunk([batch[index]]));
+      }
     } catch {
-      // A small local model may occasionally return malformed JSON. Keep the
-      // reliable paragraph translator as a narrow fallback for that batch.
+      if (batch.length > 1) {
+        try {
+          const results = await translateBatch(batch);
+          for (let index = 0; index < batch.length; index += 1) {
+            if (results[index]) translated.push(results[index]);
+            else translated.push(...await translateChunk([batch[index]]));
+          }
+          continue;
+        } catch {
+          // A small local model may occasionally return malformed JSON. Keep
+          // the paragraph translator as the final narrow fallback.
+        }
+      }
       for (const text of batch) translated.push(...await translateChunk([text]));
     }
   }
@@ -372,7 +578,7 @@ async function translateBatch(texts) {
     "先理解逻辑再按自然中文语序表达，不得逐词硬译，不得解题、删减条件或补充信息。量词、奇偶性、上下界、先后顺序和充分必要关系必须准确。",
     "术语统一：array=数组，index=下标，segment/subarray=区间/子数组，operation=操作，query=询问，distinct=互不相同，at most=至多，at least=至少。禁止使用“阵列”“键入”“您”。",
     "变量名、数字、公式、代码标识符、YES/NO 和所有 ICPCMATH数字END 占位符必须原样保留；每个占位符须恰好出现一次。",
-    "只返回合法 JSON 数组，元素数量、顺序和 id 必须与输入相同，格式为 [{\"id\":0,\"text\":\"中文译文\"}]。不要输出 Markdown 或说明。",
+    `只返回包含 ${texts.length} 条译文的 JSON 对象，格式为 {\"translations\":[\"译文1\",\"译文2\"]}。数组数量和顺序必须与输入相同，不要输出 Markdown 或说明。`,
     JSON.stringify(input),
   ].join("\n");
   const payload = await translatorFetch("/v1/chat/completions", {
@@ -382,27 +588,36 @@ async function translateBatch(texts) {
       model: TRANSLATOR_MODEL,
       temperature: 0,
       max_tokens: Math.min(3600, Math.max(600, Math.ceil(texts.join("").length * 1.6))),
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "statement_translations",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: { translations: { type: "array", items: { type: "string" }, minItems: texts.length, maxItems: texts.length } },
+            required: ["translations"],
+            additionalProperties: false,
+          },
+        },
+      },
       messages: [
         { role: "system", content: "你是严谨的中文算法竞赛题面编辑，并且只输出符合要求的 JSON。" },
         { role: "user", content: prompt },
       ],
     }),
   }, 5 * 60_000);
-  const raw = String(payload.choices?.[0]?.message?.content || "").trim()
-    .replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
-  const start = raw.indexOf("[");
-  const end = raw.lastIndexOf("]");
-  if (start < 0 || end <= start) throw new Error("批量翻译未返回 JSON 数组");
-  const parsed = JSON.parse(raw.slice(start, end + 1));
-  if (!Array.isArray(parsed) || parsed.length !== texts.length) throw new Error("批量翻译片段数量不一致");
+  const raw = String(payload.choices?.[0]?.message?.content || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed?.translations) || parsed.translations.length !== texts.length) throw new Error("批量翻译片段数量不一致");
   return texts.map((source, id) => {
-    const item = parsed[id];
-    if (Number(item?.id) !== id || typeof item?.text !== "string" || !item.text.trim()) throw new Error("批量翻译片段顺序无效");
-    const translated = item.text.trim();
+    const item = parsed.translations[id];
+    if (typeof item !== "string" || !item.trim()) return null;
+    const translated = item.trim().replaceAll("$$$", "");
     const placeholders = [...new Set(source.match(/ICPCMATH\d+END/g) || [])];
     for (const placeholder of placeholders) {
       const flexible = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "gi");
-      if ([...translated.matchAll(flexible)].length !== 1) throw new Error(`批量翻译未保留公式占位符 ${placeholder}`);
+      if ([...translated.matchAll(flexible)].length !== 1) return null;
     }
     return polishChinese(translated);
   });
@@ -416,10 +631,37 @@ async function translateHtml(originalHtml, sourceUrl) {
     if (translated) $(element).text(translated);
   });
   const records = [];
+  const processedBlocks = new Set();
   let formulaIndex = 0;
+  // Translate complete natural-language blocks instead of the tiny text nodes
+  // around every inline formula. This both improves Chinese sentence order and
+  // reduces a typical statement from dozens of model calls to a few batches.
+  $("#translation-root").find("p, li, td, th, figcaption").each((_, element) => {
+    if ($(element).parents("pre, code, .section-title").length || $(element).find("p, li, td, th, figcaption, img, a, pre, code").length) return;
+    const clone = $(element).clone();
+    const originalFormulas = $(element).find(".tex-span").toArray();
+    const formulas = [];
+    clone.find(".tex-span").each((index, formulaNode) => {
+      const placeholder = `ICPCMATH${formulaIndex++}END`;
+      const formulaElement = originalFormulas[index];
+      formulas.push({ placeholder, html: formulaElement ? $.html(formulaElement) : "" });
+      $(formulaNode).replaceWith(placeholder);
+    });
+    let source = clone.text();
+    source = source.replace(/\${3}[\s\S]*?\${3}/g, (formula) => {
+      const placeholder = `ICPCMATH${formulaIndex++}END`;
+      formulas.push({ placeholder, html: escapeHtml(formula) });
+      return placeholder;
+    }).replace(/\s+/g, " ").trim();
+    if (!/[A-Za-z]{2}/.test(source.replace(/ICPCMATH\d+END/g, ""))) return;
+    processedBlocks.add(element);
+    records.push({ kind: "block", element, trimmed: source, formulas });
+  });
+
   $("#translation-root").find("*").contents().each((_, node) => {
     if (node.type !== "text") return;
     if ($(node).parents("pre, code, .tex-span, .section-title").length) return;
+    if ($(node).parents().toArray().some((parent) => processedBlocks.has(parent))) return;
     const raw = node.data || "";
     const fixedHeading = fixedHeadings.get(raw.trim().toLowerCase());
     if (fixedHeading) {
@@ -433,17 +675,27 @@ async function translateHtml(originalHtml, sourceUrl) {
       formulas.push({ placeholder, formula });
       return placeholder;
     });
-    records.push({ node, raw, trimmed: masked.trim(), formulas });
+    records.push({ kind: "text", node, raw, trimmed: masked.trim(), formulas });
   });
   const unique = [...new Set(records.map((record) => record.trimmed))];
   const translations = await translateTexts(unique);
   const map = new Map(unique.map((item, index) => [item, translations[index]]));
   for (const record of records) {
+    if (record.kind === "block") {
+      let html = escapeHtml(map.get(record.trimmed) || record.trimmed);
+      for (const { placeholder, html: formulaHtml } of record.formulas) {
+        const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
+        if (!flexiblePlaceholder.test(html)) throw new Error(`翻译模型未保留公式占位符 ${placeholder}`);
+        html = html.replace(flexiblePlaceholder, () => formulaHtml);
+      }
+      $(record.element).html(html);
+      continue;
+    }
     let translated = map.get(record.trimmed) || record.trimmed;
     for (const { placeholder, formula } of record.formulas) {
       const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
       if (!flexiblePlaceholder.test(translated)) throw new Error(`翻译模型未保留公式占位符 ${placeholder}`);
-      translated = translated.replace(flexiblePlaceholder, formula);
+      translated = translated.replace(flexiblePlaceholder, () => formula);
     }
     const prefix = record.raw.match(/^\s*/)?.[0] || "";
     const suffix = record.raw.match(/\s*$/)?.[0] || "";
@@ -465,12 +717,12 @@ async function downloadImage(image, code) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
-    const response = await fetch(image.sourceUrl, { headers: { "User-Agent": USER_AGENT, Referer: `https://codeforces.com/problemset/problem/${code.replace(/([A-Z])/, "/$1")}` }, signal: controller.signal });
+    const response = await fetchCodeforcesResource(image.sourceUrl, { headers: { "User-Agent": USER_AGENT, Referer: `https://codeforces.com/problemset/problem/${code.replace(/([A-Z])/, "/$1")}` }, signal: controller.signal });
     if (!response.ok) throw new Error(`图片 HTTP ${response.status}`);
     const contentType = String(response.headers.get("content-type") || "").split(";")[0].toLowerCase();
     if (!contentType.startsWith("image/")) throw new Error("资源不是图片");
-    const buffer = Buffer.from(await response.arrayBuffer());
-    if (!buffer.length || buffer.length > 6 * 1024 * 1024) throw new Error("图片大小超出限制");
+    const buffer = await readLimitedBuffer(response, 6 * 1024 * 1024);
+    if (!buffer.length) throw new Error("图片内容为空");
     const id = sha256(Buffer.concat([Buffer.from(image.sourceUrl), buffer]));
     db.prepare("INSERT OR REPLACE INTO statement_assets (id, code, source_url, content_type, body, created_at) VALUES (?, ?, ?, ?, ?, ?)").run(id, code, image.sourceUrl, contentType, buffer, now());
     return { ...image, assetId: id, contentType, ocrEn: await recognizeImageText(buffer, id, image.alt || image.title || "") };
@@ -499,8 +751,7 @@ async function translateStatement(code) {
   recentTranslationAttempts.set(code, now());
   let translationSaved = false;
   try {
-    setStatus(code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在生成中文题面");
-    await ensureTranslationModel(code);
+    setStatus(code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在快速生成并校对中文题面");
     const chineseHtml = await translateHtml(row.original_html, row.source_url);
     db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, now(), code);
     translationSaved = true;
@@ -522,41 +773,35 @@ async function translateStatement(code) {
     }
     db.prepare("UPDATE problem_statements SET images_json = ?, updated_at = ? WHERE code = ?").run(JSON.stringify(images), now(), code);
   } catch (error) {
+    recentTranslationAttempts.set(code, now());
     const message = error instanceof Error ? error.message : "中文翻译失败";
+    console.error("statement translation failed", code, message);
     if (translationSaved) setStatus(code, "ready", null);
-    else setStatus(code, "ready_original", `原题面已就绪；中文翻译稍后重试：${message}`);
+    else setStatus(code, "ready_original", "原题面已就绪；中文翻译服务暂时不可用，将在稍后重试");
   }
 }
 
 function queueTranslation(code) {
+  if (queuedTranslations.has(code)) return true;
   const last = recentTranslationAttempts.get(code) || 0;
-  if (now() - last < 45_000) return;
+  if (now() - last < 45_000) return false;
+  if (queuedTranslations.size >= 32) {
+    setStatus(code, "ready_original", "原题面已就绪；中文翻译队列繁忙，将在稍后重试");
+    return false;
+  }
   recentTranslationAttempts.set(code, now());
-  translationQueue = translationQueue.then(() => translateStatement(code)).catch((error) => console.error("statement translation queue", error));
+  queuedTranslations.add(code);
+  if (recentTranslationAttempts.size > 512) pruneMap(recentTranslationAttempts, (timestamp) => now() - timestamp > 24 * 60 * 60_000, 512);
+  translationQueue = translationQueue
+    .catch(() => undefined)
+    .then(() => translateStatement(code))
+    .catch((error) => console.error("statement translation queue", error))
+    .finally(() => queuedTranslations.delete(code));
+  return true;
 }
 
 function allowImport(ip, bucket, limit) {
-  const key = `${ip}:${bucket}`;
-  const timestamp = now();
-  const current = importWindows.get(key);
-  if (!current || timestamp - current.startedAt > 60 * 60_000) {
-    importWindows.set(key, { startedAt: timestamp, count: 1 });
-    return true;
-  }
-  current.count += 1;
-  return current.count <= limit;
-}
-
-async function readJsonBody(request, maxBytes = 2 * 1024 * 1024) {
-  const chunks = [];
-  let size = 0;
-  for await (const chunk of request) {
-    size += chunk.length;
-    if (size > maxBytes) throw Object.assign(new Error("题面数据过大"), { status: 413 });
-    chunks.push(chunk);
-  }
-  try { return JSON.parse(Buffer.concat(chunks).toString("utf8") || "{}"); }
-  catch { throw Object.assign(new Error("请求 JSON 无效"), { status: 400 }); }
+  return importLimiter(`${ip}:${bucket}`, limit);
 }
 
 function codeFromSourceUrl(sourceUrl) {
@@ -576,7 +821,7 @@ export function createStatementHandler({ json, clientIp }) {
       if (request.method === "GET" && assetMatch) {
         const asset = db.prepare("SELECT content_type, body FROM statement_assets WHERE id = ?").get(assetMatch[1]);
         if (!asset) return json(response, 404, { error: "图片不存在" }), true;
-        response.writeHead(200, { "Content-Type": asset.content_type, "Content-Length": asset.body.length, "Cache-Control": "public, max-age=31536000, immutable", "X-Content-Type-Options": "nosniff" });
+        response.writeHead(200, { "Content-Type": asset.content_type, "Content-Length": asset.body.length, "Cache-Control": "public, max-age=31536000, immutable", "Content-Security-Policy": "default-src 'none'; sandbox", "X-Content-Type-Options": "nosniff" });
         response.end(asset.body);
         return true;
       }
@@ -590,11 +835,11 @@ export function createStatementHandler({ json, clientIp }) {
           void importOriginal(parsed);
           row = statementRow(parsed.code);
         } else if (row.original_html && (!row.chinese_html || Number(row.translation_version || 0) < TRANSLATION_VERSION)) {
-          if (row.status !== "translating" && row.status !== "model_downloading") {
+          const queued = queueTranslation(parsed.code);
+          if (queued && row.status !== "translating" && row.status !== "model_downloading") {
             setStatus(parsed.code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在生成中文题面");
             row = statementRow(parsed.code);
           }
-          queueTranslation(parsed.code);
         } else if (!row.original_html && row.status === "source_required" && now() - row.updated_at > 10 * 60_000) {
           void importOriginal(parsed);
         }
@@ -602,39 +847,49 @@ export function createStatementHandler({ json, clientIp }) {
       }
 
       if (request.method === "POST" && url.pathname === "/codeforces/statements/import") {
-        if (!allowImport(clientIp(request), "statement", 120)) return json(response, 429, { error: "本小时导入题面过多，请稍后再试" }), true;
-        const body = await readJsonBody(request);
+        const user = authenticateRequest(request);
+        const rate = allowImport(clientIp(request), "statement", 120);
+        if (!rate.allowed) return json(response, 429, { error: "本小时导入题面过多，请稍后再试" }, { "Retry-After": String(rate.retryAfterSeconds) }), true;
+        const body = await readJsonBody(request, { maxBytes: 2 * 1024 * 1024 });
         const parsed = normalizeStatementCode(body.code);
         if (!parsed || codeFromSourceUrl(body.sourceUrl) !== parsed.code) return json(response, 400, { error: "题号或原题地址无效" }), true;
+        const existing = statementRow(parsed.code);
+        if (existing?.original_html && (user.role !== "admin" || user.must_change_password)) return json(response, 200, { statement: publicStatement(existing) }), true;
         const document = parseCodeforcesStatement(String(body.html || ""), String(body.sourceUrl), parsed.code);
         saveOriginal(document);
-        queueTranslation(parsed.code);
+        if (!queueTranslation(parsed.code)) setStatus(parsed.code, "ready_original", "原题面已就绪；中文翻译将在稍后开始");
         return json(response, 201, { statement: publicStatement(statementRow(parsed.code)) }), true;
       }
 
       if (request.method === "POST" && url.pathname === "/codeforces/statements/translation") {
-        if (!allowImport(clientIp(request), "translation", 30)) return json(response, 429, { error: "本小时提交翻译过多，请稍后再试" }), true;
-        const body = await readJsonBody(request);
+        const user = authenticateRequest(request);
+        const rate = allowImport(clientIp(request), "translation", 30);
+        if (!rate.allowed) return json(response, 429, { error: "本小时提交翻译过多，请稍后再试" }, { "Retry-After": String(rate.retryAfterSeconds) }), true;
+        const body = await readJsonBody(request, { maxBytes: 2 * 1024 * 1024 });
         const parsed = normalizeStatementCode(body.code);
         const row = parsed ? statementRow(parsed.code) : null;
         if (!parsed || !row?.original_html) return json(response, 404, { error: "原题面尚未导入" }), true;
         const chineseHtml = sanitizeStatementHtml(String(body.chineseHtml || ""), row.source_url).html;
         if (load(chineseHtml, {}, false).text().trim().length < 20) return json(response, 400, { error: "中文题面内容为空" }), true;
+        if (!formulasMatch(row.original_html, chineseHtml)) return json(response, 400, { error: "浏览器译文改变了数学公式，已拒绝保存" }), true;
         const existingImages = safeImages(row.images_json);
         const submitted = Array.isArray(body.imageTranslations) ? body.imageTranslations : [];
         for (const image of existingImages) {
           const matched = submitted.find((item) => item?.sourceUrl === image.sourceUrl && typeof item.ocrZh === "string");
           if (matched) image.ocrZh = matched.ocrZh.trim().slice(0, 4000);
         }
-        db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, JSON.stringify(existingImages), now(), parsed.code);
-        return json(response, 200, { statement: publicStatement(statementRow(parsed.code)) }), true;
+        if (user.role === "admin" && !user.must_change_password) {
+          db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, JSON.stringify(existingImages), now(), parsed.code);
+          return json(response, 200, { statement: publicStatement(statementRow(parsed.code)) }), true;
+        }
+        return json(response, 200, { statement: deviceTranslationPreview(row, chineseHtml, existingImages) }), true;
       }
 
       return json(response, 404, { error: "Not found" }), true;
     } catch (error) {
-      const status = Number(error?.status) || 502;
-      console.error(new Date().toISOString(), request.method, url.pathname, error);
-      return json(response, status, { error: error instanceof Error ? error.message : "题面服务异常" }), true;
+      const exposed = publicError(error, "题面服务暂时不可用");
+      if (exposed.status >= 500) console.error(new Date().toISOString(), request.method, url.pathname, error);
+      return json(response, exposed.status, { error: exposed.message }), true;
     }
   };
 }

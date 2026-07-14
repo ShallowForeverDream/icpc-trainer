@@ -1,9 +1,10 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { FormEvent, useCallback, useEffect, useMemo, useState } from "react";
+import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, Icon, ProblemRow } from "../components/AppShell";
-import { browserApiUrl } from "../lib/browser-api";
+import { apiJson } from "../lib/api-client";
+import { readTrainerPreferences } from "../lib/preferences";
 import { getTrainingClientId } from "../lib/training-client";
 
 type CatalogProblem = { code: string; contestId: number; index: string; title: string; rating: number; tags: string[]; status?: string; reason?: string };
@@ -23,6 +24,7 @@ const practiceModes: Array<{ id: PracticeMode; title: string; meta: string; badg
 ];
 
 export default function ProblemLibraryPage() {
+  const [handle, setHandle] = useState("ShallowDream2");
   const [mode, setMode] = useState<"recommended" | "catalog">("recommended");
   const [practiceMode, setPracticeMode] = useState<PracticeMode>("balanced");
   const [concealMeta, setConcealMeta] = useState(true);
@@ -36,14 +38,18 @@ export default function ProblemLibraryPage() {
   const [message, setMessage] = useState("");
   const [page, setPage] = useState(1);
   const [total, setTotal] = useState(0);
+  const requestRef = useRef<AbortController | null>(null);
   const pageSize = 40;
 
-  const loadProblems = useCallback(async (nextPage = 1, nextMode: "recommended" | "catalog" = mode, nextPracticeMode: PracticeMode = practiceMode) => {
+  const loadProblems = useCallback(async (nextPage = 1, nextMode: "recommended" | "catalog" = mode, nextPracticeMode: PracticeMode = practiceMode, nextHandle = handle) => {
+    requestRef.current?.abort();
+    const controller = new AbortController();
+    requestRef.current = controller;
     setSyncState("syncing");
     setMessage("");
     const params = new URLSearchParams({ min: String(minRating), max: String(maxRating), q: query, tags: selectedTags.join(",") });
     if (nextMode === "recommended") {
-      params.set("handle", "ShallowDream2");
+      params.set("handle", nextHandle);
       params.set("limit", "40");
       params.set("mode", nextPracticeMode);
       params.set("clientId", getTrainingClientId());
@@ -55,28 +61,30 @@ export default function ProblemLibraryPage() {
     }
     try {
       const endpoint = nextMode === "recommended" ? "/codeforces/recommendations" : "/codeforces/problems";
-      const response = await fetch(browserApiUrl(`${endpoint}?${params}`), { cache: "no-store" });
-      const data = await response.json();
-      if (!response.ok) throw new Error(data.error ?? "加载失败");
+      const data = await apiJson<{ problems?: CatalogProblem[]; profile?: Profile; page?: number; total?: number }>(`${endpoint}?${params}`, { cache: "no-store", signal: controller.signal });
       setProblems(data.problems ?? []);
       setProfile(nextMode === "recommended" ? data.profile ?? null : null);
       setPage(data.page ?? 1);
       setTotal(data.total ?? data.problems?.length ?? 0);
       setSyncState("live");
     } catch (error) {
+      if (controller.signal.aborted) return;
       setProblems([]);
       setMessage(error instanceof Error ? error.message : "题库暂时不可用");
       setSyncState("error");
     }
-  }, [maxRating, minRating, mode, practiceMode, query, selectedTags]);
+  }, [handle, maxRating, minRating, mode, practiceMode, query, selectedTags]);
 
   useEffect(() => {
     const params = new URLSearchParams(location.search);
     const requested = params.get("mode") as PracticeMode | null;
     const nextPracticeMode = practiceModes.some((item) => item.id === requested) ? requested! : "balanced";
+    const savedHandle = readTrainerPreferences().codeforcesHandle;
+    setHandle(savedHandle);
     setPracticeMode(nextPracticeMode);
     setConcealMeta(params.get("training") !== "0");
-    void loadProblems(1, "recommended", nextPracticeMode);
+    void loadProblems(1, "recommended", nextPracticeMode, savedHandle);
+    return () => requestRef.current?.abort();
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleTag(tag: string) {
@@ -94,7 +102,7 @@ export default function ProblemLibraryPage() {
 
   return <AppShell active="题库">
     <section className="problem-library-head">
-      <div><h1>不要刷更多题，要练对下一题。</h1><p>结合 ShallowDream2 的 AC、WA、未完成题与训练复盘，选择当前最有训练价值的一题。</p></div>
+      <div><h1>不要刷更多题，要练对下一题。</h1><p>结合 {handle} 的 AC、WA、未完成题与训练复盘，选择当前最有训练价值的一题。</p></div>
       <button className="button button-primary" onClick={() => void loadProblems(1, mode)} disabled={syncState === "syncing"}><Icon name="history" /> {syncState === "syncing" ? "正在匹配…" : "刷新结果"}</button>
     </section>
 

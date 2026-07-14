@@ -4,7 +4,9 @@
 import { useEffect, useMemo, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { AppShell, Icon, ProblemRow } from "./components/AppShell";
-import { browserApiUrl } from "./lib/browser-api";
+import { apiJson } from "./lib/api-client";
+import { readTrainerPreferences, saveTrainerPreferences } from "./lib/preferences";
+import { readStoredJson, writeStoredJson } from "./lib/storage";
 import { getTrainingClientId, loadTrainingSummary, type TrainingSummary } from "./lib/training-client";
 
 type Recommendation = { code: string; title: string; titleZh?: string; rating: number; tags: string[]; reason?: string };
@@ -22,6 +24,7 @@ function dateKey(date: Date) {
 }
 
 export default function Home() {
+  const [handle, setHandle] = useState("ShallowDream2");
   const [goal, setGoal] = useState(4);
   const [manualActivity, setManualActivity] = useState<Record<string, number>>({});
   const [remoteActivity, setRemoteActivity] = useState<Record<string, number>>({});
@@ -31,21 +34,28 @@ export default function Home() {
   const [recommendations, setRecommendations] = useState<Recommendation[]>(fallbackRecommendations);
   const [batch, setBatch] = useState(0);
   const [syncing, setSyncing] = useState(true);
+  const [syncError, setSyncError] = useState("");
   const today = dateKey(new Date());
   const days = useMemo(() => Array.from({ length: 84 }, (_, index) => { const date = new Date(); date.setDate(date.getDate() - 83 + index); return dateKey(date); }), []);
 
   useEffect(() => {
-    try {
-      const saved = JSON.parse(localStorage.getItem("icpc-trainer-dashboard") ?? "{}");
-      if (saved.goal) setGoal(saved.goal);
-      if (saved.activity) setManualActivity(saved.activity);
-    } catch { localStorage.removeItem("icpc-trainer-dashboard"); }
+    const preferences = readTrainerPreferences();
+    setHandle(preferences.codeforcesHandle);
+    setGoal(preferences.dailyGoal);
+    const saved = readStoredJson<{ activity?: Record<string, number> }>("icpc-trainer-dashboard", {});
+    if (saved.activity && typeof saved.activity === "object") {
+      setManualActivity(Object.fromEntries(Object.entries(saved.activity).filter(([key, value]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && Number.isInteger(value) && value >= 0 && value <= 100)));
+    }
     const clientId = getTrainingClientId();
-    Promise.all([
-      fetch(browserApiUrl("/codeforces/submissions?handle=ShallowDream2"), { cache: "no-store" }).then((response) => response.json()),
-      fetch(browserApiUrl(`/codeforces/recommendations?handle=ShallowDream2&min=800&max=1600&limit=12&mode=balanced&clientId=${encodeURIComponent(clientId)}`), { cache: "no-store" }).then((response) => response.json()),
-      loadTrainingSummary(),
-    ]).then(([submissionData, recommendationData, summaryData]) => {
+    const controller = new AbortController();
+    Promise.allSettled([
+      apiJson<{ submissions?: Submission[] }>(`/codeforces/submissions?handle=${encodeURIComponent(preferences.codeforcesHandle)}`, { cache: "no-store", signal: controller.signal }),
+      apiJson<{ problems?: Recommendation[] }>(`/codeforces/recommendations?handle=${encodeURIComponent(preferences.codeforcesHandle)}&min=800&max=1600&limit=12&mode=balanced&clientId=${encodeURIComponent(clientId)}`, { cache: "no-store", signal: controller.signal }),
+      loadTrainingSummary(preferences.codeforcesHandle, controller.signal),
+    ]).then(([submissionResult, recommendationResult, summaryResult]) => {
+      if (controller.signal.aborted) return;
+      let failed = 0;
+      const submissionData = submissionResult.status === "fulfilled" ? submissionResult.value : (failed += 1, {});
       const nextSubmissions = Array.isArray(submissionData.submissions) ? submissionData.submissions as Submission[] : [];
       setSubmissions(nextSubmissions);
       const solvedPerDay: Record<string, number> = {};
@@ -57,15 +67,23 @@ export default function Home() {
         solvedPerDay[key] = (solvedPerDay[key] ?? 0) + 1;
       }
       setRemoteActivity(solvedPerDay);
+      const recommendationData = recommendationResult.status === "fulfilled" ? recommendationResult.value : (failed += 1, {});
       if (Array.isArray(recommendationData.problems) && recommendationData.problems.length) setRecommendations(recommendationData.problems);
-      setTrainingSummary(summaryData);
-      const trainedPerDay: Record<string, number> = {};
-      for (const item of summaryData.recent) {
-        const key = dateKey(new Date(item.createdAt));
-        trainedPerDay[key] = (trainedPerDay[key] ?? 0) + 1;
+      if (summaryResult.status === "fulfilled") {
+        const summaryData = summaryResult.value;
+        setTrainingSummary(summaryData);
+        const trainedPerDay: Record<string, number> = {};
+        for (const item of summaryData.recent) {
+          const key = dateKey(new Date(item.createdAt));
+          trainedPerDay[key] = (trainedPerDay[key] ?? 0) + 1;
+        }
+        setTrainingActivity(trainedPerDay);
+      } else {
+        failed += 1;
       }
-      setTrainingActivity(trainedPerDay);
-    }).catch(() => undefined).finally(() => setSyncing(false));
+      if (failed) setSyncError(failed === 3 ? "实时数据暂时不可用，已显示本地训练数据" : "部分实时数据同步失败，其余内容仍可使用");
+    }).finally(() => { if (!controller.signal.aborted) setSyncing(false); });
+    return () => controller.abort();
   }, []);
 
   const activity = useMemo(() => Object.fromEntries(days.map((key) => [key, Math.max(manualActivity[key] ?? 0, remoteActivity[key] ?? 0, trainingActivity[key] ?? 0)])), [days, manualActivity, remoteActivity, trainingActivity]);
@@ -87,7 +105,8 @@ export default function Home() {
   function saveDashboard(nextGoal: number, nextActivity = manualActivity) {
     setGoal(nextGoal);
     setManualActivity(nextActivity);
-    localStorage.setItem("icpc-trainer-dashboard", JSON.stringify({ goal: nextGoal, activity: nextActivity }));
+    try { saveTrainerPreferences({ codeforcesHandle: handle, dailyGoal: nextGoal }); } catch (error) { setSyncError(error instanceof Error ? error.message : "训练目标未能保存"); }
+    if (!writeStoredJson("icpc-trainer-dashboard", { activity: nextActivity })) setSyncError("浏览器无法保存训练记录");
   }
 
   function recordProblem() {
@@ -113,7 +132,7 @@ export default function Home() {
         <div className="daily-goal-copy"><span>每日目标</span><h2>{done >= goal ? "今日目标已完成" : `还差 ${goal - done} 题`}</h2><p>连续 {streak} 天 · 本周完成 {weeklyActivity} 题</p><div><button onClick={() => saveDashboard(Math.max(1, goal - 1))}>−</button><strong>{goal} 题/天</strong><button onClick={() => saveDashboard(goal + 1)}>＋</button><button className="complete-goal" onClick={recordProblem}>手动记一题</button></div></div>
       </article>
       <article className="recent-completed-card panel">
-        <div className="panel-head"><div><h2>最近完成</h2><p>{syncing ? "正在同步 Codeforces…" : `累计记录 ${totalActivity} 题`}</p></div><Link href="/submissions">全部记录 →</Link></div>
+        <div className="panel-head"><div><h2>最近完成</h2><p>{syncing ? `正在同步 ${handle}…` : syncError || `累计记录 ${totalActivity} 题`}</p></div><Link href="/submissions">全部记录 →</Link></div>
         <div className="recent-solve-list">{recentAccepted.length ? recentAccepted.map((item) => <Link href={`/problem/${item.code.replace("CF ", "")}`} key={item.id}><Icon name="check" /><span><b>{item.code} · {item.title}</b><small>{new Date(item.createdAt).toLocaleString("zh-CN", { month: "numeric", day: "numeric", hour: "2-digit", minute: "2-digit" })}</small></span></Link>) : <p className="dashboard-empty">还没有同步到近期 AC，完成一道题后会显示在这里。</p>}</div>
       </article>
     </section>

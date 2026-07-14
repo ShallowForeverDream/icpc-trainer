@@ -3,7 +3,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { AppShell, Icon } from "../components/AppShell";
 import { readAuth, saveAuth, type AuthSession } from "../lib/auth-client";
-import { browserApiUrl } from "../lib/browser-api";
+import { apiJson } from "../lib/api-client";
 
 export default function LoginPage() {
   const [email, setEmail] = useState("");
@@ -16,9 +16,7 @@ export default function LoginPage() {
   async function submit(event: FormEvent) {
     event.preventDefault(); setStatus("loading"); setMessage("");
     try {
-      const response = await fetch(browserApiUrl("/auth/login"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
-      const data = await response.json() as AuthSession & { error?: string };
-      if (!response.ok) throw new Error(data.error || "登录失败");
+      const data = await apiJson<AuthSession>("/auth/login", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password }) });
       saveAuth(data);
       location.href = data.user.mustChangePassword ? "/account" : data.user.role === "admin" ? "/admin" : "/";
     } catch (error) { setMessage(error instanceof Error ? error.message : "登录失败"); setStatus("error"); }

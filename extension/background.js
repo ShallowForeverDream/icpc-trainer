@@ -1,4 +1,14 @@
-chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+function trustedSender(sender) {
+  try {
+    const url = new URL(sender.url || "");
+    return url.origin === "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site"
+      || (url.protocol === "http:" && ["localhost", "127.0.0.1"].includes(url.hostname));
+  }
+  catch { return false; }
+}
+
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (!trustedSender(sender)) return;
   if (message?.type === "OPEN_CODEFORCES_SUBMIT" && /^https:\/\/codeforces\.com\/problemset\/submit/.test(message.url)) {
     chrome.tabs.create({ url: message.url });
     return;

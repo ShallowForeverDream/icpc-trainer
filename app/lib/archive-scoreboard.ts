@@ -29,7 +29,8 @@ export type ArchiveStandingRow = {
   problems: Record<string, ArchiveProblemState>;
 };
 
-const cache = new Map<string, { expiresAt: number; data: RawData }>();
+const cache = new Map<string, { expiresAt: number; staleUntil: number; data: RawData }>();
+const inFlight = new Map<string, Promise<RawData>>();
 const ignoredStatuses = new Set(["COMPILATION_ERROR", "PRESENTATION_ERROR", "CONFIGURATION_ERROR", "SYSTEM_ERROR", "CANCELED", "SKIPPED", "UNKNOWN", "UNDEFINED"]);
 const pendingStatuses = new Set(["PENDING", "WAITING", "COMPILING", "JUDGING", "FROZEN"]);
 const acceptedStatuses = new Set(["OK", "AC", "ACCEPTED", "CORRECT"]);
@@ -71,17 +72,29 @@ async function fetchJson(url: string) {
 async function loadRaw(contest: ArchiveContest): Promise<RawData> {
   const cached = cache.get(contest.boardPath);
   if (cached && cached.expiresAt > Date.now()) return cached.data;
-  const base = `https://board.xcpcio.com/data/${contest.boardPath}`;
-  const config = await fetchJson(`${base}/config.json`) as RawConfig;
-  const organizationUrl = config.organizations?.url;
-  const [teams, runs, organizations] = await Promise.all([
-    fetchJson(`${base}/team.json`),
-    fetchJson(`${base}/run.json`),
-    organizationUrl ? fetchJson(new URL(organizationUrl, `${base}/`).toString()).catch(() => []) : Promise.resolve([]),
-  ]);
-  const data = { config, teams: list(teams as RawTeam[] | Record<string, RawTeam>), runs: list(runs as RawRun[] | Record<string, RawRun>), organizations: list(organizations as RawOrganization[] | Record<string, RawOrganization>) };
-  cache.set(contest.boardPath, { expiresAt: Date.now() + 60 * 60_000, data });
-  return data;
+  const existing = inFlight.get(contest.boardPath);
+  if (existing) return existing;
+  const job = (async () => {
+    try {
+      const base = `https://board.xcpcio.com/data/${contest.boardPath}`;
+      const config = await fetchJson(`${base}/config.json`) as RawConfig;
+      const organizationUrl = config.organizations?.url;
+      const [teams, runs, organizations] = await Promise.all([
+        fetchJson(`${base}/team.json`),
+        fetchJson(`${base}/run.json`),
+        organizationUrl ? fetchJson(new URL(organizationUrl, `${base}/`).toString()).catch(() => []) : Promise.resolve([]),
+      ]);
+      const data = { config, teams: list(teams as RawTeam[] | Record<string, RawTeam>), runs: list(runs as RawRun[] | Record<string, RawRun>), organizations: list(organizations as RawOrganization[] | Record<string, RawOrganization>) };
+      cache.set(contest.boardPath, { expiresAt: Date.now() + 60 * 60_000, staleUntil: Date.now() + 24 * 60 * 60_000, data });
+      while (cache.size > 32) cache.delete(cache.keys().next().value!);
+      return data;
+    } catch (error) {
+      if (cached && cached.staleUntil > Date.now()) return cached.data;
+      throw error;
+    }
+  })().finally(() => inFlight.delete(contest.boardPath));
+  inFlight.set(contest.boardPath, job);
+  return job;
 }
 
 export function calculateArchiveStandings(raw: RawData, elapsedSeconds: number, reveal: boolean, group = "all") {

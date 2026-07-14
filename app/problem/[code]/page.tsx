@@ -7,10 +7,13 @@ import { useParams } from "next/navigation";
 import { AppShell, Icon } from "../../components/AppShell";
 import { findCuratedProblem } from "../../data/problems";
 import { findImportedStatement } from "../../data/problem-statements";
-import { browserApiUrl } from "../../lib/browser-api";
+import { apiJson } from "../../lib/api-client";
+import { readTrainerPreferences } from "../../lib/preferences";
+import { readStoredJson, readStoredString, removeStoredValue, writeStoredJson, writeStoredString } from "../../lib/storage";
 import { saveTrainingEvent, type TrainingDifficulty, type TrainingOutcome } from "../../lib/training-client";
 import {
   CachedStatement,
+  cacheBrowserTranslation,
   fetchStatementViaExtension,
   importStatementSource,
   loadStatement,
@@ -33,6 +36,20 @@ type DisplayProblem = {
 };
 
 type StatementLanguage = "original" | "chinese";
+type ThinkingRecord = { startedAt?: number | null; note?: string; hintLevel?: number; difficulty?: TrainingDifficulty };
+
+function isStringArray(value: unknown): value is string[] {
+  return Array.isArray(value) && value.length <= 500 && value.every((item) => typeof item === "string" && item.length <= 40);
+}
+
+function isThinkingRecord(value: unknown): value is ThinkingRecord {
+  if (!value || typeof value !== "object") return false;
+  const item = value as ThinkingRecord;
+  return (item.startedAt === undefined || item.startedAt === null || Number.isFinite(item.startedAt))
+    && (item.note === undefined || typeof item.note === "string")
+    && (item.hintLevel === undefined || Number.isInteger(item.hintLevel))
+    && (item.difficulty === undefined || ["easy", "right", "hard"].includes(item.difficulty));
+}
 
 const initialCode = `#include <bits/stdc++.h>
 using namespace std;
@@ -141,8 +158,8 @@ export default function ProblemDetailPage() {
   const extensionAttempted = useRef(false);
   const [favorite, setFavorite] = useState(false);
   const [code, setCode] = useState(initialCode);
-  const [submitState, setSubmitState] = useState<"idle" | "sent">("idle");
-  const [autoSubmit, setAutoSubmit] = useState(false);
+  const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "empty" | "missing">("idle");
+  const submitTimeout = useRef<number | null>(null);
   const [trainingMode, setTrainingMode] = useState(false);
   const [metaRevealed, setMetaRevealed] = useState(false);
   const [sessionStartedAt, setSessionStartedAt] = useState<number | null>(null);
@@ -182,12 +199,13 @@ export default function ProblemDetailPage() {
 
   useEffect(() => {
     if (curated) { setProblem(curated); return; }
-    fetch(browserApiUrl(`/codeforces/problems?scope=single&code=${encodeURIComponent(requestedCode)}`))
-      .then((response) => response.json())
+    const controller = new AbortController();
+    apiJson<{ problem?: Omit<DisplayProblem, "titleZh" | "summaryZh" | "inputZh" | "outputZh"> }>(`/codeforces/problems?scope=single&code=${encodeURIComponent(requestedCode)}`, { signal: controller.signal })
       .then((data) => {
         if (!data.problem) return;
         setProblem({ ...data.problem, titleZh: importedStatement?.titleZh ?? "中文题面首次打开后生成", summaryZh: "正在导入 Codeforces 原题并生成可切换的中文题面。", inputZh: "请查看原题面。", outputZh: "请查看原题面。" });
       }).catch(() => undefined);
+    return () => controller.abort();
   }, [curated, importedStatement, requestedCode]);
 
   useEffect(() => {
@@ -201,7 +219,8 @@ export default function ProblemDetailPage() {
 
   useEffect(() => {
     if (statement?.status === "ready") return;
-    const interval = window.setInterval(() => void refreshStatement(), statement?.chineseHtml ? 10_000 : 3500);
+    const delay = statement?.chineseHtml ? 10_000 : statement?.status === "ready_original" ? 15_000 : 3500;
+    const interval = window.setInterval(() => void refreshStatement(), delay);
     return () => window.clearInterval(interval);
   }, [refreshStatement, statement?.chineseHtml, statement?.status]);
 
@@ -218,10 +237,13 @@ export default function ProblemDetailPage() {
     setProblem((current) => ({ ...current, title: title || current.title }));
   }, [statement?.title]);
 
-  useEffect(() => { setCode(localStorage.getItem(`icpc-trainer-draft:${requestedCode}`) ?? initialCode); }, [requestedCode]);
-  useEffect(() => { localStorage.setItem(`icpc-trainer-draft:${requestedCode}`, code); }, [code, requestedCode]);
+  useEffect(() => { setCode(readStoredString(`icpc-trainer-draft:${requestedCode}`, initialCode)); }, [requestedCode]);
   useEffect(() => {
-    const favorites = JSON.parse(localStorage.getItem("icpc-trainer-favorites") ?? "[]") as string[];
+    const timeout = window.setTimeout(() => writeStoredString(`icpc-trainer-draft:${requestedCode}`, code), 300);
+    return () => window.clearTimeout(timeout);
+  }, [code, requestedCode]);
+  useEffect(() => {
+    const favorites = readStoredJson<string[]>("icpc-trainer-favorites", [], isStringArray);
     setFavorite(favorites.includes(problem.code));
   }, [problem.code]);
 
@@ -229,15 +251,13 @@ export default function ProblemDetailPage() {
     const enabled = new URLSearchParams(location.search).get("training") === "1";
     setTrainingMode(enabled);
     setMetaRevealed(!enabled);
-    try {
-      const saved = JSON.parse(localStorage.getItem(`icpc-trainer-thinking:${requestedCode}`) ?? "{}");
-      setThinkingNote(saved.note ?? "");
-      setHintLevel(Number(saved.hintLevel) || 0);
-      setDifficulty(["easy", "right", "hard"].includes(saved.difficulty) ? saved.difficulty : "right");
-      const startedAt = enabled ? Number(saved.startedAt) || Date.now() : null;
-      setSessionStartedAt(startedAt);
-      if (startedAt) localStorage.setItem(`icpc-trainer-thinking:${requestedCode}`, JSON.stringify({ ...saved, startedAt }));
-    } catch { localStorage.removeItem(`icpc-trainer-thinking:${requestedCode}`); }
+    const saved = readStoredJson<ThinkingRecord>(`icpc-trainer-thinking:${requestedCode}`, {}, isThinkingRecord);
+    setThinkingNote(saved.note?.slice(0, 10_000) ?? "");
+    setHintLevel(Math.min(3, Math.max(0, Number(saved.hintLevel) || 0)));
+    setDifficulty(saved.difficulty && ["easy", "right", "hard"].includes(saved.difficulty) ? saved.difficulty : "right");
+    const startedAt = enabled ? Number(saved.startedAt) || Date.now() : null;
+    setSessionStartedAt(startedAt);
+    if (startedAt) writeStoredJson(`icpc-trainer-thinking:${requestedCode}`, { ...saved, startedAt });
   }, [requestedCode]);
 
   useEffect(() => {
@@ -250,14 +270,30 @@ export default function ProblemDetailPage() {
 
   useEffect(() => {
     if (!trainingMode) return;
-    const previous = JSON.parse(localStorage.getItem(`icpc-trainer-thinking:${requestedCode}`) ?? "{}");
-    localStorage.setItem(`icpc-trainer-thinking:${requestedCode}`, JSON.stringify({ ...previous, startedAt: sessionStartedAt, note: thinkingNote, hintLevel, difficulty }));
+    const timeout = window.setTimeout(() => {
+      const previous = readStoredJson<ThinkingRecord>(`icpc-trainer-thinking:${requestedCode}`, {}, isThinkingRecord);
+      writeStoredJson(`icpc-trainer-thinking:${requestedCode}`, { ...previous, startedAt: sessionStartedAt, note: thinkingNote.slice(0, 10_000), hintLevel, difficulty });
+    }, 400);
+    return () => window.clearTimeout(timeout);
   }, [difficulty, hintLevel, requestedCode, sessionStartedAt, thinkingNote, trainingMode]);
 
+  useEffect(() => {
+    const receive = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin || event.data?.source !== "icpc-trainer-extension" || event.data?.type !== "ICPC_TRAINER_SUBMIT_RESULT") return;
+      if (submitTimeout.current) window.clearTimeout(submitTimeout.current);
+      setSubmitState(event.data.ok ? "sent" : "missing");
+    };
+    window.addEventListener("message", receive);
+    return () => {
+      window.removeEventListener("message", receive);
+      if (submitTimeout.current) window.clearTimeout(submitTimeout.current);
+    };
+  }, []);
+
   function toggleFavorite() {
-    const favorites = new Set<string>(JSON.parse(localStorage.getItem("icpc-trainer-favorites") ?? "[]"));
+    const favorites = new Set<string>(readStoredJson<string[]>("icpc-trainer-favorites", [], isStringArray));
     if (favorites.has(problem.code)) favorites.delete(problem.code); else favorites.add(problem.code);
-    localStorage.setItem("icpc-trainer-favorites", JSON.stringify([...favorites]));
+    writeStoredJson("icpc-trainer-favorites", [...favorites].slice(0, 500));
     setFavorite(favorites.has(problem.code));
   }
 
@@ -266,33 +302,53 @@ export default function ProblemDetailPage() {
     try {
       setStatementAction("正在检查 Chrome 本地翻译能力");
       const translated = await translateStatementInBrowser(statement.originalHtml, statement.images, setStatementAction);
-      setStatementAction("正在保存浏览器本地翻译");
-      const next = await submitBrowserTranslation(requestedCode, translated.chineseHtml, translated.images);
-      setStatement(next);
-      setStatementError("");
-      setStatementAction("中文题面已保存");
+      const local = cacheBrowserTranslation(statement, translated.chineseHtml, translated.images);
+      setStatement(local);
       setLanguage("chinese");
+      setStatementError("");
+      setStatementAction("中文题面已保存到当前设备，正在尝试同步共享缓存");
+      try {
+        const next = await submitBrowserTranslation(requestedCode, translated.chineseHtml, translated.images);
+        setStatement(next);
+        setStatementAction(next.cacheScope === "device" ? "中文题面已保存到当前设备" : "中文题面已保存并同步");
+      } catch {
+        setStatementAction("中文题面已保存到当前设备；登录后可同步共享缓存");
+      }
     } catch (error) {
       setStatementAction("");
       setStatementError(error instanceof Error ? error.message : "浏览器本地翻译失败");
     }
   }
 
-  function sendToExtension() {
+  const sendToExtension = useCallback(() => {
+    if (!code.trim()) {
+      setSubmitState("empty");
+      return;
+    }
     window.postMessage({
       source: "icpc-trainer",
       type: "ICPC_TRAINER_SUBMIT",
-      payload: { contestId: problem.contestId, index: problem.index, languageLabel: "GNU C++20", sourceCode: code, autoSubmit },
+      payload: { contestId: problem.contestId, index: problem.index, languageLabel: "GNU C++20", sourceCode: code },
     }, window.location.origin);
-    setSubmitState("sent");
-  }
+    setSubmitState("sending");
+    if (submitTimeout.current) window.clearTimeout(submitTimeout.current);
+    submitTimeout.current = window.setTimeout(() => setSubmitState("missing"), 1800);
+  }, [code, problem.contestId, problem.index]);
+
+  useEffect(() => {
+    const shortcut = (event: KeyboardEvent) => {
+      if ((event.metaKey || event.ctrlKey) && event.key === "Enter") { event.preventDefault(); sendToExtension(); }
+    };
+    window.addEventListener("keydown", shortcut);
+    return () => window.removeEventListener("keydown", shortcut);
+  }, [sendToExtension]);
 
   async function recordTraining(outcome: TrainingOutcome) {
     setTrainingState("saving");
     try {
-      await saveTrainingEvent({ code: requestedCode, outcome, durationMinutes: Math.max(1, Math.round(elapsedSeconds / 60)), hintLevel, difficulty, reflection: thinkingNote });
+      await saveTrainingEvent({ handle: readTrainerPreferences().codeforcesHandle, code: requestedCode, outcome, durationMinutes: Math.max(1, Math.round(elapsedSeconds / 60)), hintLevel, difficulty, reflection: thinkingNote });
       setTrainingState("saved");
-      localStorage.removeItem(`icpc-trainer-thinking:${requestedCode}`);
+      removeStoredValue(`icpc-trainer-thinking:${requestedCode}`);
     } catch { setTrainingState("error"); }
   }
 
@@ -321,13 +377,13 @@ export default function ProblemDetailPage() {
             <span className={`statement-status status-${statement?.status || "loading"}`}><i />{status}</span>
           </div>
           {language === "original" ? statement?.originalHtml ? <CachedStatementView statement={statement} language="original" /> : <div className="statement-body statement-loading-card">
-            <div className="statement-loader" /><h2>正在导入原题面</h2><p>这是本题第一次打开。服务器会先尝试 Codeforces 与缓存数据源；若服务器访问受限，v0.3 浏览器扩展会读取公开题面并完成导入。</p>
+            <div className="statement-loader" /><h2>正在导入原题面</h2><p>这是本题第一次打开。服务器会先尝试 Codeforces 与缓存数据源；若服务器访问受限，v0.4 浏览器扩展会读取公开题面并完成导入。</p>
             {statementError ? <p className="statement-error">{statementError}</p> : null}
             <div className="hero-actions"><button className="button button-primary" onClick={() => void importWithExtension()} disabled={Boolean(statementAction)}>通过扩展重新导入</button><a className="button button-ghost" href={officialProblemUrl} target="_blank" rel="noreferrer">先打开原题完成验证 ↗</a></div>
           </div> : statement?.chineseHtml ? <CachedStatementView statement={statement} language="chinese" /> : importedStatement ? <CuratedChineseStatement statement={importedStatement} /> : <div className="statement-body statement-loading-card">
-            <div className="statement-loader" /><h2>中文题面正在生成</h2><p>{statement?.originalHtml ? "原题面已经可以阅读。服务器正在用本地模型翻译，完成后会自动缓存；公式、代码与样例保持原样。" : "中文翻译会在原题导入后自动开始。你可以先切换到原题面阅读。"}</p>
+            {statement?.status !== "ready_original" ? <div className="statement-loader" /> : <Icon name="history" />}<h2>{statement?.status === "ready_original" ? "中文翻译正在排队重试" : "中文题面正在生成"}</h2><p>{statement?.status === "ready_original" ? "原题面可立即阅读，服务器翻译暂未成功并会自动重试。你也可以使用 Chrome 本地翻译，结果会先保存在当前设备，不再因登录或网络失败而丢失。" : statement?.originalHtml ? "原题面已经可以阅读。服务器正在用本地模型翻译，完成后会自动缓存；公式、代码与样例保持原样。" : "中文翻译会在原题导入后自动开始。你可以先切换到原题面阅读。"}</p>
             {statementError ? <p className="statement-error">{statementError}</p> : null}
-            {statement?.originalHtml ? <div className="hero-actions"><button className="button button-primary" onClick={() => void translateInBrowser()} disabled={Boolean(statementAction)}>使用 Chrome 本地翻译</button><button className="button button-ghost" onClick={() => setLanguage("original")}>返回原题面</button></div> : null}
+            {statement?.originalHtml ? <div className="hero-actions"><button className="button button-primary" onClick={() => void translateInBrowser()} disabled={Boolean(statementAction)}>使用 Chrome 本地翻译</button><button className="button button-ghost" onClick={() => void refreshStatement()}>立即重试</button><button className="button button-ghost" onClick={() => setLanguage("original")}>返回原题面</button></div> : null}
           </div>}
         </> : tab === "提交记录" ? <div className="empty-state"><Icon name="history" /><h3>查看公开提交记录</h3><p>在「提交记录」输入 Codeforces Handle，即可同步最近提交与判题结果。</p><a className="button button-primary" href="/submissions">前往同步</a></div> : <div className="locked-editorial"><Icon name="spark" /><h3>解题导航</h3><p>{strategyByTag[problem.tags[0]] ?? "从约束范围反推目标复杂度，先写出朴素算法，再寻找可以复用的状态或单调性。"}</p><p>建议复杂度方向：根据 <b>{problem.tags.join(" / ")}</b> 标签选择对应模板，并使用样例和极端数据验证。</p><div className="hero-actions"><a className="button button-primary" href="/templates">打开算法模板</a><a className="button button-ghost" href={officialProblemUrl} target="_blank" rel="noreferrer">核对官方题面 ↗</a></div></div>}
       </article>
@@ -345,7 +401,7 @@ export default function ProblemDetailPage() {
         </section> : null}
         <div className="editor-head"><div><span className="active-dot" /> main.cpp</div><select aria-label="编译语言"><option>GNU C++20</option></select></div>
         <textarea className="code-editor" value={code} onChange={(event) => setCode(event.target.value)} spellCheck={false} aria-label="C++ 代码编辑器" />
-        <div className="editor-footer"><div><a href="/templates">＋ 打开模板库</a><span>草稿已自动保存在当前浏览器</span></div><label className="auto-submit-option"><input type="checkbox" checked={autoSubmit} onChange={(event) => setAutoSubmit(event.target.checked)} /> 预填后自动点击 Codeforces 提交按钮</label><button className="submit-button" onClick={sendToExtension}>{submitState === "sent" ? <><Icon name="check" /> 已发送给浏览器扩展</> : <>提交到 Codeforces <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
+        <div className="editor-footer"><div><a href="/templates">＋ 打开模板库</a><span>草稿已自动保存在当前浏览器</span></div><p className="submit-safety-note">扩展只负责预填；请在 Codeforces 核对语言和代码后手动提交。</p>{submitState === "empty" ? <p className="statement-error" role="alert">请先填写代码。</p> : submitState === "missing" ? <p className="statement-error" role="alert">未检测到 v0.4 扩展，请安装或重新加载扩展后重试。</p> : null}<button className="submit-button" onClick={sendToExtension} disabled={submitState === "sending"}>{submitState === "sent" ? <><Icon name="check" /> 已打开，请到 Codeforces 确认</> : submitState === "sending" ? <>正在连接扩展…</> : <>填充到 Codeforces <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
       </aside>
     </section>
   </AppShell>;

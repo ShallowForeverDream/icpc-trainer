@@ -3,7 +3,7 @@
 import { FormEvent, useState } from "react";
 import { AppShell, Icon } from "../components/AppShell";
 import { saveAuth, type AuthSession } from "../lib/auth-client";
-import { browserApiUrl } from "../lib/browser-api";
+import { apiJson } from "../lib/api-client";
 
 export default function RegisterPage() {
   const [email, setEmail] = useState("");
@@ -18,9 +18,7 @@ export default function RegisterPage() {
     if (password !== confirm) { setStatus("error"); setMessage("两次输入的密码不一致"); return; }
     setStatus("loading");
     try {
-      const response = await fetch(browserApiUrl("/auth/register"), { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, inviteCode }) });
-      const data = await response.json() as AuthSession & { error?: string };
-      if (!response.ok) throw new Error(data.error || "注册失败");
+      const data = await apiJson<AuthSession>("/auth/register", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ email, password, inviteCode }) });
       saveAuth(data); location.href = "/account";
     } catch (error) { setMessage(error instanceof Error ? error.message : "注册失败"); setStatus("error"); }
   }

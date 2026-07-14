@@ -1,5 +1,6 @@
 import { authFetch } from "./auth-client";
-import { browserApiUrl } from "./browser-api";
+import { apiFetch } from "./api-client";
+import { readStoredString, writeStoredString } from "./storage";
 
 export type TrainingOutcome = "independent" | "hinted" | "editorial" | "unsolved";
 export type TrainingDifficulty = "easy" | "right" | "hard";
@@ -25,10 +26,10 @@ const CLIENT_ID_KEY = "icpc-trainer-client-id";
 
 export function getTrainingClientId() {
   if (typeof window === "undefined") return "";
-  let value = localStorage.getItem(CLIENT_ID_KEY);
+  let value = readStoredString(CLIENT_ID_KEY);
   if (!value) {
     value = typeof crypto.randomUUID === "function" ? crypto.randomUUID() : `device_${Date.now().toString(36)}_${Math.random().toString(36).slice(2)}`;
-    localStorage.setItem(CLIENT_ID_KEY, value);
+    writeStoredString(CLIENT_ID_KEY, value);
   }
   return value;
 }
@@ -51,11 +52,10 @@ export async function saveTrainingEvent(input: {
   return data.event;
 }
 
-export async function loadTrainingSummary(handle = "ShallowDream2") {
+export async function loadTrainingSummary(handle = "ShallowDream2", signal?: AbortSignal) {
   const query = new URLSearchParams({ clientId: getTrainingClientId(), handle });
-  const response = await fetch(browserApiUrl(`/training/summary?${query}`), { cache: "no-store" });
+  const response = await apiFetch(`/training/summary?${query}`, { cache: "no-store", signal });
   const data = await response.json() as TrainingSummary & { error?: string };
   if (!response.ok) throw new Error(data.error || "训练复盘加载失败");
   return data;
 }
-

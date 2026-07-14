@@ -22,20 +22,48 @@ test("imports, sanitizes, and reads a first-open statement through HTTP", async 
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["server.mjs"], {
     cwd: new URL(".", import.meta.url),
-    env: { ...process.env, PORT: String(port), DB_PATH: join(directory, "test.sqlite"), OLLAMA_BASE_URL: "" },
+    env: {
+      ...process.env,
+      PORT: String(port),
+      DB_PATH: join(directory, "test.sqlite"),
+      OLLAMA_BASE_URL: "",
+      ADMIN_EMAIL: "admin@example.com",
+      ADMIN_PASSWORD: "StrongTest12345",
+    },
     stdio: "ignore",
   });
 
   try {
     await waitForHealth(baseUrl);
+    const loginResponse = await fetch(`${baseUrl}/auth/login`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: "admin@example.com", password: "StrongTest12345" }),
+    });
+    assert.equal(loginResponse.status, 200);
+    const { token } = await loginResponse.json();
+    const authorization = { Authorization: `Bearer ${token}` };
+    const passwordResponse = await fetch(`${baseUrl}/auth/change-password`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authorization },
+      body: JSON.stringify({ currentPassword: "StrongTest12345", newPassword: "StrongTest67890" }),
+    });
+    assert.equal(passwordResponse.status, 200);
     const importBody = {
       code: "2176C",
       sourceUrl: "https://codeforces.com/problemset/problem/2176/C?locale=en",
       html: `<div class="problem-statement"><div class="header"><div class="title">C. Odd Process</div><div class="time-limit">time limit per test 2 seconds</div><div class="memory-limit">memory limit per test 256 megabytes</div></div><div class="legend"><p>Read the original statement.</p><img src="https://codeforces.com/images/test.png" alt="Left and Right" onerror="alert(1)"></div><div class="input-specification"><div class="section-title">Input</div><p>One integer.</p></div><div class="output-specification"><div class="section-title">Output</div><p>Print the answer.</p></div></div>`,
     };
-    const response = await fetch(`${baseUrl}/codeforces/statements/import`, {
+    const unauthorizedResponse = await fetch(`${baseUrl}/codeforces/statements/import`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(importBody),
+    });
+    assert.equal(unauthorizedResponse.status, 401);
+
+    const response = await fetch(`${baseUrl}/codeforces/statements/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authorization },
       body: JSON.stringify(importBody),
     });
     assert.equal(response.status, 201);
@@ -52,7 +80,7 @@ test("imports, sanitizes, and reads a first-open statement through HTTP", async 
 
     const translationResponse = await fetch(`${baseUrl}/codeforces/statements/translation`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authorization },
       body: JSON.stringify({ code: "2176C", chineseHtml: "<div class=\"legend\"><p>这是一段已经生成并且可以立即阅读的中文缓存题面。</p></div>" }),
     });
     assert.equal(translationResponse.status, 200);
@@ -60,7 +88,7 @@ test("imports, sanitizes, and reads a first-open statement through HTTP", async 
 
     const reimportResponse = await fetch(`${baseUrl}/codeforces/statements/import`, {
       method: "POST",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", ...authorization },
       body: JSON.stringify(importBody),
     });
     assert.equal(reimportResponse.status, 201);

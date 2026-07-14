@@ -3,6 +3,8 @@ import { getUserSubmissions } from "../../../lib/codeforces";
 
 type StandingsProblem = { contestId: number; index: string };
 type StandingsRequest = { participants?: string[]; handle?: string; startedAt?: number; durationMinutes?: number; problems?: StandingsProblem[] };
+type StandingState = { solved: boolean; wrongAttempts: number; solvedMinutes: number | null; penalty: number };
+type StandingRow = { handle: string; solved: number; penalty: number; problems: Record<string, StandingState>; rank: number };
 
 export async function POST(request: NextRequest) {
   try {
@@ -21,7 +23,7 @@ export async function POST(request: NextRequest) {
     const startSeconds = Math.floor(startedAt / 1000);
     const endSeconds = startSeconds + durationMinutes * 60;
     const problemKeys = new Set(problems.map((problem) => `${problem.contestId}${problem.index}`));
-    const rows = [];
+    const rows: StandingRow[] = [];
     for (const handle of participants) {
       const submissions = await getUserSubmissions(handle, 1000);
       const states = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, { solved: false, wrongAttempts: 0, solvedMinutes: null as number | null, penalty: 0 }]));

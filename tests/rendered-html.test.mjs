@@ -98,9 +98,10 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
 });
 
 test("ships live multiplayer VP generation, combined contests, and standings", async () => {
-  const [route, standingsRoute, recommendationRoute, page, catalog] = await Promise.all([
+  const [route, standingsRoute, standingsHelper, recommendationRoute, page, catalog] = await Promise.all([
     readFile(new URL("app/api/vp/generate/route.ts", root), "utf8"),
     readFile(new URL("app/api/vp/standings/route.ts", root), "utf8"),
+    readFile(new URL("app/lib/vp-original-standings.ts", root), "utf8"),
     readFile(new URL("app/api/codeforces/recommendations/route.ts", root), "utf8"),
     readFile(new URL("app/vp/page.tsx", root), "utf8"),
     readFile(new URL("app/problem/page.tsx", root), "utf8"),
@@ -110,6 +111,8 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   assert.match(route, /pickThinkingSet/);
   assert.match(route, /THINKING_TAGS/);
   assert.match(route, /thinkingRatio/);
+  assert.match(route, /replayableSourcePool/);
+  assert.match(route, /getContestStandings/);
   assert.match(route, /getProblemset\(true\)/);
   assert.match(route, /pickMirror/);
   assert.match(route, /pickCombined/);
@@ -119,11 +122,18 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   assert.match(standingsRoute, /15_000/);
   assert.match(standingsRoute, /15_000, true/);
   assert.match(standingsRoute, /penalty/);
+  assert.match(standingsRoute, /buildOriginalVpRows/);
+  assert.match(standingsRoute, /sourceBoards/);
+  assert.match(standingsRoute, /selectedProblems/);
+  assert.match(standingsHelper, /bestSubmissionTimeSeconds/);
+  assert.match(standingsHelper, /problem\.contestId === source\.contest\.id/);
   assert.match(recommendationRoute, /targetRating/);
   assert.match(page, /ShallowDream2/);
   assert.match(page, /实时榜单/);
   assert.match(page, /思维题占比/);
-  assert.match(page, /WA \+20 分钟，CE 不罚时/);
+  assert.match(page, /AC 优先，WA \+20 分钟/);
+  assert.match(page, /原比赛组合实时榜单/);
+  assert.match(page, /组合榜只保留本次已有题目/);
   assert.match(page, /pollAfterSeconds/);
   assert.match(page, /多场组合/);
   assert.match(page, /来源参考/);
@@ -188,6 +198,10 @@ test("ships the domestic API, cached statements, OCR, and local translation depl
   assert.match(backend, /pickThinkingSet/);
   assert.match(backend, /thinkingCount/);
   assert.match(backend, /pendingAttempts/);
+  assert.match(backend, /contest\.standings/);
+  assert.match(backend, /buildOriginalVpRows/);
+  assert.match(backend, /CF_STANDINGS_CACHE_DIR/);
+  assert.match(backend, /selectedProblems/);
   assert.match(backend, /createStatementHandler/);
   assert.match(statements, /problem_statements/);
   assert.match(statements, /statement_assets/);

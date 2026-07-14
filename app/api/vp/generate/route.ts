@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getProblemset, getUserSubmissions, publicProblem, type CodeforcesProblem } from "../../../lib/codeforces";
+import { getContestStandings, getProblemset, getUserSubmissions, publicProblem, type CodeforcesProblem } from "../../../lib/codeforces";
 
 type GenerateRequest = { handle?: string; participants?: string[]; mode?: string; count?: number; targetRating?: number; thinkingRatio?: number; durationMinutes?: number; seed?: string };
 
@@ -75,6 +75,32 @@ function pickThinkingSet(pool: CodeforcesProblem[], count: number, target: numbe
   return selected;
 }
 
+function replayableSourcePool(pool: CodeforcesProblem[], count: number, target: number, random: () => number) {
+  const sourceCount = Math.min(3, Math.max(2, Math.ceil(count / 4)));
+  const minimumPerSource = Math.ceil(count / sourceCount);
+  const groups = new Map<number, CodeforcesProblem[]>();
+  for (const problem of pool) {
+    if (!problem.contestId) continue;
+    const group = groups.get(problem.contestId) ?? [];
+    group.push(problem);
+    groups.set(problem.contestId, group);
+  }
+  const candidates = [...groups.values()].filter((problems) => problems.length >= minimumPerSource).sort((left, right) => {
+    const score = (problems: CodeforcesProblem[]) => {
+      const average = problems.reduce((sum, problem) => sum + (problem.rating ?? target), 0) / problems.length;
+      const thinking = problems.filter(isThinkingProblem).length / problems.length;
+      return Math.abs(average - target) - thinking * 120 - Math.min(8, problems.length) * 8;
+    };
+    return score(left) - score(right);
+  });
+  if (candidates.length < sourceCount) return pool;
+  const window = candidates.slice(0, Math.min(14, candidates.length));
+  const chosen: CodeforcesProblem[][] = [];
+  while (chosen.length < sourceCount && window.length) chosen.push(window.splice(Math.floor(random() * window.length), 1)[0]);
+  const restricted = chosen.flat();
+  return restricted.length >= count ? restricted : pool;
+}
+
 function pickMirror(pool: CodeforcesProblem[], desiredCount: number, target: number, random: () => number) {
   const groups = new Map<number, CodeforcesProblem[]>();
   for (const problem of pool) {
@@ -144,7 +170,7 @@ export async function POST(request: NextRequest) {
       selected = combined.selected;
       sourceContestIds = combined.contestIds;
     } else {
-      selected = pickThinkingSet(pool, count, targetRating, thinkingRatio, random);
+      selected = pickThinkingSet(replayableSourcePool(pool, count, targetRating, random), count, targetRating, thinkingRatio, random);
     }
     if (selected.length < 5) return NextResponse.json({ error: "可用题目不足，请调整组卷条件" }, { status: 422 });
 
@@ -153,6 +179,7 @@ export async function POST(request: NextRequest) {
       const sourceProblems = selected.filter((problem) => problem.contestId === contestId);
       return { contestId, problemCount: sourceProblems.length, averageRating: Math.round(sourceProblems.reduce((sum, item) => sum + (item.rating ?? targetRating), 0) / Math.max(1, sourceProblems.length)), url: `https://codeforces.com/contest/${contestId}/standings` };
     });
+    void Promise.allSettled(sourceContestIds.map((contestId) => getContestStandings(contestId)));
     return NextResponse.json({
       id: `vp-${hashSeed(`${seed}:${handle}`).toString(16)}`,
       handle,

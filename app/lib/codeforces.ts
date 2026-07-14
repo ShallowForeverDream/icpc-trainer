@@ -18,11 +18,31 @@ export type CodeforcesSubmission = {
   memoryConsumedBytes: number;
 };
 
+export type CodeforcesParty = {
+  participantType?: string;
+  teamId?: number;
+  teamName?: string;
+  members?: Array<{ handle: string }>;
+};
+
+export type CodeforcesProblemResult = {
+  points?: number;
+  rejectedAttemptCount?: number;
+  bestSubmissionTimeSeconds?: number;
+};
+
+export type CodeforcesContestStandings = {
+  contest: { id: number; name: string; durationSeconds: number };
+  problems: CodeforcesProblem[];
+  rows: Array<{ party: CodeforcesParty; problemResults: CodeforcesProblemResult[] }>;
+};
+
 type ApiPayload<T> = { status: "OK" | "FAILED"; comment?: string; result?: T };
 
 const globalCache = globalThis as typeof globalThis & {
   __icpcProblems?: { expiresAt: number; staleUntil: number; value: CodeforcesProblem[] };
   __icpcSubmissions?: Map<string, { expiresAt: number; staleUntil: number; fetchedAt: number; count: number; value: CodeforcesSubmission[] }>;
+  __icpcContestStandings?: Map<number, { expiresAt: number; staleUntil: number; value: CodeforcesContestStandings }>;
   __icpcQueue?: Promise<unknown>;
   __icpcLastCall?: number;
   __icpcQueueDepth?: number;
@@ -100,6 +120,25 @@ export async function getUserSubmissions(handle: string, count = 1000, maxAgeMs 
     return value.slice(0, requestedCount);
   } catch (error) {
     if (cached && cached.staleUntil > Date.now() && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
+    throw error;
+  }
+}
+
+export async function getContestStandings(contestId: number): Promise<CodeforcesContestStandings> {
+  const normalizedId = Math.max(1, Math.floor(contestId));
+  const cache = globalCache.__icpcContestStandings ??= new Map();
+  const cached = cache.get(normalizedId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  try {
+    const value = await throttledFetch<CodeforcesContestStandings>("contest.standings", new URLSearchParams({ contestId: String(normalizedId) }));
+    if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new Error("原比赛榜单数据格式无效");
+    value.rows = value.rows.slice(0, 500);
+    const now = Date.now();
+    cache.set(normalizedId, { expiresAt: now + 6 * 60 * 60 * 1000, staleUntil: now + 7 * 24 * 60 * 60 * 1000, value });
+    while (cache.size > 64) cache.delete(cache.keys().next().value!);
+    return value;
+  } catch (error) {
+    if (cached && cached.staleUntil > Date.now()) return cached.value;
     throw error;
   }
 }

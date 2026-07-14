@@ -1,5 +1,7 @@
 import http from "node:http";
 import { randomUUID } from "node:crypto";
+import { mkdir, readFile, rename, writeFile } from "node:fs/promises";
+import { dirname, join } from "node:path";
 import { createAuthHandler, getTrainingSignals } from "./auth.mjs";
 import { createStatementHandler } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, pruneMap, publicError, readJsonBody } from "./http-utils.mjs";
@@ -7,10 +9,12 @@ import { HttpError, boundedInteger, createWindowLimiter, pruneMap, publicError, 
 const PORT = Number(process.env.PORT || 8787);
 const CF_BASE = "https://codeforces.com/api";
 const USER_AGENT = "icpc-trainer-backend/0.1";
+const CF_STANDINGS_CACHE_DIR = join(dirname(process.env.DB_PATH || "./data/icpc-trainer.sqlite"), "cf-standings");
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
 let problemCache = null;
 let problemFetch = null;
 const submissionCache = new Map();
+const contestStandingsCache = new Map();
 const inFlightCodeforces = new Map();
 let apiQueue = Promise.resolve();
 let lastApiCall = 0;
@@ -106,6 +110,42 @@ async function getSubmissions(handle, count = 1000, maxAgeMs = 60_000) {
     return value.slice(0, requestedCount);
   } catch (error) {
     if (cached && cached.staleUntil > Date.now() && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
+    throw error;
+  }
+}
+
+async function getContestStandings(contestId) {
+  const normalizedId = boundedInteger(contestId, { min: 1, max: 10_000_000, fallback: 0 });
+  if (!normalizedId) throw new HttpError(400, "原比赛编号无效");
+  const cached = contestStandingsCache.get(normalizedId);
+  if (cached && cached.expiresAt > Date.now()) return cached.value;
+  const cachePath = join(CF_STANDINGS_CACHE_DIR, `${normalizedId}.json`);
+  if (!cached) {
+    try {
+      const persisted = JSON.parse(await readFile(cachePath, "utf8"));
+      if (persisted?.value?.contest && Array.isArray(persisted.value.problems) && Array.isArray(persisted.value.rows)) {
+        const now = Date.now();
+        contestStandingsCache.set(normalizedId, { expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, value: persisted.value });
+        return persisted.value;
+      }
+    } catch { /* Cache miss. */ }
+  }
+  try {
+    const value = await codeforces("contest.standings", new URLSearchParams({ contestId: String(normalizedId) }));
+    if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new HttpError(502, "原比赛榜单数据无效");
+    value.rows = value.rows.slice(0, 500);
+    const now = Date.now();
+    contestStandingsCache.set(normalizedId, { expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, value });
+    try {
+      await mkdir(CF_STANDINGS_CACHE_DIR, { recursive: true });
+      const temporary = `${cachePath}.${randomUUID()}.tmp`;
+      await writeFile(temporary, JSON.stringify({ cachedAt: now, value }), "utf8");
+      await rename(temporary, cachePath);
+    } catch { /* Memory cache remains usable when disk persistence fails. */ }
+    if (contestStandingsCache.size > 64) pruneMap(contestStandingsCache, (entry) => entry.staleUntil <= now, 64);
+    return value;
+  } catch (error) {
+    if (cached && cached.staleUntil > Date.now()) return cached.value;
     throw error;
   }
 }
@@ -329,6 +369,31 @@ function pickThinkingSet(pool, count, target, thinkingRatio, random) {
   return selected;
 }
 
+function replayableSourcePool(pool, count, target, random) {
+  const sourceCount = Math.min(3, Math.max(2, Math.ceil(count / 4)));
+  const minimumPerSource = Math.ceil(count / sourceCount);
+  const groups = new Map();
+  for (const problem of pool) {
+    const group = groups.get(problem.contestId) || [];
+    group.push(problem);
+    groups.set(problem.contestId, group);
+  }
+  const candidates = [...groups.values()].filter((problems) => problems.length >= minimumPerSource).sort((left, right) => {
+    const score = (problems) => {
+      const average = problems.reduce((sum, problem) => sum + (problem.rating || target), 0) / problems.length;
+      const thinking = problems.filter(isThinkingProblem).length / problems.length;
+      return Math.abs(average - target) - thinking * 120 - Math.min(8, problems.length) * 8;
+    };
+    return score(left) - score(right);
+  });
+  if (candidates.length < sourceCount) return pool;
+  const window = candidates.slice(0, Math.min(14, candidates.length));
+  const chosen = [];
+  while (chosen.length < sourceCount && window.length) chosen.push(window.splice(Math.floor(random() * window.length), 1)[0]);
+  const restricted = chosen.flat();
+  return restricted.length >= count ? restricted : pool;
+}
+
 function pickMirror(pool, desiredCount, target, random) {
   const groups = new Map();
   for (const problem of pool) {
@@ -399,35 +464,81 @@ async function generateVp(body) {
     if (!combined) throw new HttpError(422, "没有找到足够的历史比赛用于组合");
     selected = combined.selected;
     sourceContestIds = combined.contestIds;
-  } else selected = pickThinkingSet(pool, count, targetRating, thinkingRatio, random);
+  } else selected = pickThinkingSet(replayableSourcePool(pool, count, targetRating, random), count, targetRating, thinkingRatio, random);
   if (selected.length < 5) throw new HttpError(422, "可用题目不足，请调整组卷条件");
   if (!sourceContestIds.length) sourceContestIds = [...new Set(selected.map((problem) => problem.contestId))];
   const sourceContests = sourceContestIds.map((contestId) => {
     const sourceProblems = selected.filter((problem) => problem.contestId === contestId);
     return { contestId, problemCount: sourceProblems.length, averageRating: Math.round(sourceProblems.reduce((sum, item) => sum + (item.rating || targetRating), 0) / Math.max(1, sourceProblems.length)), url: `https://codeforces.com/contest/${contestId}/standings` };
   });
+  void Promise.allSettled(sourceContestIds.map((contestId) => getContestStandings(contestId)));
   const mode = body.mode === "原场镜像" ? "原场镜像" : body.mode === "多场组合" ? "多场组合" : "自由组卷";
   return { id: `vp-${hashSeed(`${seed}:${handle}`).toString(16)}`, handle, participants, mode, seed, durationMinutes, targetRating, thinkingRatio, thinkingCount: selected.filter(isThinkingProblem).length, sourceContestId, sourceContests, excludedSolved: solved.size, createdAt: new Date().toISOString(), problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem), thinking: isThinkingProblem(problem) })) };
 }
 
-async function buildVpStandings(body) {
-  const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
-  const startedAt = Number(body.startedAt);
-  const durationMinutes = boundedInteger(body.durationMinutes, { min: 60, max: 600, fallback: 180 });
-  if (!Number.isFinite(startedAt) || startedAt <= 0 || startedAt > Date.now() + 60_000) throw new HttpError(400, "比赛开始时间无效");
-  const problems = Array.isArray(body.problems) ? body.problems.slice(0, 20).filter((item) => Number(item?.contestId) && /^[A-Z][0-9]?$/.test(String(item?.index || ""))) : [];
-  if (!problems.length) throw new HttpError(400, "比赛题目为空");
+function vpProblemKey(problem) {
+  return `${problem.contestId}${problem.index}`;
+}
+
+function emptyVpStates(problems) {
+  return Object.fromEntries(problems.map((problem) => [vpProblemKey(problem), { solved: false, wrongAttempts: 0, pendingAttempts: 0, solvedMinutes: null, penalty: 0 }]));
+}
+
+function originalPartyIdentity(party) {
+  if (party?.participantType && party.participantType !== "CONTESTANT") return null;
+  const handles = (party?.members || []).map((member) => String(member?.handle || "").trim()).filter(Boolean);
+  if (!handles.length) return null;
+  const identity = [...handles].map((handle) => handle.toLowerCase()).sort().join("+");
+  return { id: `original:${identity}`, handle: String(party.teamName || handles.join(" + ")) };
+}
+
+function buildOriginalVpRows(problems, sourceBoards, elapsedSeconds) {
+  const combined = new Map();
+  for (const source of sourceBoards) {
+    const selected = problems.filter((problem) => problem.contestId === source.contest.id);
+    if (!selected.length) continue;
+    const positions = new Map(source.problems.map((problem, index) => [problem.index, index]));
+    for (const sourceRow of source.rows) {
+      const identity = originalPartyIdentity(sourceRow.party);
+      if (!identity) continue;
+      let row = combined.get(identity.id);
+      if (!row) {
+        row = { ...identity, solved: 0, penalty: 0, problems: emptyVpStates(problems), sourceContests: new Set(), origin: "original", mine: false };
+        combined.set(identity.id, row);
+      }
+      row.sourceContests.add(source.contest.id);
+      for (const problem of selected) {
+        const position = positions.get(problem.index);
+        const result = position === undefined ? null : sourceRow.problemResults?.[position];
+        if (!result) continue;
+        const solvedAt = Number(result.bestSubmissionTimeSeconds);
+        const rejected = Math.max(0, Number(result.rejectedAttemptCount) || 0);
+        const state = row.problems[vpProblemKey(problem)];
+        if (Number(result.points) > 0 && Number.isFinite(solvedAt) && solvedAt >= 0 && solvedAt <= elapsedSeconds) {
+          state.solved = true;
+          state.wrongAttempts = rejected;
+          state.solvedMinutes = Math.floor(solvedAt / 60);
+          state.penalty = state.solvedMinutes + rejected * 20;
+        } else if (elapsedSeconds >= Number(source.contest.durationSeconds || 0)) state.wrongAttempts = rejected;
+      }
+    }
+  }
+  return [...combined.values()].map((row) => {
+    const states = Object.values(row.problems);
+    return { ...row, sourceCount: row.sourceContests.size, sourceContests: [...row.sourceContests], solved: states.filter((state) => state.solved).length, penalty: states.reduce((sum, state) => sum + state.penalty, 0) };
+  });
+}
+
+async function buildCurrentVpRows(participants, problems, startedAt, durationMinutes) {
   const startSeconds = Math.floor(startedAt / 1000);
   const endSeconds = startSeconds + durationMinutes * 60;
-  const problemKeys = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, problem]));
-  const rows = [];
-  for (const handle of participants) {
-    const submissions = await getSubmissions(handle, 1000, 15_000);
-    const states = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, { solved: false, wrongAttempts: 0, pendingAttempts: 0, solvedMinutes: null, penalty: 0 }]));
-    const ordered = submissions.filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= endSeconds && problemKeys.has(`${item.problem?.contestId}${item.problem?.index}`)).sort((a, b) => a.creationTimeSeconds - b.creationTimeSeconds);
+  const problemKeys = new Set(problems.map(vpProblemKey));
+  const submissionSets = await Promise.all(participants.map((handle) => getSubmissions(handle, 1000, 15_000)));
+  return participants.map((handle, participantIndex) => {
+    const states = emptyVpStates(problems);
+    const ordered = submissionSets[participantIndex].filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= endSeconds && problemKeys.has(`${item.problem?.contestId}${item.problem?.index}`)).sort((a, b) => a.creationTimeSeconds - b.creationTimeSeconds);
     for (const submission of ordered) {
-      const key = `${submission.problem.contestId}${submission.problem.index}`;
-      const state = states.get(key);
+      const state = states[`${submission.problem.contestId}${submission.problem.index}`];
       if (!state || state.solved) continue;
       if (submission.verdict === "OK") {
         state.solved = true;
@@ -437,17 +548,47 @@ async function buildVpStandings(body) {
       } else if (submission.verdict === "TESTING") state.pendingAttempts += 1;
       else if (!["COMPILATION_ERROR", "SKIPPED"].includes(submission.verdict || "")) state.wrongAttempts += 1;
     }
-    const solved = [...states.values()].filter((state) => state.solved).length;
-    const penalty = [...states.values()].reduce((sum, state) => sum + state.penalty, 0);
-    rows.push({ handle, solved, penalty, problems: Object.fromEntries(states) });
-  }
-  rows.sort((a, b) => b.solved - a.solved || a.penalty - b.penalty || a.handle.localeCompare(b.handle));
+    const values = Object.values(states);
+    return { id: `mine:${handle.toLowerCase()}`, handle, solved: values.filter((state) => state.solved).length, penalty: values.reduce((sum, state) => sum + state.penalty, 0), problems: states, sourceCount: 0, sourceContests: [], origin: "mine", mine: true };
+  });
+}
+
+async function buildVpStandings(body) {
+  const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
+  const startedAt = Number(body.startedAt);
+  const durationMinutes = boundedInteger(body.durationMinutes, { min: 60, max: 600, fallback: 180 });
+  if (!Number.isFinite(startedAt) || startedAt <= 0 || startedAt > Date.now() + 60_000) throw new HttpError(400, "比赛开始时间无效");
+  const problems = Array.isArray(body.problems) ? body.problems.slice(0, 20).filter((item) => Number(item?.contestId) && /^[A-Z][0-9]?$/.test(String(item?.index || ""))).map((item, index) => ({ contestId: Number(item.contestId), index: String(item.index), slot: String(item.slot || String.fromCharCode(65 + index)) })) : [];
+  if (!problems.length) throw new HttpError(400, "比赛题目为空");
+  const elapsedSeconds = Math.max(0, Math.min(durationMinutes * 60, Math.floor((Date.now() - startedAt) / 1000)));
+  const contestIds = [...new Set(problems.map((problem) => problem.contestId))];
+  const [sourceResults, currentRows] = await Promise.all([
+    Promise.allSettled(contestIds.map((contestId) => getContestStandings(contestId))),
+    buildCurrentVpRows(participants, problems, startedAt, durationMinutes),
+  ]);
+  const sourceBoards = sourceResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
+  const unavailableContestIds = contestIds.filter((_, index) => sourceResults[index].status === "rejected");
+  const originalRows = buildOriginalVpRows(problems, sourceBoards, elapsedSeconds);
+  const rows = [...originalRows, ...currentRows].sort((a, b) => b.solved - a.solved || a.penalty - b.penalty || Number(a.mine) - Number(b.mine) || a.handle.localeCompare(b.handle));
   let previous = null;
   rows.forEach((row, index) => {
     row.rank = previous && previous.solved === row.solved && previous.penalty === row.penalty ? previous.rank : index + 1;
     previous = row;
   });
-  return { updatedAt: new Date().toISOString(), startedAt, durationMinutes, pollAfterSeconds: Math.max(15, Math.ceil(participants.length * 2.5)), rows };
+  const visible = rows.slice(0, 120);
+  for (const row of currentRows) if (!visible.some((item) => item.id === row.id)) visible.push(row);
+  return {
+    updatedAt: new Date().toISOString(),
+    startedAt,
+    durationMinutes,
+    elapsedSeconds,
+    pollAfterSeconds: Math.max(15, Math.ceil(participants.length * 2.5)),
+    totalRows: rows.length,
+    originalTeams: originalRows.length,
+    unavailableContestIds,
+    sourceBoards: sourceBoards.map((source) => ({ contestId: source.contest.id, name: source.contest.name, selectedProblems: problems.filter((problem) => problem.contestId === source.contest.id).map((problem) => problem.slot), sampledTeams: source.rows.length })),
+    rows: visible,
+  };
 }
 
 const server = http.createServer(async (request, response) => {

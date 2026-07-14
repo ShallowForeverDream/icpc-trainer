@@ -23,6 +23,9 @@ export type CachedStatement = {
   sourceKind: "codeforces" | "codeforces-dataset" | "pending" | string;
   originalHtml: string | null;
   chineseHtml: string | null;
+  translationVersion: number;
+  translationCurrent: boolean;
+  revalidating: boolean;
   images: StatementImage[];
   status: "importing" | "source_required" | "model_downloading" | "translating" | "ready_original" | "ready" | string;
   message: string | null;

@@ -82,7 +82,8 @@ function statusText(statement: CachedStatement | null, error: string) {
   if (!statement) return "正在连接题面服务";
   if (statement.status === "importing") return "首次打开：正在导入 Codeforces 原题面";
   if (statement.status === "source_required") return "服务器受到 Codeforces 限制，正在调用浏览器扩展导入";
-  if (statement.status === "model_downloading") return statement.message || "首次使用：正在下载本地翻译模型";
+  if (statement.chineseHtml && statement.revalidating) return "中文缓存可立即阅读 · 后台正在校对新版术语";
+  if (statement.status === "model_downloading") return statement.chineseHtml ? "中文缓存可立即阅读 · 后台正在载入校对模型" : statement.message || "首次使用：正在下载本地翻译模型";
   if (statement.status === "translating") return statement.message || "原题已就绪，正在生成中文题面";
   if (statement.status === "ready_original") return statement.message || "原题已就绪，中文翻译稍后重试";
   if (statement.status === "ready") return "原题面与中文题面均已缓存";
@@ -99,7 +100,7 @@ function CachedStatementView({ statement, language }: { statement: CachedStateme
       <span><b>{statement.sourceKind === "codeforces" ? "Codeforces" : "CF 数据集"}</b> 题面来源</span>
     </div>
     <div className="cf-statement-html" dangerouslySetInnerHTML={{ __html: html }} />
-    <div className="source-callout"><b>{language === "original" ? "原题面" : "机器翻译题面"}</b><p>{language === "original" ? "首次打开后缓存自 Codeforces；公式、样例和图片保持原始结构。" : "由本地模型翻译并缓存。变量、公式与样例不参与翻译；如有差异请以原题面为准。"}</p></div>
+    <div className="source-callout"><b>{language === "original" ? "原题面" : statement.revalidating ? "中文缓存题面 · 后台校对中" : "中文题面"}</b><p>{language === "original" ? "首次打开后缓存自 Codeforces；公式、样例和图片保持原始结构。" : statement.revalidating ? "先显示上一版可用中文，不再让你等待；新版术语校对完成后会自动替换。" : "由本地模型翻译并缓存。变量、公式与样例保持原样；如有差异请以原题面为准。"}</p></div>
   </div>;
 }
 
@@ -200,9 +201,9 @@ export default function ProblemDetailPage() {
 
   useEffect(() => {
     if (statement?.status === "ready") return;
-    const interval = window.setInterval(() => void refreshStatement(), 3500);
+    const interval = window.setInterval(() => void refreshStatement(), statement?.chineseHtml ? 10_000 : 3500);
     return () => window.clearInterval(interval);
-  }, [refreshStatement, statement?.status]);
+  }, [refreshStatement, statement?.chineseHtml, statement?.status]);
 
   useEffect(() => {
     if (statement?.originalHtml || !["importing", "source_required"].includes(statement?.status || "") || extensionAttempted.current) return;

@@ -72,6 +72,7 @@ function safeImages(value) {
 
 function publicStatement(row) {
   if (!row) return null;
+  const translationVersion = Number(row.translation_version || 0);
   return {
     code: row.code,
     contestId: Number(row.contest_id),
@@ -82,8 +83,12 @@ function publicStatement(row) {
     sourceUrl: row.source_url || `https://codeforces.com/problemset/problem/${row.contest_id}/${row.problem_index}`,
     sourceKind: row.source_kind || "pending",
     originalHtml: row.original_html || null,
-    chineseHtml: Number(row.translation_version || 0) >= TRANSLATION_VERSION ? row.chinese_html || null : null,
-    translationVersion: Number(row.translation_version || 0),
+    // Serve the last usable translation immediately while a newer terminology
+    // pass is generated in the background (stale-while-revalidate).
+    chineseHtml: row.chinese_html || null,
+    translationVersion,
+    translationCurrent: Boolean(row.chinese_html) && translationVersion >= TRANSLATION_VERSION,
+    revalidating: Boolean(row.chinese_html) && translationVersion < TRANSLATION_VERSION,
     images: safeImages(row.images_json),
     status: row.status,
     message: row.error || null,
@@ -115,7 +120,6 @@ function saveOriginal(document) {
       source_kind=excluded.source_kind,
       original_html=excluded.original_html,
       images_json=excluded.images_json,
-      chinese_html=NULL,
       translation_version=0,
       status='translating',
       error=NULL,
@@ -211,6 +215,7 @@ async function translatorFetch(path, options = {}, timeoutMs = 120_000) {
 }
 
 async function ensureTranslationModel(code) {
+  if (!TRANSLATOR_BASE_URL) throw new Error("未配置本地中文翻译模型");
   if (modelReadyPromise) return modelReadyPromise;
   modelReadyPromise = (async () => {
     setStatus(code, "model_downloading", `首次使用正在下载或载入本地翻译模型 ${TRANSLATOR_MODEL}`);
@@ -330,8 +335,77 @@ function polishChinese(value) {
 
 async function translateTexts(texts) {
   const translated = [];
-  for (const text of texts) translated.push(...await translateChunk([text]));
+  const batches = [];
+  let current = [];
+  let currentSize = 0;
+  for (const text of texts) {
+    if (current.length && (current.length >= 6 || currentSize + text.length > 2200)) {
+      batches.push(current);
+      current = [];
+      currentSize = 0;
+    }
+    current.push(text);
+    currentSize += text.length;
+  }
+  if (current.length) batches.push(current);
+
+  for (const batch of batches) {
+    if (batch.length === 1) {
+      translated.push(...await translateChunk(batch));
+      continue;
+    }
+    try {
+      translated.push(...await translateBatch(batch));
+    } catch {
+      // A small local model may occasionally return malformed JSON. Keep the
+      // reliable paragraph translator as a narrow fallback for that batch.
+      for (const text of batch) translated.push(...await translateChunk([text]));
+    }
+  }
   return translated;
+}
+
+async function translateBatch(texts) {
+  const input = texts.map((text, id) => ({ id, text }));
+  const prompt = [
+    "你是 QOJ / 洛谷风格的中文竞赛题面编辑。请批量翻译 JSON 数组中的英文题面片段。",
+    "先理解逻辑再按自然中文语序表达，不得逐词硬译，不得解题、删减条件或补充信息。量词、奇偶性、上下界、先后顺序和充分必要关系必须准确。",
+    "术语统一：array=数组，index=下标，segment/subarray=区间/子数组，operation=操作，query=询问，distinct=互不相同，at most=至多，at least=至少。禁止使用“阵列”“键入”“您”。",
+    "变量名、数字、公式、代码标识符、YES/NO 和所有 ICPCMATH数字END 占位符必须原样保留；每个占位符须恰好出现一次。",
+    "只返回合法 JSON 数组，元素数量、顺序和 id 必须与输入相同，格式为 [{\"id\":0,\"text\":\"中文译文\"}]。不要输出 Markdown 或说明。",
+    JSON.stringify(input),
+  ].join("\n");
+  const payload = await translatorFetch("/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: TRANSLATOR_MODEL,
+      temperature: 0,
+      max_tokens: Math.min(3600, Math.max(600, Math.ceil(texts.join("").length * 1.6))),
+      messages: [
+        { role: "system", content: "你是严谨的中文算法竞赛题面编辑，并且只输出符合要求的 JSON。" },
+        { role: "user", content: prompt },
+      ],
+    }),
+  }, 5 * 60_000);
+  const raw = String(payload.choices?.[0]?.message?.content || "").trim()
+    .replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const start = raw.indexOf("[");
+  const end = raw.lastIndexOf("]");
+  if (start < 0 || end <= start) throw new Error("批量翻译未返回 JSON 数组");
+  const parsed = JSON.parse(raw.slice(start, end + 1));
+  if (!Array.isArray(parsed) || parsed.length !== texts.length) throw new Error("批量翻译片段数量不一致");
+  return texts.map((source, id) => {
+    const item = parsed[id];
+    if (Number(item?.id) !== id || typeof item?.text !== "string" || !item.text.trim()) throw new Error("批量翻译片段顺序无效");
+    const translated = item.text.trim();
+    const placeholders = [...new Set(source.match(/ICPCMATH\d+END/g) || [])];
+    for (const placeholder of placeholders) {
+      const flexible = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "gi");
+      if ([...translated.matchAll(flexible)].length !== 1) throw new Error(`批量翻译未保留公式占位符 ${placeholder}`);
+    }
+    return polishChinese(translated);
+  });
 }
 
 async function translateHtml(originalHtml, sourceUrl) {
@@ -342,6 +416,7 @@ async function translateHtml(originalHtml, sourceUrl) {
     if (translated) $(element).text(translated);
   });
   const records = [];
+  let formulaIndex = 0;
   $("#translation-root").find("*").contents().each((_, node) => {
     if (node.type !== "text") return;
     if ($(node).parents("pre, code, .tex-span, .section-title").length) return;
@@ -354,7 +429,7 @@ async function translateHtml(originalHtml, sourceUrl) {
     if (!/[A-Za-z]{2}/.test(raw.replace(/\${3}[\s\S]*?\${3}/g, ""))) return;
     const formulas = [];
     const masked = raw.replace(/\${3}[\s\S]*?\${3}/g, (formula) => {
-      const placeholder = `ICPCMATH${formulas.length}END`;
+      const placeholder = `ICPCMATH${formulaIndex++}END`;
       formulas.push({ placeholder, formula });
       return placeholder;
     });
@@ -422,8 +497,16 @@ async function translateStatement(code) {
   const row = statementRow(code);
   if (!row?.original_html || (row.chinese_html && Number(row.translation_version || 0) >= TRANSLATION_VERSION)) return;
   recentTranslationAttempts.set(code, now());
+  let translationSaved = false;
   try {
-    setStatus(code, "translating", "正在缓存题面图片并识别其中的英文");
+    setStatus(code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在生成中文题面");
+    await ensureTranslationModel(code);
+    const chineseHtml = await translateHtml(row.original_html, row.source_url);
+    db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, now(), code);
+    translationSaved = true;
+
+    // Images are enhanced only after the readable Chinese statement has been
+    // committed, so slow image hosts or OCR never block the main statement.
     const originalImages = safeImages(row.images_json);
     const images = [];
     for (const image of originalImages.slice(0, 20)) {
@@ -431,19 +514,17 @@ async function translateStatement(code) {
       catch (error) { images.push({ ...image, error: error instanceof Error ? error.message : "图片缓存失败" }); }
     }
     db.prepare("UPDATE problem_statements SET images_json = ?, updated_at = ? WHERE code = ?").run(JSON.stringify(images), now(), code);
-    await ensureTranslationModel(code);
-    setStatus(code, "translating", "正在生成中文题面并翻译图片文字");
     const ocrTexts = images.filter((item) => item.ocrEn).map((item) => item.ocrEn);
     if (ocrTexts.length) {
       const ocrTranslations = await translateTexts(ocrTexts);
       let index = 0;
       for (const image of images) if (image.ocrEn) image.ocrZh = ocrTranslations[index++];
     }
-    const chineseHtml = await translateHtml(row.original_html, row.source_url);
-    db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, JSON.stringify(images), now(), code);
+    db.prepare("UPDATE problem_statements SET images_json = ?, updated_at = ? WHERE code = ?").run(JSON.stringify(images), now(), code);
   } catch (error) {
     const message = error instanceof Error ? error.message : "中文翻译失败";
-    setStatus(code, "ready_original", `原题面已就绪；中文翻译稍后重试：${message}`);
+    if (translationSaved) setStatus(code, "ready", null);
+    else setStatus(code, "ready_original", `原题面已就绪；中文翻译稍后重试：${message}`);
   }
 }
 
@@ -509,7 +590,10 @@ export function createStatementHandler({ json, clientIp }) {
           void importOriginal(parsed);
           row = statementRow(parsed.code);
         } else if (row.original_html && (!row.chinese_html || Number(row.translation_version || 0) < TRANSLATION_VERSION)) {
-          setStatus(parsed.code, "translating", "正在按新版术语规范重新校对中文题面");
+          if (row.status !== "translating" && row.status !== "model_downloading") {
+            setStatus(parsed.code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在生成中文题面");
+            row = statementRow(parsed.code);
+          }
           queueTranslation(parsed.code);
         } else if (!row.original_html && row.status === "source_required" && now() - row.updated_at > 10 * 60_000) {
           void importOriginal(parsed);

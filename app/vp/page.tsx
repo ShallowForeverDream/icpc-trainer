@@ -2,6 +2,7 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import { useEffect, useMemo, useState } from "react";
+import Link from "next/link";
 import { AppShell, Icon } from "../components/AppShell";
 import { browserApiUrl } from "../lib/browser-api";
 
@@ -121,7 +122,8 @@ export default function VpPage() {
   }
 
   return <AppShell active="模拟赛">
-    <section className="vp-builder-head"><div><h1>创建 VP</h1><p>支持个性化组卷、原场镜像和多场组合；比赛开始后自动生成多人实时榜单。</p></div><div><b>{duration / 60}h</b><span>{count} 题</span><span>{participants.length || 0} 人</span></div></section>
+    <section className="vp-builder-head"><div><h1>创建 VP</h1><p>常规组卷用于 Codeforces 训练；历届补题可按原场时间轴重放 ICPC 真实榜单。</p></div><div><b>{duration / 60}h</b><span>{count} 题</span><span>{participants.length || 0} 人</span></div></section>
+    <Link className="archive-vp-entry" href="/vp/archive"><span>ICPC</span><div><small>新增模式</small><h2>历届补题 · 跟原场榜走</h2><p>2026 / 2025 / 2024 邀请赛、区域赛与 EC-Final；真实队伍和逐提交时间线同步重放。</p></div><b>选择赛事 →</b></Link>
     <section className="vp-builder simplified-vp-builder">
       <div className="builder-main">
         <div className="builder-section"><div><h2>比赛模式</h2><p>不同模式都会排除主 Handle 已 AC 的题目。</p></div><div className="mode-grid three-modes">{modeOptions.map(([name, description, icon]) => <button key={name} className={mode === name ? "active" : ""} onClick={() => setMode(name)}><b>{icon}</b><span><strong>{name}</strong><small>{description}</small></span><i>{mode === name ? "●" : "○"}</i></button>)}</div></div>

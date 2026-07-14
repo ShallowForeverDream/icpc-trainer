@@ -28,14 +28,15 @@ test("imports, sanitizes, and reads a first-open statement through HTTP", async 
 
   try {
     await waitForHealth(baseUrl);
+    const importBody = {
+      code: "2176C",
+      sourceUrl: "https://codeforces.com/problemset/problem/2176/C?locale=en",
+      html: `<div class="problem-statement"><div class="header"><div class="title">C. Odd Process</div><div class="time-limit">time limit per test 2 seconds</div><div class="memory-limit">memory limit per test 256 megabytes</div></div><div class="legend"><p>Read the original statement.</p><img src="https://codeforces.com/images/test.png" alt="Left and Right" onerror="alert(1)"></div><div class="input-specification"><div class="section-title">Input</div><p>One integer.</p></div><div class="output-specification"><div class="section-title">Output</div><p>Print the answer.</p></div></div>`,
+    };
     const response = await fetch(`${baseUrl}/codeforces/statements/import`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        code: "2176C",
-        sourceUrl: "https://codeforces.com/problemset/problem/2176/C?locale=en",
-        html: `<div class="problem-statement"><div class="header"><div class="title">C. Odd Process</div><div class="time-limit">time limit per test 2 seconds</div><div class="memory-limit">memory limit per test 256 megabytes</div></div><div class="legend"><p>Read the original statement.</p><img src="https://codeforces.com/images/test.png" alt="Left and Right" onerror="alert(1)"></div><div class="input-specification"><div class="section-title">Input</div><p>One integer.</p></div><div class="output-specification"><div class="section-title">Output</div><p>Print the answer.</p></div></div>`,
-      }),
+      body: JSON.stringify(importBody),
     });
     assert.equal(response.status, 201);
     const imported = await response.json();
@@ -48,6 +49,24 @@ test("imports, sanitizes, and reads a first-open statement through HTTP", async 
     const cached = await cachedResponse.json();
     assert.equal(cached.statement.code, "2176C");
     assert.equal(cached.statement.images[0].sourceUrl, "https://codeforces.com/images/test.png");
+
+    const translationResponse = await fetch(`${baseUrl}/codeforces/statements/translation`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: "2176C", chineseHtml: "<div class=\"legend\"><p>这是一段已经生成并且可以立即阅读的中文缓存题面。</p></div>" }),
+    });
+    assert.equal(translationResponse.status, 200);
+    assert.equal((await translationResponse.json()).statement.translationCurrent, true);
+
+    const reimportResponse = await fetch(`${baseUrl}/codeforces/statements/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(importBody),
+    });
+    assert.equal(reimportResponse.status, 201);
+    const stale = (await reimportResponse.json()).statement;
+    assert.match(stale.chineseHtml, /可以立即阅读的中文缓存题面/);
+    assert.equal(stale.revalidating, true);
   } finally {
     child.kill("SIGTERM");
     await new Promise((resolve) => child.once("exit", resolve));

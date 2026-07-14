@@ -100,6 +100,30 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   assert.match(catalog, /selectedTags/);
 });
 
+test("ships historical ICPC upsolving with timestamp-replayed real standings", async () => {
+  const [catalog, page, route, scoreboard] = await Promise.all([
+    readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
+    readFile(new URL("app/vp/archive/page.tsx", root), "utf8"),
+    readFile(new URL("app/api/archive/scoreboard/route.ts", root), "utf8"),
+    readFile(new URL("app/lib/archive-scoreboard.ts", root), "utf8"),
+  ]);
+  assert.equal((catalog.match(/boardPath: "icpc\//g) ?? []).length, 24);
+  assert.match(catalog, /2026-wuhan-invitational/);
+  assert.match(catalog, /2025-chengdu/);
+  assert.match(catalog, /2024-nanjing/);
+  assert.match(page, /同时间轴真实榜单/);
+  assert.match(page, /我的队伍实时插榜/);
+  assert.match(route, /archiveScoreboard/);
+  assert.match(scoreboard, /run\.json/);
+  assert.match(scoreboard, /freezeAtSeconds/);
+  assert.match(scoreboard, /pendingAttempts/);
+  const response = await render("/vp/archive");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /历届补题/);
+  assert.match(html, /ICPC 武汉邀请赛/);
+});
+
 test("ships the domestic API, cached statements, OCR, and local translation deployment", async () => {
   const [backend, statements, compose, dockerfile, nginx, browserApi] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
@@ -120,6 +144,8 @@ test("ships the domestic API, cached statements, OCR, and local translation depl
   assert.match(statements, /statement_assets/);
   assert.match(statements, /tesseract/);
   assert.match(statements, /TRANSLATOR_MODEL/);
+  assert.match(statements, /stale-while-revalidate/);
+  assert.match(statements, /translateBatch/);
   assert.match(compose, /127\.0\.0\.1:8787:8787/);
   assert.match(compose, /ggml-org\/llama\.cpp:server/);
   assert.match(dockerfile, /tesseract-ocr/);

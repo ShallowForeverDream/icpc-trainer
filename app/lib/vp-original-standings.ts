@@ -1,8 +1,9 @@
-import type { CodeforcesContestStandings, CodeforcesParty } from "./codeforces";
+import type { CodeforcesContestStandings, CodeforcesParty, CodeforcesSubmission } from "./codeforces";
 
 export type VpStandingProblem = { contestId: number; index: string; slot: string };
 export type VpStandingState = { solved: boolean; wrongAttempts: number; pendingAttempts: number; solvedMinutes: number | null; penalty: number };
-export type VpStandingRow = { id: string; handle: string; solved: number; penalty: number; problems: Record<string, VpStandingState>; sourceCount: number; sourceContests: number[]; origin: "original" | "mine"; mine: boolean; rank?: number };
+export type VpMedal = "gold" | "silver" | "bronze" | null;
+export type VpStandingRow = { id: string; handle: string; solved: number; penalty: number; lastSolvedMinutes: number | null; problems: Record<string, VpStandingState>; sourceCount: number; sourceContests: number[]; origin: "original" | "mine"; mine: boolean; rank?: number; medal?: VpMedal };
 
 export function vpProblemKey(problem: Pick<VpStandingProblem, "contestId" | "index">) {
   return `${problem.contestId}${problem.index}`;
@@ -10,6 +11,31 @@ export function vpProblemKey(problem: Pick<VpStandingProblem, "contestId" | "ind
 
 export function emptyVpStates(problems: VpStandingProblem[]) {
   return Object.fromEntries(problems.map((problem) => [vpProblemKey(problem), { solved: false, wrongAttempts: 0, pendingAttempts: 0, solvedMinutes: null, penalty: 0 }])) as Record<string, VpStandingState>;
+}
+
+export function vpMedalCutoffs(officialTeams: number) {
+  const teams = Math.max(0, Math.floor(officialTeams || 0));
+  if (!teams) return { gold: 0, silver: 0, bronze: 0 };
+  const gold = Math.max(1, Math.ceil(teams * .1));
+  const silver = gold + Math.ceil(teams * .2);
+  const bronze = silver + Math.ceil(teams * .3);
+  return { gold, silver, bronze };
+}
+
+function medalForRank(rank: number, cutoffs: ReturnType<typeof vpMedalCutoffs>): VpMedal {
+  if (rank <= cutoffs.gold) return "gold";
+  if (rank <= cutoffs.silver) return "silver";
+  if (rank <= cutoffs.bronze) return "bronze";
+  return null;
+}
+
+function summarize(states: Record<string, VpStandingState>) {
+  const solvedStates = Object.values(states).filter((state) => state.solved);
+  return {
+    solved: solvedStates.length,
+    penalty: solvedStates.reduce((sum, state) => sum + state.penalty, 0),
+    lastSolvedMinutes: solvedStates.length ? Math.max(...solvedStates.map((state) => state.solvedMinutes || 0)) : null,
+  };
 }
 
 function originalPartyIdentity(party: CodeforcesParty) {
@@ -31,7 +57,7 @@ export function buildOriginalVpRows(problems: VpStandingProblem[], sourceBoards:
       if (!identity) continue;
       let row = combined.get(identity.id);
       if (!row) {
-        row = { ...identity, solved: 0, penalty: 0, problems: emptyVpStates(problems), sourceCount: 0, sourceContests: [], sourceSet: new Set(), origin: "original", mine: false };
+        row = { ...identity, solved: 0, penalty: 0, lastSolvedMinutes: null, problems: emptyVpStates(problems), sourceCount: 0, sourceContests: [], sourceSet: new Set(), origin: "original", mine: false };
         combined.set(identity.id, row);
       }
       row.sourceSet.add(source.contest.id);
@@ -52,7 +78,40 @@ export function buildOriginalVpRows(problems: VpStandingProblem[], sourceBoards:
     }
   }
   return [...combined.values()].map(({ sourceSet, ...row }) => {
-    const states = Object.values(row.problems);
-    return { ...row, sourceCount: sourceSet.size, sourceContests: [...sourceSet], solved: states.filter((state) => state.solved).length, penalty: states.reduce((sum, state) => sum + state.penalty, 0) };
+    return { ...row, sourceCount: sourceSet.size, sourceContests: [...sourceSet], ...summarize(row.problems) };
   });
+}
+
+export function buildParticipantVpRows(participants: string[], problems: VpStandingProblem[], startedAt: number, submissionSets: CodeforcesSubmission[][], cutoffSeconds: number) {
+  const startSeconds = Math.floor(startedAt / 1000);
+  const cutoff = startSeconds + Math.max(0, Math.floor(cutoffSeconds));
+  const problemKeys = new Set(problems.map(vpProblemKey));
+  return participants.map((handle, participantIndex): VpStandingRow => {
+    const states = emptyVpStates(problems);
+    const submissions = (submissionSets[participantIndex] ?? []).filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= cutoff && problemKeys.has(`${item.problem.contestId}${item.problem.index}`)).sort((left, right) => left.creationTimeSeconds - right.creationTimeSeconds);
+    for (const submission of submissions) {
+      const state = states[`${submission.problem.contestId}${submission.problem.index}`];
+      if (!state || state.solved) continue;
+      if (submission.verdict === "OK") {
+        state.solved = true;
+        state.pendingAttempts = 0;
+        state.solvedMinutes = Math.max(0, Math.floor((submission.creationTimeSeconds - startSeconds) / 60));
+        state.penalty = state.solvedMinutes + state.wrongAttempts * 20;
+      } else if (submission.verdict === "TESTING") state.pendingAttempts += 1;
+      else if (!["COMPILATION_ERROR", "SKIPPED"].includes(submission.verdict ?? "")) state.wrongAttempts += 1;
+    }
+    return { id: `mine:${handle.toLowerCase()}`, handle, ...summarize(states), problems: states, sourceCount: 0, sourceContests: [], origin: "mine", mine: true };
+  });
+}
+
+export function rankVpRows(originalRows: VpStandingRow[], participantRows: VpStandingRow[]) {
+  const cutoffs = vpMedalCutoffs(originalRows.length);
+  const rows = [...originalRows, ...participantRows].sort((left, right) => right.solved - left.solved || left.penalty - right.penalty || (left.lastSolvedMinutes ?? Number.MAX_SAFE_INTEGER) - (right.lastSolvedMinutes ?? Number.MAX_SAFE_INTEGER) || Number(left.mine) - Number(right.mine) || left.handle.localeCompare(right.handle));
+  let previous: VpStandingRow | undefined;
+  rows.forEach((row, index) => {
+    row.rank = previous && previous.solved === row.solved && previous.penalty === row.penalty ? previous.rank : index + 1;
+    row.medal = medalForRank(row.rank ?? index + 1, cutoffs);
+    previous = row;
+  });
+  return { rows, cutoffs };
 }

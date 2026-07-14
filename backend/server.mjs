@@ -5,6 +5,7 @@ import { dirname, join } from "node:path";
 import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } from "./auth.mjs";
 import { createStatementHandler } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
+import { buildParticipantVpRows, rankVpRows, summarizeVpStates } from "./vp-scoring.mjs";
 import {
   finishVpSession,
   ownerKeys,
@@ -543,32 +544,7 @@ function buildOriginalVpRows(problems, sourceBoards, elapsedSeconds) {
     }
   }
   return [...combined.values()].map((row) => {
-    const states = Object.values(row.problems);
-    return { ...row, sourceCount: row.sourceContests.size, sourceContests: [...row.sourceContests], solved: states.filter((state) => state.solved).length, penalty: states.reduce((sum, state) => sum + state.penalty, 0) };
-  });
-}
-
-async function buildCurrentVpRows(participants, problems, startedAt, durationMinutes) {
-  const startSeconds = Math.floor(startedAt / 1000);
-  const endSeconds = startSeconds + durationMinutes * 60;
-  const problemKeys = new Set(problems.map(vpProblemKey));
-  const submissionSets = await Promise.all(participants.map((handle) => getSubmissions(handle, 1000, 15_000)));
-  return participants.map((handle, participantIndex) => {
-    const states = emptyVpStates(problems);
-    const ordered = submissionSets[participantIndex].filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= endSeconds && problemKeys.has(`${item.problem?.contestId}${item.problem?.index}`)).sort((a, b) => a.creationTimeSeconds - b.creationTimeSeconds);
-    for (const submission of ordered) {
-      const state = states[`${submission.problem.contestId}${submission.problem.index}`];
-      if (!state || state.solved) continue;
-      if (submission.verdict === "OK") {
-        state.solved = true;
-        state.pendingAttempts = 0;
-        state.solvedMinutes = Math.max(0, Math.floor((submission.creationTimeSeconds - startSeconds) / 60));
-        state.penalty = state.solvedMinutes + state.wrongAttempts * 20;
-      } else if (submission.verdict === "TESTING") state.pendingAttempts += 1;
-      else if (!["COMPILATION_ERROR", "SKIPPED"].includes(submission.verdict || "")) state.wrongAttempts += 1;
-    }
-    const values = Object.values(states);
-    return { id: `mine:${handle.toLowerCase()}`, handle, solved: values.filter((state) => state.solved).length, penalty: values.reduce((sum, state) => sum + state.penalty, 0), problems: states, sourceCount: 0, sourceContests: [], origin: "mine", mine: true };
+    return { ...row, sourceCount: row.sourceContests.size, sourceContests: [...row.sourceContests], ...summarizeVpStates(row.problems) };
   });
 }
 
@@ -579,7 +555,12 @@ async function buildVpStandings(body, ownerKey) {
   if (!Number.isFinite(startedAt) || startedAt <= 0 || startedAt > Date.now() + 60_000) throw new HttpError(400, "比赛开始时间无效");
   const problems = Array.isArray(body.problems) ? body.problems.slice(0, 20).filter((item) => Number(item?.contestId) && /^[A-Z][0-9]?$/.test(String(item?.index || ""))).map((item, index) => ({ contestId: Number(item.contestId), index: String(item.index), slot: String(item.slot || String.fromCharCode(65 + index)) })) : [];
   if (!problems.length) throw new HttpError(400, "比赛题目为空");
-  const elapsedSeconds = Math.max(0, Math.min(durationMinutes * 60, Math.floor((Date.now() - startedAt) / 1000)));
+  const durationSeconds = durationMinutes * 60;
+  const elapsedSeconds = Math.max(0, Math.min(durationSeconds, Math.floor((Date.now() - startedAt) / 1000)));
+  const freezeAtSeconds = Math.max(0, durationSeconds - 60 * 60);
+  const finished = elapsedSeconds >= durationSeconds;
+  const frozen = !finished && elapsedSeconds >= freezeAtSeconds;
+  const boardElapsedSeconds = frozen ? freezeAtSeconds : elapsedSeconds;
   const pollAfterSeconds = Math.max(15, Math.ceil(participants.length * 2.5));
   const sessionId = typeof body.vpId === "string" && /^vp-[a-f0-9-]{16,64}$/i.test(body.vpId) ? body.vpId : null;
   if (sessionId && !readVpSession(sessionId, ownerKey)) throw new HttpError(404, "VP 记录不存在或不属于当前账号");
@@ -588,31 +569,36 @@ async function buildVpStandings(body, ownerKey) {
   const cachedSnapshot = readVpSnapshot(snapshotKey, elapsedBucket);
   if (cachedSnapshot) return { ...cachedSnapshot.value, cacheHit: true };
   const contestIds = [...new Set(problems.map((problem) => problem.contestId))];
-  const [sourceResults, currentRows] = await Promise.all([
+  const [sourceResults, submissionSets] = await Promise.all([
     Promise.allSettled(contestIds.map((contestId) => getContestStandings(contestId))),
-    buildCurrentVpRows(participants, problems, startedAt, durationMinutes),
+    Promise.all(participants.map((handle) => getSubmissions(handle, 1000, 15_000))),
   ]);
   const sourceBoards = sourceResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
   const unavailableContestIds = contestIds.filter((_, index) => sourceResults[index].status === "rejected");
-  const originalRows = buildOriginalVpRows(problems, sourceBoards, elapsedSeconds);
-  const rows = [...originalRows, ...currentRows].sort((a, b) => b.solved - a.solved || a.penalty - b.penalty || Number(a.mine) - Number(b.mine) || a.handle.localeCompare(b.handle));
-  let previous = null;
-  rows.forEach((row, index) => {
-    row.rank = previous && previous.solved === row.solved && previous.penalty === row.penalty ? previous.rank : index + 1;
-    previous = row;
-  });
+  const originalRows = buildOriginalVpRows(problems, sourceBoards, boardElapsedSeconds);
+  const participantRows = buildParticipantVpRows(participants, problems, startedAt, submissionSets, elapsedSeconds);
+  const boardParticipantRows = frozen ? buildParticipantVpRows(participants, problems, startedAt, submissionSets, freezeAtSeconds) : participantRows;
+  const ranked = rankVpRows(originalRows, boardParticipantRows, originalRows.length);
+  const rows = ranked.rows;
+  const rankedById = new Map(rows.map((row) => [row.id, row]));
+  const liveParticipantRows = participantRows.map((row) => ({ ...row, rank: rankedById.get(row.id)?.rank || rows.length, medal: rankedById.get(row.id)?.medal || null }));
   const visible = rows.slice(0, 120);
-  for (const row of currentRows) if (!visible.some((item) => item.id === row.id)) visible.push(row);
+  for (const row of boardParticipantRows) if (!visible.some((item) => item.id === row.id)) visible.push(rankedById.get(row.id) || row);
   const result = {
     updatedAt: new Date().toISOString(),
     startedAt,
     durationMinutes,
     elapsedSeconds,
+    freezeAtSeconds,
+    frozen,
+    finished,
     pollAfterSeconds,
     totalRows: rows.length,
     originalTeams: originalRows.length,
     unavailableContestIds,
     sourceBoards: sourceBoards.map((source) => ({ contestId: source.contest.id, name: source.contest.name, selectedProblems: problems.filter((problem) => problem.contestId === source.contest.id).map((problem) => problem.slot), sampledTeams: source.rows.length })),
+    medalCutoffs: ranked.cutoffs,
+    participantRows: liveParticipantRows,
     rows: visible,
   };
   writeVpSnapshot(snapshotKey, sessionId, elapsedBucket, result);

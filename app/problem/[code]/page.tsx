@@ -39,6 +39,7 @@ type DisplayProblem = {
 type StatementLanguage = "original" | "chinese";
 type ThinkingRecord = { startedAt?: number | null; note?: string; hintLevel?: number; difficulty?: TrainingDifficulty };
 type PersistentProblemState = { draft: string; thinking: ThinkingRecord };
+type VpContext = { id: string; slot: string };
 
 function isStringArray(value: unknown): value is string[] {
   return Array.isArray(value) && value.length <= 500 && value.every((item) => typeof item === "string" && item.length <= 40);
@@ -176,6 +177,7 @@ export default function ProblemDetailPage() {
   const [thinkingNote, setThinkingNote] = useState("");
   const [difficulty, setDifficulty] = useState<TrainingDifficulty>("right");
   const [trainingState, setTrainingState] = useState<"active" | "saving" | "saved" | "error">("active");
+  const [vpContext, setVpContext] = useState<VpContext | null>(null);
   const officialProblemUrl = `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
 
   const refreshStatement = useCallback(async () => {
@@ -271,7 +273,11 @@ export default function ProblemDetailPage() {
   }, [problem.code]);
 
   useEffect(() => {
-    const enabled = new URLSearchParams(location.search).get("training") === "1";
+    const search = new URLSearchParams(location.search);
+    const enabled = search.get("training") === "1";
+    const vpId = (search.get("vp") || "").slice(0, 80);
+    const slot = (search.get("slot") || "").toUpperCase();
+    setVpContext(vpId && /^[A-Z][0-9]?$/.test(slot) ? { id: vpId, slot } : null);
     setTrainingMode(enabled);
     setMetaRevealed(!enabled);
     const saved = readStoredJson<ThinkingRecord>(`icpc-trainer-thinking:${requestedCode}`, {}, isThinkingRecord);
@@ -386,9 +392,10 @@ export default function ProblemDetailPage() {
 
   return <AppShell active="题库">
     <div className="problem-page-head">
-      <div><Link href="/problem">← 返回题库</Link><span>{ready ? "原题面已导入" : "首次打开自动导入"} · {problem.code}</span></div>
+      <div><Link href={vpContext ? "/vp" : "/problem"}>← {vpContext ? "返回 VP" : "返回题库"}</Link><span>{ready ? "原题面已导入" : "首次打开自动导入"} · {problem.code}</span></div>
       <div><a href={officialProblemUrl} target="_blank" rel="noreferrer">查看 Codeforces 原题 ↗</a><button className={favorite ? "saved" : ""} onClick={toggleFavorite}>☆ {favorite ? "已收藏" : "收藏"}</button></div>
     </div>
+    {vpContext ? <section className="vp-problem-banner"><div><b>VP · Problem {vpContext.slot}</b><span>题面、中文翻译与代码草稿均在站内；提交后榜单会自动更新。</span></div><Link href="/vp">返回实时榜单 →</Link></section> : null}
     <section className="problem-workspace">
       <article className="statement-panel">
         <div className="statement-title">
@@ -427,7 +434,7 @@ export default function ProblemDetailPage() {
         </section> : null}
         <div className="editor-head"><div><span className="active-dot" /> main.cpp</div><select aria-label="编译语言"><option>GNU C++20</option></select></div>
         <textarea className="code-editor" value={code} onChange={(event) => setCode(event.target.value)} spellCheck={false} aria-label="C++ 代码编辑器" />
-        <div className="editor-footer"><div><a href="/templates">＋ 打开模板库</a><span>草稿已自动保存在当前浏览器</span></div><p className="submit-safety-note">扩展只负责预填；请在 Codeforces 核对语言和代码后手动提交。</p>{submitState === "empty" ? <p className="statement-error" role="alert">请先填写代码。</p> : submitState === "missing" ? <p className="statement-error" role="alert">未检测到 v0.4 扩展，请安装或重新加载扩展后重试。</p> : null}<button className="submit-button" onClick={sendToExtension} disabled={submitState === "sending"}>{submitState === "sent" ? <><Icon name="check" /> 已打开，请到 Codeforces 确认</> : submitState === "sending" ? <>正在连接扩展…</> : <>填充到 Codeforces <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
+        <div className="editor-footer"><div><a href="/templates">＋ 打开模板库</a><span>草稿已自动保存</span></div><p className="submit-safety-note">扩展会打开 Codeforces 并预填代码；确认提交后，本场 VP 约 15 秒内更新判题和排名。</p>{submitState === "empty" ? <p className="statement-error" role="alert">请先填写代码。</p> : submitState === "missing" ? <p className="statement-error" role="alert">未检测到 v0.4 扩展，请安装或重新加载扩展后重试。</p> : null}<button className="submit-button" onClick={sendToExtension} disabled={submitState === "sending"}>{submitState === "sent" ? <><Icon name="check" /> 已打开提交页</> : submitState === "sending" ? <>正在连接扩展…</> : <>{vpContext ? "提交本题（打开 CF）" : "填充到 Codeforces"} <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
       </aside>
     </section>
   </AppShell>;

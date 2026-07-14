@@ -100,14 +100,16 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.doesNotMatch(fill, /submitButton|\.click\s*\(/);
 });
 
-test("ships live multiplayer VP generation, combined contests, and standings", async () => {
-  const [route, standingsRoute, standingsHelper, recommendationRoute, page, catalog] = await Promise.all([
+test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {
+  const [route, standingsRoute, standingsHelper, recommendationRoute, page, catalog, detail, backendScoring] = await Promise.all([
     readFile(new URL("app/api/vp/generate/route.ts", root), "utf8"),
     readFile(new URL("app/api/vp/standings/route.ts", root), "utf8"),
     readFile(new URL("app/lib/vp-original-standings.ts", root), "utf8"),
     readFile(new URL("app/api/codeforces/recommendations/route.ts", root), "utf8"),
     readFile(new URL("app/vp/page.tsx", root), "utf8"),
     readFile(new URL("app/problem/page.tsx", root), "utf8"),
+    readFile(new URL("app/problem/[code]/page.tsx", root), "utf8"),
+    readFile(new URL("backend/vp-scoring.mjs", root), "utf8"),
   ]);
   assert.match(route, /getUserSubmissions/);
   assert.match(route, /pickRandomSet/);
@@ -120,12 +122,15 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   assert.match(route, /pickMirror/);
   assert.match(route, /pickCombined/);
   assert.match(route, /sourceContests/);
-  assert.match(standingsRoute, /wrongAttempts/);
-  assert.match(standingsRoute, /pendingAttempts/);
+  assert.match(standingsHelper, /wrongAttempts/);
+  assert.match(standingsHelper, /pendingAttempts/);
   assert.match(standingsRoute, /15_000/);
   assert.match(standingsRoute, /15_000, true/);
-  assert.match(standingsRoute, /penalty/);
+  assert.match(standingsHelper, /penalty/);
   assert.match(standingsRoute, /buildOriginalVpRows/);
+  assert.match(standingsRoute, /freezeAtSeconds/);
+  assert.match(standingsRoute, /participantRows/);
+  assert.match(standingsRoute, /medalCutoffs/);
   assert.match(standingsRoute, /sourceBoards/);
   assert.match(standingsRoute, /selectedProblems/);
   assert.match(standingsHelper, /bestSubmissionTimeSeconds/);
@@ -134,12 +139,22 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   assert.match(page, /ShallowDream2/);
   assert.match(page, /实时榜单/);
   assert.match(page, /思维题占比/);
-  assert.match(page, /按原比赛同时间回放/);
-  assert.match(page, /原比赛组合实时榜单/);
-  assert.match(page, /只计算本次题目/);
+  assert.match(page, /站内做题/);
+  assert.match(page, /最后 1 小时封榜/);
+  assert.match(page, /总罚时/);
+  assert.match(page, /总用时/);
+  assert.match(page, /金奖前 10%/);
+  assert.match(page, /vp-final-result/);
   assert.match(page, /pollAfterSeconds/);
   assert.match(page, /多场组合/);
   assert.match(page, /来源参考/);
+  assert.match(detail, /VP · Problem/);
+  assert.match(detail, /提交本题（打开 CF）/);
+  assert.match(detail, /返回实时榜单/);
+  assert.match(backendScoring, /teams \* 0\.1/);
+  assert.match(backendScoring, /teams \* 0\.2/);
+  assert.match(backendScoring, /teams \* 0\.3/);
+  assert.match(backendScoring, /lastSolvedMinutes/);
   assert.match(catalog, /个性化推荐/);
   assert.match(catalog, /目标 Rating/);
   assert.match(catalog, /selectedTags/);

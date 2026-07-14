@@ -110,12 +110,14 @@ test("ships live multiplayer VP generation, combined contests, and standings", a
   assert.match(route, /pickThinkingSet/);
   assert.match(route, /THINKING_TAGS/);
   assert.match(route, /thinkingRatio/);
+  assert.match(route, /getProblemset\(true\)/);
   assert.match(route, /pickMirror/);
   assert.match(route, /pickCombined/);
   assert.match(route, /sourceContests/);
   assert.match(standingsRoute, /wrongAttempts/);
   assert.match(standingsRoute, /pendingAttempts/);
   assert.match(standingsRoute, /15_000/);
+  assert.match(standingsRoute, /15_000, true/);
   assert.match(standingsRoute, /penalty/);
   assert.match(recommendationRoute, /targetRating/);
   assert.match(page, /ShallowDream2/);

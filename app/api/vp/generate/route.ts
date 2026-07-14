@@ -109,8 +109,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as GenerateRequest;
     const backend = process.env.ICPC_API_BASE_URL?.replace(/\/$/, "");
     if (backend) {
-      const upstream = await fetch(`${backend}/vp/generate`, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "icpc-trainer-sites/0.1" }, body: JSON.stringify(body) });
-      return NextResponse.json(await upstream.json(), { status: upstream.status });
+      try {
+        const upstream = await fetch(`${backend}/vp/generate`, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "icpc-trainer-sites/0.1" }, body: JSON.stringify(body) });
+        const data = await upstream.json().catch(() => null);
+        if (data) return NextResponse.json(data, { status: upstream.status });
+      } catch { /* Cloudflare cannot always reach an HTTPS IP; fall back to Codeforces directly. */ }
     }
     const participants = [...new Set((body.participants?.length ? body.participants : [body.handle ?? "ShallowDream2"]).map((item) => item.trim()).filter(Boolean))].slice(0, 12);
     if (!participants.length || participants.some((item) => !/^[A-Za-z0-9_.-]{3,24}$/.test(item))) return NextResponse.json({ error: "参赛 Handle 列表无效" }, { status: 400 });
@@ -122,7 +125,7 @@ export async function POST(request: NextRequest) {
     const seed = (body.seed ?? `${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`).slice(0, 64);
     const random = randomFromSeed(seed);
 
-    const [problemset, submissions] = await Promise.all([getProblemset(), getUserSubmissions(handle, 1000)]);
+    const [problemset, submissions] = await Promise.all([getProblemset(true), getUserSubmissions(handle, 1000, 60_000, true)]);
     const solved = new Set(submissions.filter((item) => item.verdict === "OK" && item.problem.contestId).map((item) => `${item.problem.contestId}${item.problem.index}`));
     const pool = problemset.filter((problem) => problem.type === "PROGRAMMING" && problem.contestId && problem.rating && problem.rating >= Math.max(800, targetRating - 800) && problem.rating <= targetRating + 900 && !problem.tags.includes("interactive") && !solved.has(`${problem.contestId}${problem.index}`));
 

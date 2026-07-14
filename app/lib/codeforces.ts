@@ -55,11 +55,11 @@ async function throttledFetch<T>(method: string, params: URLSearchParams) {
   }
 }
 
-export async function getProblemset(): Promise<CodeforcesProblem[]> {
+export async function getProblemset(preferDirect = false): Promise<CodeforcesProblem[]> {
   const cached = globalCache.__icpcProblems;
   if (cached && cached.expiresAt > Date.now()) return cached.value;
   try {
-    const base = backendBase();
+    const base = preferDirect ? "" : backendBase();
     let value: CodeforcesProblem[];
     if (base) {
       const response = await fetch(`${base}/problemset`, { headers: { "User-Agent": "icpc-trainer-sites/0.4", Accept: "application/json" } });
@@ -76,7 +76,7 @@ export async function getProblemset(): Promise<CodeforcesProblem[]> {
   }
 }
 
-export async function getUserSubmissions(handle: string, count = 1000, maxAgeMs = 60_000): Promise<CodeforcesSubmission[]> {
+export async function getUserSubmissions(handle: string, count = 1000, maxAgeMs = 60_000, preferDirect = false): Promise<CodeforcesSubmission[]> {
   const cache = globalCache.__icpcSubmissions ??= new Map();
   const key = handle.toLowerCase();
   const requestedCount = Math.max(1, Math.min(1000, Math.round(count) || 100));
@@ -85,7 +85,7 @@ export async function getUserSubmissions(handle: string, count = 1000, maxAgeMs 
   if (cached && Date.now() - cached.fetchedAt <= requestedMaxAge && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
   const fetchedCount = Math.max(requestedCount, cached?.count ?? 0);
   try {
-    const base = backendBase();
+    const base = preferDirect ? "" : backendBase();
     let value: CodeforcesSubmission[];
     if (base) {
       const response = await fetch(`${base}/submissions/raw?handle=${encodeURIComponent(handle)}&count=${fetchedCount}`, { headers: { "User-Agent": "icpc-trainer-sites/0.4", Accept: "application/json" } });

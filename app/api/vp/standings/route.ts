@@ -11,8 +11,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json() as StandingsRequest;
     const backend = process.env.ICPC_API_BASE_URL?.replace(/\/$/, "");
     if (backend) {
-      const upstream = await fetch(`${backend}/vp/standings`, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "icpc-trainer-sites/0.2" }, body: JSON.stringify(body) });
-      return NextResponse.json(await upstream.json(), { status: upstream.status });
+      try {
+        const upstream = await fetch(`${backend}/vp/standings`, { method: "POST", headers: { "Content-Type": "application/json", "User-Agent": "icpc-trainer-sites/0.2" }, body: JSON.stringify(body) });
+        const data = await upstream.json().catch(() => null);
+        if (data) return NextResponse.json(data, { status: upstream.status });
+      } catch { /* Cloudflare cannot always reach an HTTPS IP; fall back to Codeforces directly. */ }
     }
     const participants = [...new Set((body.participants?.length ? body.participants : [body.handle ?? "ShallowDream2"]).map((item) => item.trim()).filter(Boolean))].slice(0, 12);
     if (!participants.length || participants.some((handle) => !/^[A-Za-z0-9_.-]{3,24}$/.test(handle))) return NextResponse.json({ error: "参赛 Handle 列表无效" }, { status: 400 });
@@ -25,7 +28,7 @@ export async function POST(request: NextRequest) {
     const problemKeys = new Set(problems.map((problem) => `${problem.contestId}${problem.index}`));
     const rows: StandingRow[] = [];
     for (const handle of participants) {
-      const submissions = await getUserSubmissions(handle, 1000, 15_000);
+      const submissions = await getUserSubmissions(handle, 1000, 15_000, true);
       const states = new Map(problems.map((problem) => [`${problem.contestId}${problem.index}`, { solved: false, wrongAttempts: 0, pendingAttempts: 0, solvedMinutes: null as number | null, penalty: 0 }]));
       for (const submission of submissions.filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= endSeconds && problemKeys.has(`${item.problem.contestId}${item.problem.index}`)).sort((a, b) => a.creationTimeSeconds - b.creationTimeSeconds)) {
         const state = states.get(`${submission.problem.contestId}${submission.problem.index}`);

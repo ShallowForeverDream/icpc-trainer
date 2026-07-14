@@ -16,10 +16,18 @@ let problemFetch = null;
 const submissionCache = new Map();
 const contestStandingsCache = new Map();
 const inFlightCodeforces = new Map();
+const SUBMISSION_CACHE_LIMIT = 256;
+const CONTEST_STANDINGS_CACHE_LIMIT = 64;
 let apiQueue = Promise.resolve();
 let lastApiCall = 0;
 let apiQueueDepth = 0;
 const requestLimiter = createWindowLimiter({ windowMs: 60_000, limit: 90, maxEntries: 4096 });
+
+function setBoundedCache(map, key, value, maxEntries, isExpired) {
+  map.delete(key);
+  map.set(key, value);
+  pruneMap(map, isExpired, maxEntries);
+}
 
 const json = (response, status, value, extra = {}) => {
   response.writeHead(status, {
@@ -105,8 +113,7 @@ async function getSubmissions(handle, count = 1000, maxAgeMs = 60_000) {
     const value = await codeforces("user.status", new URLSearchParams({ handle, from: "1", count: String(fetchedCount) }));
     if (!Array.isArray(value)) throw new HttpError(502, "Codeforces 提交记录响应无效");
     const fetchedAt = Date.now();
-    submissionCache.set(key, { expiresAt: fetchedAt + 60_000, staleUntil: fetchedAt + 10 * 60_000, fetchedAt, count: fetchedCount, value });
-    if (submissionCache.size > 256) pruneMap(submissionCache, (entry) => entry.staleUntil <= Date.now(), 256);
+    setBoundedCache(submissionCache, key, { expiresAt: fetchedAt + 60_000, staleUntil: fetchedAt + 10 * 60_000, fetchedAt, count: fetchedCount, value }, SUBMISSION_CACHE_LIMIT, (entry) => entry.staleUntil <= fetchedAt);
     return value.slice(0, requestedCount);
   } catch (error) {
     if (cached && cached.staleUntil > Date.now() && cached.count >= requestedCount) return cached.value.slice(0, requestedCount);
@@ -125,7 +132,8 @@ async function getContestStandings(contestId) {
       const persisted = JSON.parse(await readFile(cachePath, "utf8"));
       if (persisted?.value?.contest && Array.isArray(persisted.value.problems) && Array.isArray(persisted.value.rows)) {
         const now = Date.now();
-        contestStandingsCache.set(normalizedId, { expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, value: persisted.value });
+        persisted.value.rows = persisted.value.rows.slice(0, 500);
+        setBoundedCache(contestStandingsCache, normalizedId, { expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, value: persisted.value }, CONTEST_STANDINGS_CACHE_LIMIT, (entry) => entry.staleUntil <= now);
         return persisted.value;
       }
     } catch { /* Cache miss. */ }
@@ -135,14 +143,13 @@ async function getContestStandings(contestId) {
     if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new HttpError(502, "原比赛榜单数据无效");
     value.rows = value.rows.slice(0, 500);
     const now = Date.now();
-    contestStandingsCache.set(normalizedId, { expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, value });
+    setBoundedCache(contestStandingsCache, normalizedId, { expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, value }, CONTEST_STANDINGS_CACHE_LIMIT, (entry) => entry.staleUntil <= now);
     try {
       await mkdir(CF_STANDINGS_CACHE_DIR, { recursive: true });
       const temporary = `${cachePath}.${randomUUID()}.tmp`;
       await writeFile(temporary, JSON.stringify({ cachedAt: now, value }), "utf8");
       await rename(temporary, cachePath);
     } catch { /* Memory cache remains usable when disk persistence fails. */ }
-    if (contestStandingsCache.size > 64) pruneMap(contestStandingsCache, (entry) => entry.staleUntil <= now, 64);
     return value;
   } catch (error) {
     if (cached && cached.staleUntil > Date.now()) return cached.value;
@@ -608,9 +615,27 @@ const server = http.createServer(async (request, response) => {
     response.setHeader("Vary", "Origin");
   }
   if (request.method === "OPTIONS") return response.writeHead(ALLOWED_ORIGINS.has(origin) ? 204 : 403).end();
-  if (url.pathname === "/health") return request.method === "GET"
-    ? json(response, 200, { status: "ok", service: "icpc-trainer-api", uptime: Math.round(process.uptime()) })
-    : json(response, 405, { error: "Method not allowed", requestId }, { Allow: "GET" });
+  if (url.pathname === "/health") {
+    if (request.method !== "GET") return json(response, 405, { error: "Method not allowed", requestId }, { Allow: "GET" });
+    const memory = process.memoryUsage();
+    return json(response, 200, {
+      status: "ok",
+      service: "icpc-trainer-api",
+      uptime: Math.round(process.uptime()),
+      memory: {
+        rssMiB: Math.round(memory.rss / 1024 / 1024),
+        heapUsedMiB: Math.round(memory.heapUsed / 1024 / 1024),
+        heapTotalMiB: Math.round(memory.heapTotal / 1024 / 1024),
+      },
+      caches: {
+        submissions: submissionCache.size,
+        submissionsLimit: SUBMISSION_CACHE_LIMIT,
+        contestStandings: contestStandingsCache.size,
+        contestStandingsLimit: CONTEST_STANDINGS_CACHE_LIMIT,
+        codeforcesInFlight: inFlightCodeforces.size,
+      },
+    });
+  }
   const rate = requestLimiter(clientIp(request));
   response.setHeader("RateLimit-Limit", "90");
   response.setHeader("RateLimit-Remaining", String(rate.remaining));

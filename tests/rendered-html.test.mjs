@@ -372,6 +372,9 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(page, /prewarmBySlot/);
   assert.match(page, /medalForRank/);
   assert.match(page, /比赛结束后自动揭榜/);
+  assert.match(page, /replayMyProblemStates/);
+  assert.match(page, /scoreboard\.frozen && !session\.reveal \? scoreboard\.freezeAtSeconds : elapsed/);
+  assert.match(page, /你的榜单行与原场队伍一同冻结/);
   assert.match(page, /总罚时/);
   assert.match(page, /总用时/);
   assert.match(page, /finishedAt/);

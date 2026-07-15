@@ -100,6 +100,32 @@ function medalForRank(rank: number, teamCount: number): VpMedal {
   return null;
 }
 
+function replayMyProblemStates(slots: string[], attempts: Record<string, MyAttempt>, submissions: ArchiveSubmission[], cutoffSeconds: number) {
+  const problems = Object.fromEntries(slots.map((slot) => [slot, { solved: false, wrongAttempts: 0, pendingAttempts: 0, solvedMinutes: null as number | null }]));
+  const replayableSlots = new Set(submissions.map((submission) => submission.slot));
+  const ordered = [...submissions].filter((submission) => submission.atSeconds <= cutoffSeconds).sort((left, right) => left.atSeconds - right.atSeconds);
+  for (const submission of ordered) {
+    const state = problems[submission.slot];
+    if (!state || state.solved) continue;
+    if (submission.verdict === "AC") {
+      state.solved = true;
+      state.solvedMinutes = Math.floor(submission.atSeconds / 60);
+    } else state.wrongAttempts += 1;
+  }
+  // Older sessions have aggregate attempts but no replayable timestamps.
+  for (const slot of slots) {
+    if (replayableSlots.has(slot)) continue;
+    const attempt = attempts[slot];
+    if (!attempt) continue;
+    problems[slot].wrongAttempts = attempt.wrong;
+    if (attempt.solvedAt !== undefined && attempt.solvedAt <= cutoffSeconds) {
+      problems[slot].solved = true;
+      problems[slot].solvedMinutes = Math.floor(attempt.solvedAt / 60);
+    }
+  }
+  return problems;
+}
+
 const medalText: Record<Exclude<VpMedal, null>, string> = { gold: "金奖", silver: "银奖", bronze: "铜奖" };
 
 export default function ArchiveVpPage() {
@@ -296,11 +322,8 @@ export default function ArchiveVpPage() {
 
   const combinedRows = useMemo(() => {
     if (!scoreboard || !session) return [];
-    const problems = Object.fromEntries(scoreboard.slots.map((slot) => {
-      const attempt = session.attempts[slot] || { wrong: 0 };
-      const solved = attempt.solvedAt !== undefined && attempt.solvedAt <= elapsed;
-      return [slot, { solved, wrongAttempts: attempt.wrong, pendingAttempts: 0, solvedMinutes: solved ? Math.floor((attempt.solvedAt || 0) / 60) : null }];
-    }));
+    const rankingCutoff = scoreboard.frozen && !session.reveal ? scoreboard.freezeAtSeconds : elapsed;
+    const problems = replayMyProblemStates(scoreboard.slots, session.attempts, session.submissions ?? [], rankingCutoff);
     const solvedStates = Object.values(problems).filter((problem) => problem.solved);
     const mine: StandingRow = {
       rank: 0,
@@ -422,7 +445,7 @@ export default function ArchiveVpPage() {
       <span className={status === "error" ? "form-error" : ""}>{message}</span>
     </section>
     {finished && finalResult ? <section className={`vp-final-result archive-final-result medal-${finalResult.medal || "none"}`}><div><span>{finalResult.medal ? medalText[finalResult.medal] : "本场完成"}</span><h2>第 {finalResult.rank} 名</h2><p>按 {finalResult.teamCount} 支正式队伍计算</p></div><dl><div><dt>解题</dt><dd>{finalResult.solved}</dd></div><div><dt>总罚时</dt><dd>{finalResult.penalty}</dd></div><div><dt>总用时</dt><dd>{usedTimeLabel(finalResult.lastSolvedMinutes)}</dd></div></dl><small>比赛结束后自动揭榜；金奖前 10%，银奖随后 20%，铜奖随后 30%，同分并列同奖。</small></section> : null}
-    <section className={`archive-freeze-state ${scoreboard?.frozen ? "active" : ""}`}><b>{scoreboard?.frozen ? "榜单已进入原场封榜时段" : "榜单按原场时间推进"}</b><span>{scoreboard?.frozen ? "封榜后的提交显示为待定，不提前泄露结果；比赛结束后可手动揭榜。" : `当前重放至 ${clock(elapsed)}，下一次自动同步不超过 10 秒。`}</span></section>
+    <section className={`archive-freeze-state ${scoreboard?.frozen ? "active" : ""}`}><b>{scoreboard?.frozen ? "榜单已进入原场封榜时段" : "榜单按原场时间推进"}</b><span>{scoreboard?.frozen ? "你的榜单行与原场队伍一同冻结；提交记录仍显示真实判题，比赛结束后自动揭榜。" : `当前重放至 ${clock(elapsed)}，下一次自动同步不超过 10 秒。`}</span></section>
     {prewarm ? <section className={`archive-prewarm${prewarm.status === "ready" ? " ready" : ""}`}><div><b>{prewarm.status === "ready" ? "整场题面已就绪" : "正在准备整场题面"}</b><span>{prewarm.readyOriginal}/{prewarm.total} 原题 · {prewarm.readyChinese}/{prewarm.total} 中文 · {prewarm.officialChinese} 题官方中文</span></div><strong>{prewarm.progress}%</strong><i><span style={{ width: `${prewarm.progress}%` }} /></i></section> : prewarmError ? <section className="archive-prewarm error"><div><b>题面预热稍后重试</b><span>{prewarmError}</span></div></section> : null}
 
     <nav className="vp-room-tabs archive-room-tabs" aria-label="历届补题模拟赛内容" role="tablist">

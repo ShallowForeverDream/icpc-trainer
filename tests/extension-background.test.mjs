@@ -28,7 +28,13 @@ test("keeps concurrent judge submissions isolated by their background tab", asyn
     },
     runtime: { onMessage: { addListener(listener) { messageListener = listener; } } },
   };
-  vm.runInNewContext(source, { chrome, URL, fetch, setTimeout, clearTimeout, console }, { filename: "background.js" });
+  const healthFetch = async (url) => {
+    if (String(url).includes("codeforces.com")) {
+      return new Response('<a href="/logout">Logout</a>', { status: 200 });
+    }
+    return new Response('<a href="/login">Login</a>', { status: 200 });
+  };
+  vm.runInNewContext(source, { chrome, URL, fetch: healthFetch, setTimeout, clearTimeout, console }, { filename: "background.js" });
 
   const dispatch = (message, sender) => new Promise((resolve) => {
     const returned = messageListener(message, sender, resolve);
@@ -36,6 +42,10 @@ test("keeps concurrent judge submissions isolated by their background tab", asyn
   });
   const trainerSender = (tabId) => ({ url: "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/problem/1904C", tab: { id: tabId } });
   const submission = (requestId, index) => ({ requestId, contestId: 1904, index, sourceCode: "int main(){}", languageLabel: "GNU C++20", autoSubmit: true });
+
+  const health = await dispatch({ type: "CHECK_JUDGE_SESSIONS" }, trainerSender(9));
+  assert.equal(health.sessions.codeforces.status, "ready");
+  assert.equal(health.sessions.ucup.status, "signed_out");
 
   const first = await dispatch({ type: "OPEN_CODEFORCES_SUBMIT", url: "https://codeforces.com/problemset/submit?contestId=1904&submittedProblemIndex=A", submission: submission("submit-concurrent-a", "A") }, trainerSender(10));
   const second = await dispatch({ type: "OPEN_CODEFORCES_SUBMIT", url: "https://codeforces.com/problemset/submit?contestId=1904&submittedProblemIndex=B", submission: submission("submit-concurrent-b", "B") }, trainerSender(11));

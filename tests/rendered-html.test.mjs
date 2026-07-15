@@ -158,7 +158,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "1.2.0");
+  assert.equal(manifest.version, "1.3.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -184,10 +184,25 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(background, /trainerSubmissionResults/);
   assert.match(background, /pendingJudgeSubmissions/);
   assert.match(background, /GET_PENDING_SUBMISSION/);
+  assert.match(background, /CHECK_JUDGE_SESSIONS/);
+  assert.match(background, /checkJudgeSession/);
   assert.match(background, /judgeTabId/);
   assert.match(background, /url: "about:blank"/);
   assert.match(bridge, /replayStoredResults/);
+  assert.match(bridge, /ICPC_TRAINER_HEALTH_CHECK/);
+  assert.match(bridge, /ICPC_TRAINER_HEALTH_RESULT/);
   assert.match(bridge, /\.\.\.result, source: "icpc-trainer-extension", type: "ICPC_TRAINER_SUBMIT_RESULT"/);
+});
+
+test("renders proactive submission readiness checks and the durable source boundary", async () => {
+  const response = await render("/extension");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /赛前检查/);
+  assert.match(html, /Codeforces/);
+  assert.match(html, /Universal Cup \/ QOJ/);
+  assert.match(html, /提交源码保存在平台数据库/);
+  assert.match(html, /icpc-trainer-extension\.zip/);
 });
 
 test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {

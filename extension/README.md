@@ -12,5 +12,10 @@ submissions can be judged concurrently without overwriting one another. The
 judge tab closes after a final verdict. Login or verification failures stop
 the flow and surface only the affected judge tab for the user.
 
-The extension never uploads passwords, cookies, API secrets, or source code to
-the icpc-trainer server. Judge credentials stay in the browser session.
+The platform stores submitted source code in its own database so users can
+review every attempt from icpc-trainer. The extension never uploads passwords,
+cookies, API secrets, or judge verification data. Judge credentials stay in
+the browser session.
+
+The extension page also checks the bridge version, backend availability, and
+the active Codeforces and Universal Cup login sessions before a VP starts.

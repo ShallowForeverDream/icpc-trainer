@@ -119,6 +119,28 @@ async function openJudgeTab(message, sender, sendResponse) {
   }
 }
 
+async function checkJudgeSession(judge) {
+  const url = judge === "codeforces" ? "https://codeforces.com/settings/general" : "https://contest.ucup.ac/";
+  try {
+    const response = await fetch(url, { credentials: "include", redirect: "follow", cache: "no-store" });
+    const html = await response.text();
+    if (judge === "codeforces" && (/Just a moment/i.test(html) || /challenge-platform|cf-chl-/i.test(html))) {
+      return { status: "challenge", message: "需要完成 Codeforces 人机验证" };
+    }
+    if (!response.ok) return { status: "unreachable", message: `${judge === "codeforces" ? "Codeforces" : "Universal Cup"} 返回 HTTP ${response.status}` };
+    if (judge === "codeforces") {
+      if (/href=["'][^"']*\/logout/i.test(html) && !/name=["']handleOrEmail/i.test(html)) return { status: "ready", message: "Codeforces 会话可用" };
+      if (/name=["']handleOrEmail|href=["'][^"']*\/enter/i.test(html)) return { status: "signed_out", message: "Codeforces 尚未登录" };
+    } else {
+      if (/href=["'][^"']*\/logout/i.test(html)) return { status: "ready", message: "Universal Cup 会话可用" };
+      if (/href=["'](?:\/\/contest\.ucup\.ac)?\/login/i.test(html)) return { status: "signed_out", message: "Universal Cup 尚未登录" };
+    }
+    return { status: "unknown", message: "未能确认登录状态，可在提交前重新检测" };
+  } catch {
+    return { status: "unreachable", message: `无法连接 ${judge === "codeforces" ? "Codeforces" : "Universal Cup"}` };
+  }
+}
+
 chrome.tabs.onRemoved.addListener((tabId) => { void removePendingJob(tabId).catch(() => undefined); });
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
@@ -171,6 +193,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (!trustedTrainerSender(sender)) return;
+  if (message?.type === "CHECK_JUDGE_SESSIONS") {
+    void Promise.all([checkJudgeSession("codeforces"), checkJudgeSession("ucup")])
+      .then(([codeforces, ucup]) => sendResponse({ sessions: { codeforces, ucup } }))
+      .catch(() => sendResponse({ sessions: {} }));
+    return true;
+  }
   if (message?.type === "OPEN_CODEFORCES_SUBMIT" || message?.type === "OPEN_UCUP_SUBMIT") {
     void openJudgeTab(message, sender, sendResponse);
     return true;

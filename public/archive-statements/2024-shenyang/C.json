@@ -1,0 +1,149 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "C",
+  "problemId": 9800,
+  "titleEn": "Crisis Event: Meteorite",
+  "titleZh": "突发事件：陨石",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9800&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9800&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      5,
+      6
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9800?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Sulfox the fennec fox has recently become obsessed with Anomaly Collapse, a roguelite turn-based strategy game built around its innovative one-dimensional battlefield grid system."
+          },
+          {
+            "kind": "paragraph",
+            "text": "As he controls his squad of warriors to fight against enemies on the special battlefield, where positioning mechanisms and proper allocation of ability points are crucial for victory, he encounters another crisis event (a thoughtful “gift” from the game designers) as the factor introduced to escalate the challenge of the new chapter — Meteorite."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For this problem, let’s push this crisis event to a more extreme version than the original game. Consider a linear battlefield consisting of n grids numbered from 1 to n sequentially. Initially, the battlefield is clear of any meteorites, and several characters are positioned on certain grids. Sulfox’s objective is to ensure the survival of all characters through m rounds of the meteorite disaster."
+          },
+          {
+            "kind": "paragraph",
+            "text": "At the beginning of the i-th round (i = 1, 2,..., m), the fatal meteorite hazard unfolds: For each j = 1, 2,..., n, exactly ai,j (possibly zero) meteorites descend upon the j-th grid, accumulating with any existing meteorites. Movement of characters is prohibited during this phase, which means any character unfortunate enough to be standing on a grid where meteorites descend will instantly be squashed into a pancake."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Do not let character stand on the grid where meteorites descend"
+          },
+          {
+            "kind": "paragraph",
+            "text": "The action phase occurs after all meteorites for the i-th round have landed, during which Sulfox can move any surviving character to an adjacent grid, and this movement may be performed arbitrarily many times (possibly zero) for each character before this round ends. However, existing meteorites block characters from entering their occupied grids."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Therefore, before a character can enter such a grid, Sulfox must spend 1 point per meteorite on that grid to destroy them. Please help Sulfox calculate the minimum number of points required to ensure the survival of all characters throughout the meteorite disaster, or report that it is an impossible mission to achieve the objective."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains an integer T (1 ≤ T ≤ $10^{4}$ ), indicating the number of test cases. For each test case: The first line contains two integers n and m (1 ≤ n, m ≤ $10^{6}$, 1 ≤ n × m ≤ $10^{6}$ ), indicating the number of grids and the number of rounds respectively. The second line contains n integers c1, c2,..., cn (ci ∈ {0, 1}). There is a character positioned on the i-th grid initially if and only if ci = 1. It is guaranteed that there is at least one character in the game."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Then m lines follow, the i-th of which contains n integers ai,1, ai,2,..., ai,n (0 ≤ ai,j ≤ 1 000), indicating that ai,j meteorites descend upon the j-th grid at the beginning of the i-th round. It is guaranteed that the sum of n × m over all test cases does not exceed $10^{6}$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, if it is impossible to ensure the survival of all characters, output −1 in one line. Otherwise, output an integer in one line, indicating the minimum number of points required."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "耳廓狐亚砜最近沉迷于《异界失控》这款围绕其独创的横版一维战场系统构建的Roguelite战术回合制游戏。当他在这个特殊的战场上利用关键的站位机制与合理的技能点分配，操控自己的战士小队击溃敌方、所向披靡时，他遇到了又一个突发事件（游戏设计师准备的“厚礼”）作为新章节挑战升级而引入的变数——陨石。针对本题，我们不妨让这个突发事件比原版游戏还要极端。考虑一个由从1到n按顺序编号的n个地块组成的线状战场。初始战场上没有任何陨石，只有若干角色被置于某些地块上。亚砜的目标是确保所有角色在m轮的陨石灾难中无一伤亡。第i轮(i=1,2,...,m)开始时，致命的陨石危机将迫在眉睫：对于每个j=1,2,...,n，恰好ai,j（可能为零）颗陨石降落在第j个地块上，并与原有的陨石叠加。该阶段严禁移动角色，这意味着任何不幸站在有陨石降落的地块上的角色都将瞬间被压成烙饼。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "不要让角色站在有陨石降落的地块上"
+          },
+          {
+            "kind": "paragraph",
+            "text": "在第i轮的陨石全部落地后，本轮将进入行动阶段，此时亚砜可以将任意存活的角色移动到相邻的地块，这种移动在本轮结束前对各角色都可以执行任意多次（或零次）。然而，现有的陨石会阻挡角色进入其所占据的地块。因此，在角色进入这样的地块之前，亚砜必须为该地块上每个陨石分别花费1的点数来摧毁它们。请帮助亚砜计算在陨石灾难中确保所有角色存活所需的最少点数，或者报告达成该目标是不可能的任务。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤$10^{4}$)，表示测试数据组数。对于每组测试数据：第一行包含两个整数n和m (1≤n,m≤$10^{6}$,1≤n×m≤$10^{6}$)，分别表示地块个数和轮数。第二行包含n个整数c1,c2,...,cn (ci∈{0,1})。当且仅当ci=1时，有一个角色初始被置于第i个地块上。保证游戏中至少存在一个角色。接下来m行，其中第i行包含n个整数ai,1,ai,2,...,ai,n (0≤ai,j≤1 000)，表示第i轮开始时有ai,j块陨石降落在第j个地块上。保证所有测试数据n×m的总和不超过$10^{6}$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据，如果不可能确保所有角色存活，在一行内输出−1；否则，在一行内输出一个整数，表示所需的最少点数。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\n3 4\n1 0 1\n0 1 0\n2 0 0\n0 0 3\n4 5 0\n1 1\n1\n1000",
+    "output": "4\n-1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2\n3 4\n1 0 1\n0 1 0\n2 0 0\n0 0 3\n4 5 0\n1 1\n1\n1000",
+      "output": "4\n-1",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2024-shenyang/assets/C-1.png",
+      "captionEn": "The meteorite crisis event",
+      "captionZh": "陨石危机事件示意",
+      "imageTextZh": null
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

@@ -1,0 +1,151 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "F",
+  "problemId": 9803,
+  "titleEn": "Light Up the Hypercube",
+  "titleZh": "点亮超立方体",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9803&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9803&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      11,
+      12
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9803?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Do androids dream of electric sheep? In 2040, Sulfox was enjoying the two-dimensional puzzle from Problem E when his custom AI mistook that enjoyment for a request for a greater challenge and generated an $n$-dimensional version."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The puzzle uses an $n$-dimensional hypercube with $2^n$ vertices, each carrying an on/off light. There are $2^n$ operations numbered from $0$ to $2^n-1$. For operation $i$:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Its cost is $a_i$.",
+              "Write $i$ in binary as $b_n b_{n-1}\\cdots b_1$. Choose any $k$-face extending exactly along the dimensions with $b_j=1$, where $k$ is the number of set bits, and toggle every light on that face."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "For example, operation $0$ toggles one vertex; operations $2^0,2^1,\\ldots,2^{n-1}$ toggle the endpoints of one edge in the corresponding dimension; operation $2^n-1$ toggles all lights."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Sulfox cannot see the current state. He only hears a prompt whenever all lights are on after an operation. Find an operation sequence that guarantees hearing the prompt for every one of the $2^{2^n}$ initial states of the $2^n$ lights, and minimize its total cost. Output the minimum cost modulo $998244353$."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains $T$ ($1 \\le T \\le 10^4$). For each test case, the first line contains $n$ ($2 \\le n \\le 20$); the second line contains $2^n$ integers $a_0,a_1,\\ldots,a_{2^n-1}$ ($1 \\le a_i \\le 10^6$). The sum of $2^n$ over all test cases does not exceed $2^{20}$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output the minimum total cost modulo $998244353$."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "仿生人会梦见电子羊吗？2040 年，耳廓狐亚砜正在体验 Problem E 中的二维谜题，他的定制 AI 却误把这种乐趣理解成对更大挑战的渴望，于是生成了一个 $n$ 维版本。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "谜题使用一个有 $2^n$ 个顶点的 $n$ 维超立方体，每个顶点有一盏开关灯。共有 $2^n$ 种操作，编号为 $0$ 到 $2^n-1$。对于操作 $i$："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "执行代价为 $a_i$。",
+              "将 $i$ 的二进制表示写成 $b_n b_{n-1}\\cdots b_1$。设其中 $1$ 的个数为 $k$，任选一个恰好沿所有满足 $b_j=1$ 的维度延伸的 $k$ 维面，并切换该面上所有顶点的灯。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "例如，操作 $0$ 切换单个顶点；操作 $2^0,2^1,\\ldots,2^{n-1}$ 分别切换对应维度上一条边的两个端点；操作 $2^n-1$ 切换所有灯。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "亚砜看不到当前状态；每当一次操作后所有灯均亮起，他才会听到提示音。请构造一个操作序列，使 $2^n$ 盏灯的 $2^{2^n}$ 种初始状态都能保证在某一步听到提示音，并最小化序列总代价。输出最小代价对 $998244353$ 取模后的结果。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含测试数据组数 $T$（$1 \\le T \\le 10^4$）。每组测试数据第一行包含 $n$（$2 \\le n \\le 20$）；第二行包含 $2^n$ 个整数 $a_0,a_1,\\ldots,a_{2^n-1}$（$1 \\le a_i \\le 10^6$）。保证所有测试数据的 $2^n$ 之和不超过 $2^{20}$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对每组测试数据，输出最小总代价对 $998244353$ 取模后的结果。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\n2\n4 2 2 1\n4\n3 3 2 3 1 3 2 2 2 3 2 1 1 2 3 2",
+    "output": "25\n65666",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2\n2\n4 2 2 1\n4\n3 3 2 3 1 3 2 2 2 3 2 1 1 2 3 2",
+      "output": "25\n65666",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2024-shenyang/assets/F-1.png",
+      "captionEn": "The custom AI presents a higher-dimensional puzzle",
+      "captionZh": "定制 AI 展示高维谜题",
+      "imageTextZh": null
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

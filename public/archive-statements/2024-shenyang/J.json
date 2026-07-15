@@ -1,0 +1,177 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "J",
+  "problemId": 9807,
+  "titleEn": "Make Them Believe",
+  "titleZh": "眼见为实",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9807&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9807&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      19,
+      20
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9807?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The 2024 League of Legends World Championship culminated in an epic clash between two titans of professional League of Legends on November 2, 2024. Bilibili Gaming, after dominating the LPL with two domestic titles in 2024, undoubtedly carried the hopes of China’s premier league that had endured three years without lifting the Summoner’s Cup."
+          },
+          {
+            "kind": "paragraph",
+            "text": "In their way stood T1, who had qualified as LCK’s fourth seed but proved their championship mettle through their tournament run. And there he was — Faker, the man revered as “the highest mountain and the longest river” — still standing at the center of LoL’s greatest stage as if time itself had learned to bow before him."
+          },
+          {
+            "kind": "paragraph",
+            "text": "With four crowns already weighing heavy in his legacy, Faker somehow made the hunt for a fifth feel less like ambition and more like destiny. Now, beneath the towering dome of London’s O2 Arena, the stakes were immense for both teams: BLG aimed to end the LPL’s drought and cement their remarkable 2024 campaign, while T1 sought to defend their title and further establish their dynasty."
+          },
+          {
+            "kind": "paragraph",
+            "text": "In an electrifying best-of-five series that pushed both teams to their limits, T1 emerged victorious over BLG with a hard-fought 3-2 triumph, clinching their fifth world championship. True to the tournament’s official slogan “Make Them Believe”, T1 mounted an incredible comeback from a 1-2 deficit, reaffirming once again why they remain a seemingly insurmountable obstacle for LPL teams in the international arena."
+          },
+          {
+            "kind": "paragraph",
+            "text": "As we trace back through the journey of these two finalist teams, it all started in that fateful knockout stage, where eight teams competed in a single-elimination tournament: LNG Esports, Weibo Gaming, Hanwha Life Esports, Bilibili Gaming, Top Esports, T1, Gen.G, and FlyQuest."
+          },
+          {
+            "kind": "paragraph",
+            "text": "In an eight-team single-elimination tournament format, teams were seeded into the bracket based on their performance in the Swiss stage to face off in head-to-head matches where the loser is immediately eliminated. The tournament progresses through three rounds: Quarterfinals with eight teams, Semifinals with four teams, and the Finals with two teams, ultimately crowning a single champion."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Figure: Eight-Team Single-Elimination Tournament Bracket"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Although Worlds 2024 has irretrievably passed into history, we can still craft our own version of the story. For this problem, you will simulate a hypothetical knockout stage using the same eight-team single-elimination format. You will be given the names and the strength values of the eight teams in order from top to bottom of the Quarterfinals bracket (shown in the leftmost column in Figure), and both the names"
+          },
+          {
+            "kind": "paragraph",
+            "text": "and the strength values are guaranteed to be pairwise different. When two teams compete, the team with the higher strength value always wins, while the losing team is eliminated. For two teams competing in the Finals, the team that wins is designated as the champion, while the other team is designated as the runner-up. Your task is to find the champion team and the runner-up team in the hypothetical knockout stage."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The input contains eight lines, the i-th of which contains a string Si (1 ≤ |Si | ≤ 3) and an integer ti (1 ≤ ti ≤ 100), indicating the name and the strength value of the i-th team from top to bottom of the Quarterfinals bracket. It is guaranteed that all team names contain only uppercase English letters or decimal digits, and both the names and the strength values are pairwise different."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output “A beats B” (without quotes) in one line, where A is the name of the champion team and B is the name of the runner-up team."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In the second sample case, since we intentionally increase BLG’s strength value in the hypothetical knockout stage, please note that the outcome of the Finals, sadly, differs from the actual Worlds 2024."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "2024年11月2日，2024英雄联盟全球总决赛在两支英雄联盟职业联赛巨头的史诗级交锋中落下帷幕。Bilibili Gaming，在2024年凭借双赛季国内冠军头衔称霸LPL赛区，无疑肩负着中国联赛时隔三年重夺召唤师奖杯的希望。横亘在征途尽头的正是T1，其虽以LCK赛区四号种子的身份出征，却已然在世界赛中展现了属于他们的冠军风采。而他——Faker，那个被尊为“最高的山，最长的河”的男人——仍屹立在英雄联盟最高舞台的中央，仿佛光阴也知晓对他敬畏三分。承载着四个王冠之重，这份传奇履历使Faker与第五冠的双向奔赴不再是缘于雄心，更像是命中注定。此刻，于伦敦O2竞技场宏大的穹顶之下，两支战队誓将孤注一掷：BLG志在终结LPL的冠军荒，续写他们2024年的辉煌，而T1力求卫冕冠军并进一步确立他们的王朝。一场惊心动魄的五局三胜系列赛将两支战队都逼至极限，最终T1以3-2的比分艰难战胜了BLG，斩获了他们队史的第五个世界冠军。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "诚如本届世界赛的官方主题“眼见为实”所言，T1在1-2落后的情况下实现了惊天逆转，再次声明了为什么他们在国际赛场上始终是LPL战队似乎不可逾越的鸿沟。当我们回顾这两支决赛队伍的旅程，一切都始于那生死攸关的淘汰赛阶段，其中参与单败淘汰赛的八支队伍是：LNG Esports，Weibo Gaming，Hanwha Life Esports，Bilibili Gaming，Top Esports，T1，Gen.G，以及FlyQuest。八队单败淘汰赛制规定，各支队伍根据其在瑞士轮阶段的表现被分配至赛程表中，进入逐轮的一对一鏖战，败者立即面临淘汰。整个赛程共分三轮：四分之一决赛由八支队伍决出四强，半决赛由这四支队伍决出双雄，决赛再从这两支队伍中加冕一位无上的冠军。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "图：八队单败淘汰赛的赛程表"
+          },
+          {
+            "kind": "paragraph",
+            "text": "尽管2024英雄联盟全球总决赛已不可挽回地成为历史，我们仍然可以创造我们自己念想的故事。在本题中，你将使用相同的八队单败淘汰赛制模拟一个假设的淘汰赛阶段。你将基于赛程表中八强从上到下的顺序（如图中最左列所示）依次获得八支战队各自的名称和实力值，保证名称和实力值均互不相同。每当两支战队对决时，实力值较高的战队必定获胜，而失败的战队将被淘汰。对于决赛相遇的两支战队，获胜的战队被认定为冠军，而另一支战队被认定为亚军。你的任务是找出假设的淘汰赛阶段中的冠军战队和亚军战队。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入包含八行，其中第i行包含一个字符串Si (1≤|Si|≤3)和一个整数ti (1≤ti≤100)，表示赛程表中八强从上到下第i支战队的名称和实力值。保证所有战队的名称仅包含大写英文字母或十进制数码，且名称和实力值均互不相同。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出一行“A beats B”（不含引号），其中A是冠军战队的名称，B是亚军战队的名称。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第二个样例中，由于我们在假设的淘汰赛阶段中刻意加大了BLG的实力值，请注意决赛结果，令人遗憾地，与实际2024英雄联盟全球总决赛有所出入。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "LNG 55\nWBG 65\nHLE 70\nBLG 75\nTES 48\nT1 80\nGEN 60\nFLY 50\nLNG 55\nWBG 65\nHLE 70\nBLG 81\nTES 48\nT1 80\nGEN 60\nFLY 50",
+    "output": "T1 beats BLG\n\nBLG beats T1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "LNG 55\nWBG 65\nHLE 70\nBLG 75\nTES 48\nT1 80\nGEN 60\nFLY 50\nLNG 55\nWBG 65\nHLE 70\nBLG 81\nTES 48\nT1 80\nGEN 60\nFLY 50",
+      "output": "T1 beats BLG\n\nBLG beats T1",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2024-shenyang/assets/J-1.png",
+      "captionEn": "Eight-team single-elimination bracket",
+      "captionZh": "八队单败淘汰赛赛程",
+      "imageTextZh": "图中英文缩写为战队名称；数字表示实力值；绿色对勾表示该轮胜者。"
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

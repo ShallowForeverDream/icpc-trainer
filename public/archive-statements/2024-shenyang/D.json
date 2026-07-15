@@ -1,0 +1,190 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "D",
+  "problemId": 9801,
+  "titleEn": "Dot Product Game",
+  "titleZh": "点积游戏",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9801&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9801&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      7,
+      8
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9801?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "A permutation of 1 to n in this problem is a 1-based sequence of n integers in which every integer from 1 to n appears exactly once. Alice and Bob are playing a game on A = [a1, a2,..., an ] and B = [b1, b2,..., bn ], two permutations of 1 to n. They take turns to perform operations, with Alice going first, and the one with no possible operation loses."
+          },
+          {
+            "kind": "paragraph",
+            "text": "In each turn, Alice can only operate on the permutation A, while Bob can only operate on the permutation B. A valid operation consists of choosing two indices i and j on the operable permutation (1 ≤ i, j ≤ n) and swapping their corresponding elements, under the constraint that ni=1 ai bi = a1 b1 +a2 b2 +· · ·+an bn, P the dot product of these two permutations, must strictly increase after the swap."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Namely, a player loses if he or she cannot perform any swap to increase the dot product, and the other player wins the game. As Alice and Bob are both clever enough to adopt the best strategy, the winner of such a game can be determined from the start. Therefore, they decide to play the game n times with modifications to make it less boring. Please help them to predict the winners of these n games."
+          },
+          {
+            "kind": "paragraph",
+            "text": "More specifically, two initial permutations A = [a1, a2,..., an ], B = [b1, b2,..., bn ], and (n − 1) modifications [(t1, l1, r1, d1 ), (t2, l2, r2, d2 ),..., (tn−1, ln−1, rn−1, dn−1 )] will be given."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The first game will start from the given permutations A and B, and for k = 1, 2,..., n − 1, the (k + 1)-th game will start from the permutations for the k-th game after shifting the interval between indices lk and rk of the permutation tk left dk times. Please note that shifting an interval [pl, pl+1,..., pr ] left once will give [pl+1, pl+2,..., pr, pl ]."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For instance, shifting the interval [2, 4] of [1, 2, 3, 4, 5] left once will give [1, 3, 4, 2, 5], and twice will give [1, 4, 2, 3, 5]. Besides, shifting the interval [1, 5] of [3, 1, 4, 5, 2] left 4 times will give [2, 3, 1, 4, 5]."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains an integer T (1 ≤ T ≤ $10^{5}$ ), indicating the number of test cases. For each test case: The first line contains an integer n (1 ≤ n ≤ 5 × $10^{5}$ ), indicating the length of the permutations. The second line contains n distinct integers a1, a2,..., an (1 ≤ ai ≤ n), indicating the permutation A."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The third line contains n distinct integers b1, b2,..., bn (1 ≤ bi ≤ n), indicating the permutation B. In the next (n − 1) lines, the i-th line contains a character ti (ti ∈ {A, B}), and three integers li, ri (1 ≤ li ≤ ri ≤ n), and di (1 ≤ di ≤ n). It is guaranteed that the sum of n over all test cases does not exceed 5 × $10^{5}$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output a string of length n in one line, where the i-th character of the string is A if Alice wins the i-th game, or B otherwise (i.e., Bob wins the i-th game)."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the third test case of the sample case:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The first game starts with A = [1, 2, 3], B = [2, 1, 3];"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The second game starts with A = [2, 3, 1], B = [2, 1, 3];"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The third game starts with A = [2, 3, 1], B = [1, 2, 3]."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "本题中，1到n的一个排列是下标从1开始的长度为n的整数序列，其中每个整数从1到n恰好出现一次。Alice和Bob正在玩一个关于A=[a1,a2,...,an]和B=[b1,b2,...,bn]的游戏，这两个序列都是1到n的排列。他们轮流进行操作，Alice先行，无法进行任何操作的人输掉游戏。在每一轮中，Alice只能对排列A进行操作，而Bob只能对排列B进行操作。一个有效的操作包括选择可操作排列中的两个下标i和j (1≤i,j≤n)并交换它们对应的元素，要求这两个排列的点积ni=1 ai bi=a1 b1+a2 b2+···+an bn在交换后必须严格增加。也就是说，如果一个玩家无法进行任何P"
+          },
+          {
+            "kind": "paragraph",
+            "text": "交换以增加点积，则该玩家输掉游戏，另一个玩家获胜。由于Alice和Bob都足够聪明，能够采用最佳策略，因此可以从一开始就确定游戏的赢家。因此，他们决定进行n轮游戏，并进行一些修改以使游戏不那么无聊。请帮助他们预测这n场游戏的赢家。更具体地说，将给定两个初始排列A=[a1,a2,...,an]，B=[b1,b2,...,bn]，以及(n−1)个修改[(t1,l1,r1,d1),(t2,l2,r2,d2),...,(tn−1,ln−1,rn−1,dn−1)]。第一场游戏将从给定的排列A和B开始，对于k=1,2,...,n−1，第(k+1)场游戏将从第k场游戏的排列，将排列tk的索引区间lk和rk左移dk次之后得到的排列开始。请注意，将区间[pl,pl+1,...,pr]左移一次将得到[pl+1,pl+2,...,pr,pl]。例如，将[1,2,3,4,5]的区间[2,4]左移一次将得到[1,3,4,2,5]，左移两次将得到[1,4,2,3,5]。此外，将[3,1,4,5,2]的区间[1,5]左移4次将得到[2,3,1,4,5]。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤$10^{5}$)，表示测试数据的组数。对于每组测试数据：第一行包含一个整数n (1≤n≤5×$10^{5}$)，表示排列的长度。第二行包含n个不同的整数a1,a2,...,an (1≤ai≤n)，表示排列A。第三行包含n个不同的整数b1,b2,...,bn (1≤bi≤n)，表示排列B。接下来的(n−1)行中，第i行包含一个字符ti (ti∈{A,B})以及三个整数li，ri (1≤li≤ri≤n)和di (1≤di≤n)。保证所有测试数据的n之和不超过5×$10^{5}$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据，在一行内输出长度为n的字符串，如果Alice赢得第i场游戏那么第i个字符是A，否则是B（即Bob赢得第i场游戏）。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于样例的第三组测试数据："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第一场游戏以A=[1,2,3]，B=[2,1,3]开始；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第二场游戏以A=[2,3,1]，B=[2,1,3]开始；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第三场游戏以A=[2,3,1]，B=[1,2,3]开始。"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "5\n3\n1 2 3\n1 2 3\nA 1 1 1\nB 1 1 1\n3\n1 2 3\n2 1 3\nA 1 2 1\nB 2 2 1\n3\n1 2 3\n2 1 3\nA 1 3 1\nB 1 2 1\n3\n1 2 3\n3 2 1\nA 2 2 1\nB 2 3 1\n10\n1 2 3 4 5 6 7 8 9 10\n4 2 3 9 6 1 5 8 7 10\nA 2 9 10\nB 2 7 9\nA 1 10 8\nB 4 6 7\nB 3 10 6\nA 2 5 5\nA 8 9 4\nB 3 9 3\nA 2 7 2",
+    "output": "BBB\nABB\nAAB\nAAB\nAABBBBAAAA",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "5\n3\n1 2 3\n1 2 3\nA 1 1 1\nB 1 1 1\n3\n1 2 3\n2 1 3\nA 1 2 1\nB 2 2 1\n3\n1 2 3\n2 1 3\nA 1 3 1\nB 1 2 1\n3\n1 2 3\n3 2 1\nA 2 2 1\nB 2 3 1\n10\n1 2 3 4 5 6 7 8 9 10\n4 2 3 9 6 1 5 8 7 10\nA 2 9 10\nB 2 7 9\nA 1 10 8\nB 4 6 7\nB 3 10 6\nA 2 5 5\nA 8 9 4\nB 3 9 3\nA 2 7 2",
+      "output": "BBB\nABB\nAAB\nAAB\nAABBBBAAAA",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

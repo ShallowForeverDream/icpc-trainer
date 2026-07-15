@@ -1,0 +1,198 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "E",
+  "problemId": 9802,
+  "titleEn": "Light Up the Grid",
+  "titleZh": "点亮网格",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9802&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9802&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      9,
+      10
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9802?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Little Q is testing a self-designed puzzle game involving a 2 × 2 grid where each cell can either be on or off. When a cell is toggled, its state changes from off to on or from on to off. The following four operations can be performed at a certain cost:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Toggle a single cell with cost a0;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Toggle a row of cells with cost a1;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Toggle a column of cells with cost a2;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Toggle all cells with cost a3."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Little Q has realized that the game has started, but the screen somehow malfunctions, blocking him from seeing the current state of any cell. The only feedback he can receive is a special prompt sound triggered if, after an operation, all cells are on."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Knowing all m possible initial grids of the game in advance, Little Q wants to find a sequence of operations, ensuring that regardless of the initial grid when he starts playing, he will always hear the prompt sound after some operations in the order of the sequence. Please calculate the minimum total cost of such sequence of operations."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains five integers T (1 ≤ T ≤ $10^{4}$ ), a0, a1, a2, and a3 (1 ≤ a0, a1, a2, a3 ≤ $10^{6}$ ), indicating the number of games and the costs of each operation. For each game: The first line contains an integer m (1 ≤ m ≤ 16), indicating the number of possible initial grids of the game. Then m grids follow. For each grid:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "There will first be an empty line if it is not the first grid in the game."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "For the following two lines, the i-th line contains a string si,1 si,2 of length 2 consisting of characters 0 and 1, describing a 2 × 2 grid as a possible initial grid. Let (i, j) be the cell on the i-th row and the j-th column. If si,j is 0, then the cell (i, j) is off, or otherwise the cell (i, j) is on."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "It is guaranteed that the given grids in a game are pairwise different."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each game, output a line containing an integer, indicating the minimum total cost."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "小Q正在测试一款自制的益智游戏，该游戏涉及一个2×2网格，其中每个格子可以处于开启或关闭状态。当一个格子被切换时，其状态从关闭变为开启，或从开启变为关闭。游戏允许以一定的代价执行以下四种操作："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "切换单个格子，代价为a0；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "切换一行格子，代价为a1；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "切换一列格子，代价为a2；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "切换所有格子，代价为a3。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "小Q意识到游戏已经开始，但是屏幕不知何故出现故障，导致他无法看到任何格子的当前状态。他唯一能收到的反馈是一种特殊的提示音：如果在某个操作后，所有格子都是开启状态，该提示音会被触发。小Q事先知道游戏的所有m种可能初始网格，他想找到一个操作序列，使得无论游戏开始时的初始网格是哪种，他在按照序列的顺序进行操作后，总是能听到提示音。请计算这样一个操作序列的最小总代价。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含五个整数T (1≤T≤$10^{4}$)，a0，a1，a2和a3 (1≤a0,a1,a2,a3≤$10^{6}$)，表示游戏的数量和每个操作的代价。对于每个游戏：第一行包含一个整数m (1≤m≤16)，表示游戏的可能初始网格的数量。接下来是m个网格。对于每个网格："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "如果不是游戏中的第一个网格，将首先有一个空行。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "接下来的两行中，第i行包含一个长度为2的字符串si,1 si,2，由字符0和1组成，描述一个2×2的可能初始网格。设(i,j)为第i行和第j列的格子。如果si,j是0，那么格子(i,j)是关闭状态，否则格子(i,j)是开启状态。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "保证每个游戏中的给定的网格互不相同。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每个游戏，输出一行包含一个整数，表示最小总代价。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2 1000 100 10 1\n4\n10\n00\n\n01\n00\n\n00\n10\n\n00\n01\n1\n11\n11",
+    "output": "1121\n2",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2 1000 100 10 1\n4\n10\n00\n\n01\n00\n\n00\n10\n\n00\n01\n1\n11\n11",
+      "output": "1121\n2",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

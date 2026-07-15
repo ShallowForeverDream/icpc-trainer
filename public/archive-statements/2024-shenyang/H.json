@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "H",
+  "problemId": 9805,
+  "titleEn": "Guide Map",
+  "titleZh": "导览图",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9805&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9805&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      15,
+      15
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9805?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Byteland has n cities, and there is a bidirectional road between any two cities. There are exactly (n − 2) roads with scenery, and if properly built scenery on one more road, one can always travel from one city to the others only through roads with scenery. Little Q is initially located in the city 1 with a guide map in his hand, showing some of the roads in Byteland, and starts his journey in Byteland. Assuming he is currently in the city u:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If he can walk along a road on the guide map to a city v that he has not yet visited, he will choose the smallest such v and walk along the road to city v. Note that city 1 is visited initially;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Otherwise, he will return along the road he took to reach city u for the first time, unless he is already in city 1, in which case the journey ends immediately."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Little Q wants to visit all the sceneries while traveling on no more than one different road without sceneries. You need to help him calculate how many different guide maps can satisfy his requirements. Two guide maps are considered different if and only if there is a road on one map that does not appear on the other. Since the answer may be large, output it modulo 998244353."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains an integer n (2 ≤ n ≤ 2 × $10^{5}$ ), indicating the number of cities. Then (n − 2) lines follow, the i-th of which contains two integers u and v (1 ≤ u, v ≤ n), indicating that the i-th scenery is on the road between the u-th and the v-th cities. It is guaranteed that if properly built scenery on one more road, one can always travel from one city to the others only through roads with scenery."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output a line containing an integer, indicating the number of different guide maps modulo 998244353."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the first sample case, one of the feasible guide maps shows 4 roads (1, 4), (2, 3), (1, 2), and (1, 3). Little Q will visit the cities 1 → 2 → 3 → 2 → 1 → 4 → 1 in order following this guide map and visit the sceneries on roads (1, 4) and (2, 3) while traveling on only one road (1, 2) without sceneries. For the second sample case, there is no road with scenery, and thus a feasible guide map can not only include but also exclude the only existing road (1, 2)."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "比特大陆有n个城市，任何两个城市之间都有一条双向道路。恰好有(n−2)条道路上有旅游景点，并且如果再选取一条合适的道路修建旅游景点，就可以从一个城市只通过有旅游景点的道路到其他城市。小Q最初位于城市1，手中拿着一张导览图开始了他的旅行，地图上展示了比特大陆的一些道路。假设他当前在城市u："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "如果他可以沿着导览图上的一条道路走到一个尚未游览过的城市v，他将选择最小的这样的v并沿着道路走到城市v。注意，城市1是一开始就游览过的；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "否则，他将沿着他第一次到达城市u的道路返回，除非他已经在城市1，在这种情况下，旅行立即结束。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "小Q希望在旅行中游览所有的旅游景点，同时只经过不多于一条不同的没有旅游景点的道路。你需要帮助他计算满足他要求的不同导览图的数量。如果一张地图上的道路在另一张地图上不存在，则这两张导览图被视为不同。由于答案可能很大，请输出其对998244353取模后的结果。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含一个整数n (2≤n≤2×$10^{5}$)，表示城市的数量。接下来有(n−2)行，其中第i行包含两个整数u和v (1≤u,v≤n)，表示第i个旅游景点位于第u个和第v个城市之间的道路上。保证如果再选取一条合适的道路修建旅游景点，就可以从一个城市只通过有旅游景点的道路到其他城市。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出一行包含一个整数，表示不同导览图的数量对998244353取模后的结果。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于第一个样例，一个可行的导览图展示了4条道路(1,4)、(2,3)、(1,2)和(1,3)。小Q按照这个导览图将依次游览城市1→2→3→2→1→4→1，在沿途旅行时会参观道路(1,4)和(2,3)上的旅游景点，同时仅经过一条没有景点的道路(1,2)。对于第二个样例，注意到不存在任何道路上有旅游景点，所以导览图可以包含也可以不包含唯一可能的道路(1,2)。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "4\n1 4\n2 3\n2",
+    "output": "6\n\n2",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "4\n1 4\n2 3\n2",
+      "output": "6\n\n2",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

@@ -1,0 +1,145 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "K",
+  "problemId": 9808,
+  "titleEn": "Fragile Pinball",
+  "titleZh": "易碎的弹球",
+  "timeLimitText": "3 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9808&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9808&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      21,
+      22
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9808?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Given a convex polygon with n edges, there is a very small pinball, which can be seen as a point, that starts from a certain position inside or on the polygon and moves straight at a positive constant speed. You can activate an edge of the convex polygon at any moment for an instant. If the pinball is exactly on an activated edge (including the endpoints) at that time, it will be reflected by this edge."
+          },
+          {
+            "kind": "paragraph",
+            "text": "That is, the angle of incidence equals the angle of reflection with respect to the line that the edge lies on. Since the edges are fragile, each edge can be activated at most once. It is important to note that if the pinball is simultaneously on two edges, you cannot activate both edges at the same time. However, you can activate the two edges in quick succession."
+          },
+          {
+            "kind": "paragraph",
+            "text": "In this case, the pinball will be reflected twice, and the moving direction of the pinball also changes twice while its position and speed remain unchanged. You can also choose to activate only one of the edges or not to activate any. Since the pinball is also fragile, it can only bear at most k reflections."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You need to find the maximum distance that the pinball can travel within the convex polygon for each k = 0, 1, 2,..., n."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains an integer n (3 ≤ n ≤ 6), indicating the number of vertices of the convex polygon. For the following n lines, the i-th line contains two integers xi and yi (−100 ≤ xi, yi ≤ 100), indicating the coordinates of the i-th vertex of the convex polygon. It is guaranteed that the n vertices are given in counter-clockwise order, and any three of them are not collinear."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output (n + 1) lines, the i-th of which contains a real number, indicating the length of the longest journey of the pinball with at most i − 1 reflections. Your answer will be considered correct if its absolute or relative error does not exceed $10^{-6}$. Formally speaking, suppose that your output is a and the jury’s answer is b, your output is accepted if and only if |a−b| −6 max(1,|b|) ≤ 10."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The sample cases are shown in the figures below."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "给定一个有n条边的凸多边形，里面有一个非常小的弹球，可以看作一个点，它从多边形内部或边界的某个位置开始，以正的恒定速度沿直线运动。你可以在任何时刻激活凸多边形的一条边一瞬间。如果弹球在那个时刻恰好位于激活的边上（包括端点），它将被该边反弹。也就是说，相对于边所在的直线，入射角等于反射角。由于边是易碎的，每条边最多只能激活一次。需要注意的是，如果弹球同时位于两条边上，你不能同时激活这两条边。然而，你可以快速连续激活这两条边。在这种情况下，弹球将被反弹两次，弹球的移动方向也会改变两次，而其位置和速度保持不变。你也可以选择只激活其中一条边或不激活任何边。由于弹球也是易碎的，它最多只能承受k次反弹。你需要对于每个k=0,1,2,...,n求出弹球在凸多边形内可以行进的最长路程。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含一个整数n (3≤n≤6)，表示凸多边形的顶点数量。接下来的n行，其中第i行包含两个整数xi和yi (−100≤xi,yi≤100)，表示凸多边形第i个顶点的坐标。保证这n个顶点是按逆时针顺序给出的，并且任意三个顶点不共线。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出(n+1)行，其中第i行包含一个实数，表示弹球在i−1次反弹内可以行进的最长路程。如果你的答案的绝对误差或相对误差不超过$10^{-6}$，则将被视为正确。形式地说，假设你的输出为a，标|a−b|准答案为b，当且仅当max(1,|b|)≤$10^{-6}$时，你的输出会被接受。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "样例见下图。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n4 0\n0 3\n0 -1\n3\n4 0\n0 3\n0 2",
+    "output": "5.000000000000000000\n8.000000000000000000\n8.868185038797563409\n12.210024810881955830\n5.000000000000000000\n5.366563145999495272\n6.111919138499425171\n6.782203304416628317",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n4 0\n0 3\n0 -1\n3\n4 0\n0 3\n0 2",
+      "output": "5.000000000000000000\n8.000000000000000000\n8.868185038797563409\n12.210024810881955830\n5.000000000000000000\n5.366563145999495272\n6.111919138499425171\n6.782203304416628317",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2024-shenyang/assets/K-1.png",
+      "captionEn": "Construction stages for the two samples",
+      "captionZh": "两组样例的逐步构造过程",
+      "imageTextZh": "Sample Case 1/2 表示第一/二组样例，后缀 0 至 3 表示构造阶段；红线表示当前加入的线段。"
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

@@ -77,7 +77,13 @@ export const archiveContests: ArchiveContest[] = [
   { id: "2024-nanjing", year: 2024, name: "ICPC 区域赛南京站", city: "南京", type: "区域赛", boardPath: "icpc/49th/nanjing", problemCount: 13, gymId: 105484 },
   { id: "2024-hangzhou", year: 2024, name: "ICPC 区域赛杭州站", city: "杭州", type: "区域赛", boardPath: "icpc/49th/hangzhou", problemCount: 13, gymId: 105657 },
   { id: "2024-chengdu", year: 2024, name: "ICPC 区域赛成都站", city: "成都", type: "区域赛", boardPath: "icpc/49th/chengdu", problemCount: 13, gymId: 105486 },
-  { id: "2024-shenyang", year: 2024, name: "ICPC 区域赛沈阳站", city: "沈阳", type: "区域赛", boardPath: "icpc/49th/shenyang", problemCount: 13, gymId: 105578 },
+  {
+    id: "2024-shenyang", year: 2024, name: "ICPC 区域赛沈阳站", city: "沈阳", type: "区域赛", boardPath: "icpc/49th/shenyang", problemCount: 13, gymId: 105578,
+    qojContestId: 1865,
+    qojProblemIds: [9798, 9799, 9800, 9801, 9802, 9803, 9804, 9805, 9806, 9807, 9808, 9809, 9810],
+    problemTitles: ["Safety First", "Magical Palette", "Crisis Event: Meteorite", "Dot Product Game", "Light Up the Grid", "Light Up the Hypercube", "Guess the Polygon", "Guide Map", "Growing Tree", "Make Them Believe", "Fragile Pinball", "The Grand Contest", "Obliviate, Then Reincarnate"],
+    staticStatements: "official-chinese",
+  },
   { id: "2024-kunming", year: 2024, name: "ICPC 区域赛昆明站", city: "昆明", type: "区域赛", boardPath: "icpc/49th/kunming", problemCount: 13, gymId: 105588 },
   {
     id: "2024-shanghai", year: 2024, name: "ICPC 区域赛上海站", city: "上海", type: "区域赛", boardPath: "icpc/49th/shanghai", problemCount: 13,

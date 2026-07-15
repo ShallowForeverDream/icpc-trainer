@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "G",
+  "problemId": 9804,
+  "titleEn": "Guess the Polygon",
+  "titleZh": "猜测多边形",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9804&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9804&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      13,
+      14
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9804?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "This is an interactive problem. You are given a simple polygon, but before giving you the n vertices of the polygon, Little Q has shuffled them. Now you can ask Little Q no more than (n − 2) queries, each of which consists of two integers p and q (0 ≤ p/q ≤ 1 000, 1 ≤ q ≤ 1 000)."
+          },
+          {
+            "kind": "paragraph",
+            "text": "He will tell you the total length of the points on the line x = p/q that lie inside or on the boundary of the polygon, which can be represented as r/s with two integers r and s (r ≥ 0, s ≥ 1, gcd(r, s) = 1). Here gcd(r, s) is the greatest common divisor of r and s. You need to find the area of the polygon, which can also be represented as u/v with two integers u and v (u ≥ 0, v ≥ 1, gcd(u, v) = 1)."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The polygon and the order of the vertices are determined before the start of the interaction and do not depend on your queries. In other words, the interactor is not adaptive."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains an integer T (1 ≤ T ≤ 1 000), indicating the number of test cases. For each test case: The first line contains an integer n (3 ≤ n ≤ 1 000), indicating the number of vertices of the polygon. Then n lines follow, each containing two integers x and y (0 ≤ x, y ≤ 1 000) that give the coordinates (x, y) of the vertices of the polygon in shuffled order."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The polygon is simple, i.e., its vertices are distinct and no two edges of the polygon intersect or touch, except that consecutive edges touch at their common vertex. In addition, no two consecutive edges are collinear. It is guaranteed that the sum of n over all test cases does not exceed 1 000."
+          }
+        ]
+      },
+      {
+        "key": "interaction",
+        "title": "Interaction Protocol",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "If you want to ask a query, output one line. First output? followed by a space, then output two integers p and q (0 ≤ p/q ≤ 1 000, 1 ≤ q ≤ 1 000). After flushing your output, your program should read two integers r and s (r ≥ 0, s ≥ 1, gcd(r, s) = 1), indicating the answer to your query. If you want to guess the area of the polygon, output one line."
+          },
+          {
+            "kind": "paragraph",
+            "text": "First output! followed by a space, then output two integers u and v (u ≥ 0, v ≥ 1, gcd(u, v) = 1), indicating that the area of the polygon is u/v. After flushing your output, your program should continue processing the next test case, or exit immediately if there are no more test cases. Note that your guess does not count as a query. To flush your output, you can use:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "fflush(stdout) (if you use printf) or cout.flush() (if you use cout) in C and C++."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "System.out.flush() in Java and Kotlin."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "sys.stdout.flush() in Python."
+            ]
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the first sample case, there are three candidate polygons, shown in the figure below. Only the leftmost one meets the answer 2 to the query x = 1, and thus the area is 3. The other two have the answer 3 to the query x = 1."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For the second sample case, there is only one candidate polygon, and thus the area is 1999/2. Note that the order of the vertices shown in the sample case may not be consistent with the actual provided. The blank lines in the sample case are added for readability. In your output, extra spaces or blank lines will be ignored."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "这是一道交互题。给定一个简单多边形，但在给出多边形的n个顶点之前，小Q已经将它们打乱了。现在你可以向小Q提出不超过(n−2)个询问，每个询问包含两个整数p和q（0≤p/q≤1 000,1≤q≤1 000）。他会告诉你在x=p/q这条线上位于多边形内部或边界上的点的总长度，可以表示为r/s，其中r和s是两个整数（r≥0,s≥1,gcd(r,s)=1）。这里gcd(r,s)是r和s的最大公约数。你需要求出多边形的面积，也可以表示为u/v，其中u和v是两个整数（u≥0,v≥1,gcd(u,v)=1）。多边形及其顶点的顺序在交互开始之前就已确定，并且不依赖于你的询问。也就是说，交互器不是自适应的。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤1 000)，表示测试数据的组数。对于每组测试数据：第一行包含一个整数n (3≤n≤1 000)，表示多边形的顶点数量。接下来n行，每行包含两个整数x和y (0≤x,y≤1 000)，按照乱序给出每个多边形顶点的坐标(x,y)。多边形是简单的，即其顶点是不同的，并且多边形的两条边没有交叉或接触，除了相邻的边在它们的公共顶点处接触。此外，两个相邻的边不共线。保证所有测试数据n的总和不超过1 000。"
+          }
+        ]
+      },
+      {
+        "key": "interaction",
+        "title": "交互协议",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "如果你想提出一个询问，输出一行。首先输出?后接一个空格，然后输出两个整数p和q (0≤p/q≤1 000,1≤q≤1 000)。在刷新缓冲区后，你的程序应该读取两个整数r和s (r≥0,s≥1,gcd(r,s)=1)，表示询问的答案。如果你想猜测多边形的面积，输出一行。首先输出!后接一个空格，然后输出两个整数u和v (u≥0,v≥1,gcd(u,v)=1)，表示多边形的面积是u/v。在刷新缓冲区后，你的程序应该继续处理下一组测试数据，或者如果没有更多测试数据则应该立即退出。请注意，你的猜测不算入询问次数。要刷新缓冲区，你可以使用："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "C和C++使用fflush(stdout)（如果你使用printf）或cout.flush()（如果你使用cout）。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Java和Kotlin使用System.out.flush()。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Python使用sys.stdout.flush()。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于第一个样例，有三个可能的多边形，如下图所示。只有最左边的一个满足询问x=1的答案为2，因此面积为3。其他两个多边形对询问x=1的答案为3。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "对于第二个样例，只有一个可能的多边形，因此面积为1999/2。请注意，样例中给出的顶点顺序可能与实际提供的不一致。样例中的空行是为了可读性而添加的。在你的输出中，额外的空格或空行将被忽略。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\n4\n0 0\n1 3\n1 1\n3 0\n\n2 1\n\n3\n0 0\n999 1000\n1000 999\n\n1999 999000",
+    "output": "? 1 1\n\n! 3 1\n\n? 1 1\n\n! 1999 2",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2\n4\n0 0\n1 3\n1 1\n3 0\n\n2 1\n\n3\n0 0\n999 1000\n1000 999\n\n1999 999000",
+      "output": "? 1 1\n\n! 3 1\n\n? 1 1\n\n! 1999 2",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2024-shenyang/assets/G-1.png",
+      "captionEn": "Candidate polygons for the first sample",
+      "captionZh": "第一组样例的三个候选多边形",
+      "imageTextZh": null
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

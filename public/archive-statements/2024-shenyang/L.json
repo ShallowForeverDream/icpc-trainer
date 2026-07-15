@@ -1,0 +1,171 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "L",
+  "problemId": 9809,
+  "titleEn": "The Grand Contest",
+  "titleZh": "大奖赛",
+  "timeLimitText": "3 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9809&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9809&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      23,
+      24
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9809?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In the Grand Contest, there are many problems and a very long duration. Team 1 and team 2 participated in this contest, which had a total of n submissions. Each submission can either get a correct or incorrect verdict. A problem is considered solved by a team when the submission from that team is correct. After the contest ends, teams are ranked by the most problems solved."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Teams that solve the same number of problems are ranked by the least total time. The total time is the sum of the time consumed for each solved problem. The time consumed for a solved problem is the time elapsed from the beginning of the contest to the submission of the first correct submission, plus p penalty minutes for each previously incorrect submission for that problem."
+          },
+          {
+            "kind": "paragraph",
+            "text": "There is no time consumed for a problem that is not solved. In case of a tie, team 1 ranks before team 2."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The judges of the Grand Contest will test a feature named “remove interval”, which allows selecting two integers L and R (0 ≤ L < R) and remove the time interval [L, R] in minutes from the contest such that:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "All submissions with submission time less than L minutes are unaffected;",
+              "All submissions with submission time in [L, R] minutes have their submission time changed to L minutes from the beginning;",
+              "All submissions with submission time more than R minutes have their submission time reduced by (R − L) minutes."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "It is important to note that the above changes will only affect the submission times of certain submissions but will not affect the relative order of the submissions. You need to find the shortest time interval [L, R] in minutes such that after removing this interval from the contest, the rankings of the two teams will change, or indicate that such an interval does not exist. If there are multiple such intervals, you need to find the one with the smallest L."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains an integer T (1 ≤ T ≤ 4 × $10^{5}$ ), indicating the number of test cases. For each test case: The first line contains two integers n (1 ≤ n ≤ 4 × $10^{5}$ ) and p (1 ≤ p ≤ $10^{12}$ ), indicating the number of submissions and the penalty minutes. Then n lines follow, describing the submissions during the contest in order."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Each line contains four integers a (a ∈ {1, 2}), b (1 ≤ b ≤ $10^{9}$ ), c (1 ≤ c ≤ $10^{12}$ ), and d (d ∈ {0, 1}), indicating team a submitted on problem b at c minutes from the beginning of the contest and got verdict d. If d = 1, the submission is correct and solves the problem; otherwise, the submission is incorrect. It is guaranteed that the submission time is non-decreasing."
+          },
+          {
+            "kind": "paragraph",
+            "text": "It is guaranteed that the sum of n over all test cases does not exceed 4 × $10^{5}$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output a line. If there exists a feasible time interval in minutes, output two integers L and R, indicating the shortest interval with the smallest L. Otherwise, output −1."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "大奖赛中有着非常多的题目和非常长的比赛时间。队伍1和队伍2参加了这场比赛，共有n次提交。每次提交可以得到正确或错误的结果。如果一个队伍的提交是正确的，就认为对应的问题被该队伍解出。比赛结束后，队伍根据解决的问题数量从多到少依次排名。解决相同数量问题的队伍按解题总时间从少到多依次排名。总时间是每个解决问题所消耗时间的总和。解决问题所消耗的时间是从比赛开始到第一次正确提交的时间，加上每个之前错误提交该问题的p分钟罚时。未解决的问题不计入总时间。在平局的情况下，队伍1排在队伍2之前。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "大奖赛的裁判想测试一个名为“移除区间”的功能，该功能允许选择两个整数L和R (0≤L<R)，并从比赛中移除时间区间[L,R]分钟，使得："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "所有提交时间小于L分钟的提交不受影响；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "所有提交在区间[L,R]（单位：分钟）内的提交时间更改为从比赛开始后L分钟；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "所有提交大于R分钟的提交时间减少(R−L)分钟。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "特别要注意的是，上述更改只会影响某些提交的提交时间，但不会影响提交的相对顺序。你需要找到最短的时间区间[L,R]（单位：分钟），使得在从比赛中移除该区间后，两个团队的排名会发生变化，或者指出这样的区间不存在。如果存在多个这样的区间，你需要找到L最小的那个。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤4×$10^{5}$)，表示测试数据的组数。对于每组测试数据：第一行包含两个整数n (1≤n≤4×$10^{5}$)和p (1≤p≤$10^{12}$)，表示提交数量和罚时分钟。接下来n行按提交顺序描述比赛期间的提交。每行包含四个整数a (a∈{1,2})，b (1≤b≤$10^{9}$)，c (1≤c≤$10^{12}$)和d (d∈{0,1})，表示团队a在比赛开始c分钟时在问题b做出提交，并得到了结果d。如果d=1，则提交是正确的并解决了该问题；否则，提交是错误的。保证提交时间是单调不减的。保证所有测试数据n的总和不超过4×$10^{5}$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据，输出一行。如果存在可行的时间区间，输出两个整数L和R，表示L最小的最短区间。否则，输出−1。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\n6 20\n1 1 60 0\n2 2 60 0\n2 2 120 1\n1 2 180 1\n1 2 180 0\n2 2 300 1\n2 20\n1 1 300 1\n2 2 300 1",
+    "output": "120 160\n-1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2\n6 20\n1 1 60 0\n2 2 60 0\n2 2 120 1\n1 2 180 1\n1 2 180 0\n2 2 300 1\n2 20\n1 1 300 1\n2 2 300 1",
+      "output": "120 160\n-1",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2024-shenyang/assets/L-1.png",
+      "captionEn": "The interface for removing an interval",
+      "captionZh": "删除时间区间的操作界面",
+      "imageTextZh": "Removed intervals 表示“已删除区间”；ID 表示编号；From/To 表示起止时间；Duration 表示时长；new 表示新建；Add 表示添加。"
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

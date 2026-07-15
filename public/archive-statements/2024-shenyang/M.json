@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "M",
+  "problemId": 9810,
+  "titleEn": "Obliviate, Then Reincarnate",
+  "titleZh": "寂灭，而新生",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9810&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9810&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      25,
+      26
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9810?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Leafing through his journal of musings, Mu discovered a note forgotten between the yellowed pages. The note, inspired by the faraway constellation Vulpecula, resembled a mantra of self-encouragement which read, “Dreams are like the stars, distant and sometimes insignificant, yet enough to spark up the darkest night.” In time, Mu had eventually glimpsed the veiled face of dreams."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Through years of growth, he had emerged more seasoned, perhaps more scarred, only to accept that stars and dreams alike, constrained by the fatalism that equally governs everything, are destined to fade into oblivion."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Pursuit of dreams had crumbled, doubt about reality had shadowed, yet in his refusal to succumb to pessimism, Mu had waited, and was waiting still, harboring the belief that broken dreams, like stellar ashes in the pageantry of samsara, would be reconstructed and kindled anew. He continued reviewing the journal, with the boundless cosmos reigning overhead."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Indeed, the infinite had always held more promise and mystery than the finite — be it in the realm of spacetime, in the nebula of dreams, or even in the world of mathematics. As if on cue, his fingers paused at a page where Hilbert’s Hotel Paradox, the classic paradigm of infinite sets, had once captured his contemplation."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Amid the jottings, Mu had envisioned an upgraded version of the infinite hotel — the Celestial Hilbert’s Hotel — and cast himself as its manager, leaving an intriguing problem for programmers like you to solve."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Hilbert’s Infinite Hotel"
+          },
+          {
+            "kind": "paragraph",
+            "text": "As a marvel of deep space, the Celestial Hilbert’s Hotel features infinitely many rooms. Each room is assigned a unique integer (can be positive, negative, or zero) as its number, and all the room numbers constitute Z, the set of all integers. There are n floors in the hotel, where rooms are distributed based on the non-negative remainder of their number when divided by n."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Specifically, room x and room y are on the same floor if and only if the room numbers have the common remainder when divided by n, expressed as a congruence equation x ≡ y (mod n). Like any typical Hilbert’s Hotel, the version in question also operates with certain relocation instructions to vacate occupied rooms. Mu has designed m relocation instructions."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Each instruction, denoted as a pair (a, b), directs all guests on the same floor as room a to simultaneously move to new rooms by adding b to their previous room numbers. When necessary, Mu can select one of these m instructions and broadcast it to the corresponding floor. You might wonder about the case where guests are asked to move into already occupied rooms."
+          },
+          {
+            "kind": "paragraph",
+            "text": "In this scenario, the relocating guests will still move in, accompanying the original occupants forever."
+          },
+          {
+            "kind": "paragraph",
+            "text": "However, due to the infinity of the Celestial Hilbert’s Hotel, it is hard for Mu to track a guest’s potential locations after multiple instructions, resulting in management inefficiency. Thus, Mu proposes q queries, each concerning a guest who initially occupies room x."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Supposing that the relocation instructions can be applied any number of times in any order, with both the exact number of times and order being unspecified, for each query, your task is to determine whether the set of all room numbers possibly reachable by the guest concerned is an infinite set."
+          },
+          {
+            "kind": "paragraph",
+            "text": "More formally, let Sk be the set of room numbers possibly reachable by the guest concerned after at most k instructions, then you need to determine whether for all integers t, such k exists that |Sk | > t can be achieved, where |Sk | denotes the size of Sk."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains three integers n, m, and q (1 ≤ n, m, q ≤ 5 × $10^{5}$ ), indicating the number of floors, relocation instructions, and queries, respectively. Then m lines follow, each of which contains two integers a and b (−$10^{9}$ ≤ a, b ≤ $10^{9}$ ), describing a relocation instruction (a, b). Then q lines follow, each of which contains an integer x (−$10^{9}$ ≤ x ≤ $10^{9}$ ), indicating a query concerning the guest who initially occupies room x."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each query, output “Yes” (without quotes) in one line if the set of all room numbers possibly reachable by the guest concerned is an infinite set, or otherwise output “No” (without quotes) in one line."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "谬翻阅着他的沉思录，寻得一张纸条被遗忘于泛黄的书页间。此纸条，缘于远方天狐座的灵韵，记载着一句似是自我激励的真言：“梦若星辰，遥不可及，渺不足道，却足以将至暗点亮。”只是时过境迁，谬终究得以瞥见梦隐秘的一面。经年累月的成长催使他更加老练，或许也将伤痕刻满了他的容颜，他难逃承认星辰与梦想，在平等支配万物的宿命论之下，皆注定将归于寂灭。追随梦想的命途万念俱灰，怀疑现实的愁云笼罩心头，但谬拒绝向悲观妥协，他选择等待，至今仍在等待，怀揣着不渝的信念。他相信破碎之梦，恰如轮回盛典中的星辰余烬，必将重塑并再度燃起烈焰。他继续回顾着沉思录中的点滴，头顶正是宇宙浩瀚无垠。的确，相较于有限，无限总能蕴藏着更多的憧憬与奥秘，无论在时空的领域，在梦想的星云，甚至——在数学世界里。他的指尖应时对景地停留在了诉说希尔伯特旅馆悖论的一页，仿佛触及了这个无限集合经典范例曾牵动他思绪的瞬间。字里行间，谬构想了一个升级版的无限旅馆——天界希尔伯特旅馆——并亲自扮演其馆长，留下一个有趣的问题供像你这样的程序员来解决。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "希尔伯特的无限旅馆"
+          },
+          {
+            "kind": "paragraph",
+            "text": "作为潜匿深空的奇观，天界希尔伯特旅馆拥有无限多个房间。每个房间都被分配了一个独特的整数（可以是正数、负数或零）作为其房号，且所有的房号构成Z，即全体整数集。旅馆有n个楼层，房间根据其房号除以n后的非负余数分布在不同楼层。具体地，房间x和房间y处于同一楼层当且仅当它们的房号除以n后余数相同，用同余方程表示即x≡y (mod n)。和其他典型的希尔伯特旅馆一样，题述版本也通过特定的搬迁指令来腾空已占用的房间。谬设计了m条搬迁指令。每条指令表示为(a,b)，能引导所有与房间a处于同一楼层的旅客同时搬入新的房间，新房号通过原房号加上b来确定。必要时，谬可以选择m条指令中的一条将其广播到相应的楼层。你可能会想到当旅客被要求搬入已占用的房间时会发生什么。在这种情形下，正在搬迁的旅客仍会搬入，永远陪伴着原住户。然而，由于天界希尔伯特旅馆的无限性，谬很难追踪一位旅客经过多次指令后的潜在位置，导致管理效率低下。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "因此，谬提出了q组询问，每组询问考察了一位初始入住房间x的旅客。假设搬迁指令可以以任意顺序执行任意次数，具体次数和顺序均不确定，对于每组询问，你的任务是判断所考察的旅客所有可能到达房间的房号集合是否为无限集。形式化地，令Sk为该旅客经过至多k条指令后可能到达房间的房号集合，你需要判断对于所有整数t，是否都存在k使得|Sk|>t成立，其中|Sk|表示Sk的大小。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含三个整数n，m和q (1≤n,m,q≤5×$10^{5}$)，分别表示楼层个数、搬迁指令个数和询问组数。接下来m行，其中每行包含两个整数a和b (−$10^{9}$≤a,b≤$10^{9}$)，描述一个搬迁指令(a,b)。接下来q行，其中每行包含一个整数x (−$10^{9}$≤x≤$10^{9}$)，表示一组考察初始入住房间x的旅客的询问。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组询问，如果所考察的旅客所有可能到达房间的房号集合为无限集，在一行内输出“Yes”（不含引号），否则在一行内输出“No”（不含引号）。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3 2 3\n1 1\n-1 3\n1\n2\n3\n3 2 3\n1 1\n-1 0\n1\n2\n3",
+    "output": "Yes\nYes\nNo\n\nNo\nNo\nNo",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3 2 3\n1 1\n-1 3\n1\n2\n3\n3 2 3\n1 1\n-1 0\n1\n2\n3",
+      "output": "Yes\nYes\nNo\n\nNo\nNo\nNo",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2024-shenyang/assets/M-1.png",
+      "captionEn": "Hikari's Hope Academy",
+      "captionZh": "光之希望学院",
+      "imageTextZh": "Hikari's Hope Academy 意为“光之希望学院”。"
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

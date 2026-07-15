@@ -1,0 +1,205 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "A",
+  "problemId": 9798,
+  "titleEn": "Safety First",
+  "titleZh": "安全第一",
+  "timeLimitText": "3 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9798&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9798&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      1,
+      2
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9798?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "A ladder has $n$ sections with positive integer lengths $d_1,d_2,\\ldots,d_n$ in non-increasing order: $d_1 \\ge d_2 \\ge \\cdots \\ge d_n$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Little Q needs a ladder whose height is exactly $m$ when stood upright, where the height is the altitude difference between its highest and lowest ends. For safety, the ladder must be stable and satisfy:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The lower end of the first section must touch the ground.",
+              "For every $i=1,2,\\ldots,n-1$, the upper end of section $i$ must be locked to either the upper or lower end of section $i+1$."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Count the different stable ladders with $n$ sections and height exactly $m$. Two ladders are different if some section length differs, or if some section is locked to a different end of the next section. Output the answer modulo $998244353$."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains $T$ ($1 \\le T \\le 10^5$), the number of test cases. Each test case contains $n$ and $m$ ($1 \\le n,m \\le 2000$), the number of sections and required height."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output the number of different stable ladders modulo $998244353$."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In the following explanation, we use bold text to indicate that the upper end of the corresponding section is locked into the lower bound of the next section and keep the same in other scenarios. In the first sample case:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "for the first test case, the only possible ladder has a single section of length 1;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "for the second test case, the section lengths of all 4 possible ladders are [2, 1], [3, 1], [3, 2] and [3, 3] respectively;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "for the third test case, the section lengths of all 10 possible ladders are [1, 1, 1], [2, 1, 1], [2, 1, 1], [2, 2, 1], [3, 1, 1], [3, 2, 1], [3, 2, 2], [3, 3, 1], [3, 3, 2] and [3, 3, 3] respectively."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "一个梯子由 $n$ 段构成，每段长度均为正整数。设各段长度依次为 $d_1,d_2,\\ldots,d_n$，则须满足 $d_1 \\ge d_2 \\ge \\cdots \\ge d_n$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "小 Q 需要一架竖立后高度恰好为 $m$ 的梯子；梯子的高度是最高点与最低点的海拔高度差。出于安全考虑，梯子必须稳定，并满足："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第一段的下端必须接触地面。",
+              "对每个 $i=1,2,\\ldots,n-1$，第 $i$ 段的上端必须锁定在第 $i+1$ 段的上端或下端。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "求由 $n$ 段构成且竖立高度恰好为 $m$ 的不同稳定梯子数量。若某一段的长度不同，或某一段与下一段的锁定端点不同，则两架梯子视为不同。答案对 $998244353$ 取模。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含测试数据组数 $T$（$1 \\le T \\le 10^5$）。每组测试数据包含两个整数 $n,m$（$1 \\le n,m \\le 2000$），分别表示梯子段数和所需高度。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对每组测试数据，输出不同稳定梯子的数量对 $998244353$ 取模后的结果。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在下面的解释中，我们用粗体表示对应段的上端是和下一个段的下端锁定，并在其他情况保持原状。在第一个样例中："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "对于第一组测试数据，唯一可行的梯子包含一个长度为1的段；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "对于第二组测试数据，所有4种可行梯子的段长分别为[2,1],[3,1],[3,2]和[3,3]；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "对于第三组测试数据，所有10种可行梯子的段长分别为[1,1,1],[2,1,1],[2,1,1],[2,2,1],[3,1,1],[3,2,1],[3,2,2],[3,3,1],[3,3,2]和[3,3,3]。"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n1 3\n2 3\n3 3\n1\n2000 2000",
+    "output": "1\n4\n10\n\n204576309",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n1 3\n2 3\n3 3\n1\n2000 2000",
+      "output": "1\n4\n10\n\n204576309",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2024-shenyang/assets/A-1.png",
+      "captionEn": "A ladder with n segments and total height m",
+      "captionZh": "由 n 段组成、总高度为 m 的梯子",
+      "imageTextZh": "Ladder 表示“梯子”；d_i 表示第 i 段长度；m 表示梯子高度。"
+    },
+    {
+      "src": "/archive-statements/2024-shenyang/assets/A-2.png",
+      "captionEn": "Stable and unstable ways to connect adjacent segments",
+      "captionZh": "相邻两段的稳定与不稳定连接方式",
+      "imageTextZh": "Not stable 表示“不稳定”；Stable 表示“稳定”。"
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

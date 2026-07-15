@@ -1,0 +1,97 @@
+{
+  "contestId": "2024-shenyang",
+  "officialChinese": true,
+  "problems": [
+    {
+      "slot": "A",
+      "problemId": 9798,
+      "titleEn": "Safety First",
+      "titleZh": "安全第一",
+      "path": "/archive-statements/2024-shenyang/A.json"
+    },
+    {
+      "slot": "B",
+      "problemId": 9799,
+      "titleEn": "Magical Palette",
+      "titleZh": "神奇的调色板",
+      "path": "/archive-statements/2024-shenyang/B.json"
+    },
+    {
+      "slot": "C",
+      "problemId": 9800,
+      "titleEn": "Crisis Event: Meteorite",
+      "titleZh": "突发事件：陨石",
+      "path": "/archive-statements/2024-shenyang/C.json"
+    },
+    {
+      "slot": "D",
+      "problemId": 9801,
+      "titleEn": "Dot Product Game",
+      "titleZh": "点积游戏",
+      "path": "/archive-statements/2024-shenyang/D.json"
+    },
+    {
+      "slot": "E",
+      "problemId": 9802,
+      "titleEn": "Light Up the Grid",
+      "titleZh": "点亮网格",
+      "path": "/archive-statements/2024-shenyang/E.json"
+    },
+    {
+      "slot": "F",
+      "problemId": 9803,
+      "titleEn": "Light Up the Hypercube",
+      "titleZh": "点亮超立方体",
+      "path": "/archive-statements/2024-shenyang/F.json"
+    },
+    {
+      "slot": "G",
+      "problemId": 9804,
+      "titleEn": "Guess the Polygon",
+      "titleZh": "猜测多边形",
+      "path": "/archive-statements/2024-shenyang/G.json"
+    },
+    {
+      "slot": "H",
+      "problemId": 9805,
+      "titleEn": "Guide Map",
+      "titleZh": "导览图",
+      "path": "/archive-statements/2024-shenyang/H.json"
+    },
+    {
+      "slot": "I",
+      "problemId": 9806,
+      "titleEn": "Growing Tree",
+      "titleZh": "种树",
+      "path": "/archive-statements/2024-shenyang/I.json"
+    },
+    {
+      "slot": "J",
+      "problemId": 9807,
+      "titleEn": "Make Them Believe",
+      "titleZh": "眼见为实",
+      "path": "/archive-statements/2024-shenyang/J.json"
+    },
+    {
+      "slot": "K",
+      "problemId": 9808,
+      "titleEn": "Fragile Pinball",
+      "titleZh": "易碎的弹球",
+      "path": "/archive-statements/2024-shenyang/K.json"
+    },
+    {
+      "slot": "L",
+      "problemId": 9809,
+      "titleEn": "The Grand Contest",
+      "titleZh": "大奖赛",
+      "path": "/archive-statements/2024-shenyang/L.json"
+    },
+    {
+      "slot": "M",
+      "problemId": 9810,
+      "titleEn": "Obliviate, Then Reincarnate",
+      "titleZh": "寂灭，而新生",
+      "path": "/archive-statements/2024-shenyang/M.json"
+    }
+  ]
+}

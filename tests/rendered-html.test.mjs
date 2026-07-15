@@ -470,6 +470,35 @@ test("ships the 2025 Shenyang regional as instant official bilingual statements"
   assert.match(html, /提交代码/);
 });
 
+test("ships the 2024 Shenyang regional as instant official bilingual statements", async () => {
+  const slots = "ABCDEFGHIJKLM".split("");
+  const [catalog, manifestText, importer, ...statementTexts] = await Promise.all([
+    readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
+    readFile(new URL("public/archive-statements/2024-shenyang/manifest.json", root), "utf8"),
+    readFile(new URL("scripts/import_shenyang_statements.py", root), "utf8"),
+    ...slots.map((slot) => readFile(new URL(`public/archive-statements/2024-shenyang/${slot}.json`, root), "utf8")),
+  ]);
+  const manifest = JSON.parse(manifestText);
+  const statements = statementTexts.map((text) => JSON.parse(text));
+  assert.equal(manifest.problems.length, 13);
+  assert.equal(manifest.officialChinese, true);
+  assert.match(catalog, /id: "2024-shenyang"[\s\S]*qojContestId: 1865[\s\S]*staticStatements: "official-chinese"/);
+  assert.match(importer, /CONTEST_2024_PROBLEMS/);
+  assert.equal(statements.every((problem) => problem.english.sections.length > 0), true);
+  assert.equal(statements.every((problem) => problem.chinese.sections.length > 0), true);
+  assert.equal(statements.every((problem) => problem.source.chinesePdfUrl.includes("ver=zh_cn")), true);
+  assert.equal(statements.flatMap((problem) => problem.images).every((image) => image.src.startsWith("/archive-statements/2024-shenyang/assets/")), true);
+  assert.match(statementTexts[0], /Not stable 表示“?不稳定/);
+  assert.match(statementTexts[11], /Removed intervals 表示“?已删除区间/);
+  assert.doesNotMatch(statementTexts.join("\n"), /\(cid:|\u0001|RRR/);
+
+  const response = await render("/vp/archive/problem?contest=2024-shenyang&slot=A");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Safety First/);
+  assert.match(html, /提交代码/);
+});
+
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {
   const [backend, persistence, persistentClient, statements, compose, dockerfile, nginx, browserApi, worker] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),

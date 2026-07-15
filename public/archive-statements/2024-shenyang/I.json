@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "I",
+  "problemId": 9806,
+  "titleEn": "Growing Tree",
+  "titleZh": "种树",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9806&contest_id=1865",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=9806&contest_id=1865&ver=zh_cn",
+    "chinesePages": [
+      17,
+      17
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/1865/problem/9806?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Little Q has planted a tree, which initially has only one root node 1, which is also a leaf node. Every morning, each leaf node u will sprout two branches:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "One branch connects node u and node 2u, with a length of a2u;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The other branch connects node u and node 2u + 1, with a length of a2u+1."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "After that, node u is no longer a leaf node, and nodes 2u and 2u + 1 become new leaf nodes. This tree will grow for n days, ultimately forming a tree with 2n+1 − 1 nodes, of which 2n nodes are leaf nodes."
+          },
+          {
+            "kind": "paragraph",
+            "text": "During these n days, every afternoon, Little Q can choose one of the branches that have already grown to “prune”, modifying its length to any positive integer (possibly less than or greater than the original one), or he can choose not to prune any branches at all."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Little Q hopes that after the tree has fully grown, the sum of the lengths of the branches on the simple path from the root node to each leaf node will be pairwise different. You need to find the minimum number of branches that need to be pruned, or indicate that it is impossible to achieve this."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains an integer T (1 ≤ T ≤ 1 000) indicating the number of test cases. For each test case: The first line contains an integer n (1 ≤ n ≤ 10), indicating the number of days the tree grows. The second line contains 2n+1 − 2 integers a2, a3,..., a2n+1 −1 (1 ≤ ai ≤ 108 ), indicating the length of"
+          },
+          {
+            "kind": "paragraph",
+            "text": "the branches. It is guaranteed that the number of test cases with n greater than 7 does not exceed 10."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output a line containing an integer, indicating the minimum number of branches that need to be pruned if it is possible to meet the requirement, or −1 otherwise."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "小Q种下了一棵树，这棵树初始只有一个根节点1，同时也是叶子节点。在每天上午，每个叶子节点u会萌发出两条树枝："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "一条树枝连接节点u和节点2u，其长度是a2u；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "另一条树枝连接节点u和节点2u+1，其长度是a2u+1。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "之后节点u不再是叶子节点，而节点2u和节点2u+1成为新的叶子节点。这棵树会生长n天，最终长成有2n+1−1个节点的树，其中2n个节点是叶子节点。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "在这n天里，每天下午小Q可以选择一条当前已经长出来的树枝进行“修剪”，将其长度修改为任意的正整数（可以比原来的值大或小），或者也可以不对任何树枝进行修剪。小Q希望在这棵树长成之后，根节点到每个叶子节点的简单路径上的树枝长度之和两两不同。你需要帮他计算出最少要修剪多少条树枝，或者指出这是不可能做到的。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤1 000)表示测试数据组数，对于每组测试数据：第一行包含一个整数n (1≤n≤10)，表示树生长的天数。第二行包含2n+1−2个整数a2,a3,...,a2n+1−1 (1≤ai≤108)，表示树枝的长度。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "保证n大于7的测试数据不超过10组。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据，输出一行包含一个整数，表示满足要求所需修剪的最少树枝数量，如果不可能满足要求，则输出−1。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n2\n1 2 4 3 2 1\n2\n1 2 3 3 2 1\n2\n1 2 3 3 1 1",
+    "output": "1\n2\n-1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n2\n1 2 4 3 2 1\n2\n1 2 3 3 2 1\n2\n1 2 3 3 1 1",
+      "output": "1\n2\n-1",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

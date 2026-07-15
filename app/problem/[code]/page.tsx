@@ -290,7 +290,7 @@ function GymSubmitDialog({ contestId, archiveContestId, currentIndex, problemCou
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
-      <footer><span>{extensionReady ? `${SUBMIT_EXTENSION_LABEL} 扩展已连接 · 凭据只留在浏览器` : `未检测到 ${SUBMIT_EXTENSION_LABEL} 扩展`}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
+      <footer><span>{extensionReady ? `${SUBMIT_EXTENSION_LABEL} 扩展已连接 · 凭据只留在浏览器` : <>未检测到 {SUBMIT_EXTENSION_LABEL} 扩展<Link href="/extension">安装并检查提交扩展 →</Link></>}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
     </section>
   </div>;
 }

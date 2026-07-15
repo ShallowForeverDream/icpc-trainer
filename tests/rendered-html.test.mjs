@@ -247,6 +247,11 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(page, /题目列表/);
   assert.match(page, /队伍提交记录/);
   assert.match(page, /fetchTeamSubmissions/);
+  assert.match(page, /loadPlatformSubmissions/);
+  assert.match(page, /detailHref: `\/submissions\//);
+  assert.match(page, /platformJudgeIds/);
+  assert.match(page, /站内提交优先显示并可打开源码/);
+  assert.doesNotMatch(page, /source\.url[^\n]*target="_blank"/);
   assert.match(page, /最后 1 小时封榜/);
   assert.match(page, /总罚时/);
   assert.match(page, /总用时/);

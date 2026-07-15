@@ -7,18 +7,21 @@ import { authFetch, readAuth, type AuthUser } from "../lib/auth-client";
 
 type Invite = { id: number; code?: string; codePrefix?: string; maxUses: number; usedCount: number; expiresAt: string; createdAt: string; status: "active" | "used" | "expired" };
 type Feedback = { id: number; email: string | null; category: string; rating: number; message: string; page: string; status: string; createdAt: string };
+type StatementReview = { kind: "codeforces" | "archive"; id: string; title: string; source: string; reviewed: boolean; official: boolean; href: string; reviewedAt: string | null; updatedAt: string };
 
 export default function AdminPage() {
   const [users, setUsers] = useState<AuthUser[]>([]);
   const [invites, setInvites] = useState<Invite[]>([]);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
+  const [statementReviews, setStatementReviews] = useState<StatementReview[]>([]);
+  const [reviewServiceReady, setReviewServiceReady] = useState(true);
   const [generated, setGenerated] = useState("");
   const [maxUses, setMaxUses] = useState(1);
   const [expiresInDays, setExpiresInDays] = useState(7);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
-  const [view, setView] = useState<"invites" | "users" | "feedback">("invites");
+  const [view, setView] = useState<"invites" | "users" | "statements" | "feedback">("invites");
 
   const load = useCallback(async () => {
     const auth = readAuth();
@@ -27,11 +30,18 @@ export default function AdminPage() {
     if (auth.user.mustChangePassword) { location.replace("/account"); return; }
     setLoading(true);
     try {
-      const [usersResponse, invitesResponse, feedbackResponse] = await Promise.all([authFetch("/admin/users"), authFetch("/admin/invites"), authFetch("/admin/feedback")]);
+      const [usersResponse, invitesResponse, feedbackResponse, reviewsResponse] = await Promise.all([authFetch("/admin/users"), authFetch("/admin/invites"), authFetch("/admin/feedback"), authFetch("/codeforces/statements/review-queue?limit=300")]);
       if (!usersResponse.ok || !invitesResponse.ok || !feedbackResponse.ok) throw new Error("管理员登录已失效");
       setUsers(((await usersResponse.json()) as { users: AuthUser[] }).users);
       setInvites(((await invitesResponse.json()) as { invites: Invite[] }).invites);
       setFeedback(((await feedbackResponse.json()) as { feedback: Feedback[] }).feedback);
+      if (reviewsResponse.ok) {
+        setStatementReviews(((await reviewsResponse.json()) as { items: StatementReview[] }).items || []);
+        setReviewServiceReady(true);
+      } else {
+        setStatementReviews([]);
+        setReviewServiceReady(false);
+      }
     } catch (error) { setMessage(error instanceof Error ? error.message : "加载失败"); } finally { setLoading(false); }
   }, []);
 
@@ -79,11 +89,12 @@ export default function AdminPage() {
   return <AppShell active="管理">
     <section className="admin-hero">
       <div><h1>管理</h1><p>注册、用户与反馈</p></div>
-      <div className="admin-metrics"><span><b>{users.length}</b>用户</span><span><b>{invites.filter((item) => item.status === "active").length}</b>有效邀请码</span></div>
+      <div className="admin-metrics"><span><b>{users.length}</b>用户</span><span><b>{invites.filter((item) => item.status === "active").length}</b>有效邀请码</span><span><b>{statementReviews.filter((item) => !item.reviewed).length}</b>待校对题面</span></div>
     </section>
     <div className="admin-tabs" role="tablist">
       <button className={view === "invites" ? "active" : ""} onClick={() => setView("invites")}>邀请码</button>
       <button className={view === "users" ? "active" : ""} onClick={() => setView("users")}>用户</button>
+      <button className={view === "statements" ? "active" : ""} onClick={() => setView("statements")}>题面校对</button>
       <button className={view === "feedback" ? "active" : ""} onClick={() => setView("feedback")}>反馈</button>
     </div>
     {view === "invites" ? <div className="admin-grid">
@@ -102,6 +113,7 @@ export default function AdminPage() {
       </section>
     </div> : null}
     {view === "users" ? <section className="panel users-panel"><div className="panel-head"><h2>注册用户</h2></div><div className="admin-list user-list">{users.map((user) => <div key={user.id}><span className="user-avatar">{user.email.slice(0, 2).toUpperCase()}</span><b>{user.email}</b><Pill>{user.role === "admin" ? "管理员" : "用户"}</Pill><span>{new Date(user.createdAt).toLocaleDateString("zh-CN")}</span></div>)}</div></section> : null}
+    {view === "statements" ? <section className="panel statement-review-queue"><div className="panel-head"><div><h2>中文题面校对</h2><p>优先处理沈阳训练中实际打开的机器翻译题面。</p></div><span>{statementReviews.filter((item) => !item.reviewed).length} 待校对</span></div>{!reviewServiceReady ? <div className="loading-panel">阿里云后端升级后会启用题面校对队列。</div> : loading ? <div className="loading-panel">加载中…</div> : statementReviews.length ? <div className="statement-review-list">{statementReviews.map((item) => <a href={item.href} key={`${item.kind}:${item.id}`}><span className={`review-state${item.reviewed ? " reviewed" : ""}`}>{item.official ? "官方" : item.reviewed ? "已校对" : "待校对"}</span><div><b>{item.title}</b><small>{item.source} · 更新于 {new Date(item.updatedAt).toLocaleDateString("zh-CN")}</small></div><em>{item.reviewed && !item.official ? "重新校对 →" : item.official ? "查看题面 →" : "开始校对 →"}</em></a>)}</div> : <div className="loading-panel">目前没有需要校对的动态题面</div>}</section> : null}
     {view === "feedback" ? <section className="panel users-panel"><div className="panel-head"><h2>反馈</h2><span>{feedback.length} 条</span></div>{feedback.length ? <div className="feedback-admin-list">{feedback.map((item) => <article key={item.id}><div><Pill>{item.category}</Pill><b>{"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}</b><time>{new Date(item.createdAt).toLocaleString("zh-CN")}</time><select aria-label="反馈处理状态" value={item.status} disabled={actionId === item.id} onChange={(event) => void updateFeedbackStatus(item.id, event.target.value)}><option value="new">待处理</option><option value="reviewed">已查看</option><option value="planned">已计划</option><option value="done">已完成</option></select></div><p>{item.message}</p><small>{item.email || "匿名用户"}</small></article>)}</div> : <div className="loading-panel">暂无反馈</div>}</section> : null}
   </AppShell>;
 }

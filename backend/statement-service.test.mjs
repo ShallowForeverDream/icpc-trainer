@@ -3,6 +3,7 @@ import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { DatabaseSync } from "node:sqlite";
 import test from "node:test";
 
 async function waitForHealth(baseUrl) {
@@ -102,7 +103,47 @@ test("imports, sanitizes, and reads a first-open statement through HTTP", async 
       body: JSON.stringify({ code: "2176C", chineseHtml: "<div class=\"legend\"><p>这是一段已经生成并且可以立即阅读的中文缓存题面。</p></div>" }),
     });
     assert.equal(translationResponse.status, 200);
-    assert.equal((await translationResponse.json()).statement.translationCurrent, true);
+    const reviewedTranslation = (await translationResponse.json()).statement;
+    assert.equal(reviewedTranslation.translationCurrent, true);
+    assert.equal(reviewedTranslation.translationReviewed, true);
+    assert.ok(reviewedTranslation.translationReviewedAt);
+
+    const reviewQueueResponse = await fetch(`${baseUrl}/codeforces/statements/review-queue`, { headers: authorization });
+    assert.equal(reviewQueueResponse.status, 200);
+    const reviewQueue = (await reviewQueueResponse.json()).items;
+    assert.equal(reviewQueue.find((item) => item.id === "2176C")?.reviewed, true);
+
+    const unauthorizedQueueResponse = await fetch(`${baseUrl}/codeforces/statements/review-queue`);
+    assert.equal(unauthorizedQueueResponse.status, 401);
+
+    const archiveDb = new DatabaseSync(join(directory, "test.sqlite"));
+    const archiveTimestamp = Date.now();
+    const archiveOriginal = { sections: [{ key: "statement", title: "Statement", blocks: [{ kind: "paragraph", text: "Given $n$, print $n$." }] }], samples: [] };
+    const archiveChinese = { sections: [{ key: "statement", title: "题目描述", blocks: [{ kind: "paragraph", text: "给定一个整数 $n$，请按照题目要求在一行内输出整数 $n$。" }] }] };
+    archiveDb.prepare(`INSERT INTO archive_statements (
+      id, contest_slug, slot, qoj_contest_id, problem_id, contest_name, title_en, title_zh,
+      source_url, original_json, chinese_json, translation_version, status, created_at, updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'ready', ?, ?)`)
+      .run("2023-shenyang:A", "2023-shenyang", "A", 100, 200, "2023 ICPC Shenyang", "Example", "示例",
+        "https://codeforces.com/gym/100/problem/A", JSON.stringify(archiveOriginal), JSON.stringify(archiveChinese), 2, archiveTimestamp, archiveTimestamp);
+    archiveDb.close();
+
+    const badArchiveReview = await fetch(`${baseUrl}/archive/statements/translation-review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authorization },
+      body: JSON.stringify({ contestId: "2023-shenyang", slot: "A", titleZh: "示例题", chinese: { sections: [{ key: "statement", title: "题目描述", blocks: [{ kind: "paragraph", text: "给定 n，输出 n。" }] }] }, images: [] }),
+    });
+    assert.equal(badArchiveReview.status, 400);
+
+    const archiveReviewResponse = await fetch(`${baseUrl}/archive/statements/translation-review`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authorization },
+      body: JSON.stringify({ contestId: "2023-shenyang", slot: "A", titleZh: "示例题", chinese: archiveChinese, images: [] }),
+    });
+    assert.equal(archiveReviewResponse.status, 200);
+    const archiveReviewed = (await archiveReviewResponse.json()).statement;
+    assert.equal(archiveReviewed.translationReviewed, true);
+    assert.equal(archiveReviewed.titleZh, "示例题");
 
     const reimportResponse = await fetch(`${baseUrl}/codeforces/statements/import`, {
       method: "POST",

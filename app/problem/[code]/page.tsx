@@ -9,6 +9,7 @@ import { findArchiveContest } from "../../data/archive-contests";
 import { findCuratedProblem } from "../../data/problems";
 import { findImportedStatement } from "../../data/problem-statements";
 import { apiJson } from "../../lib/api-client";
+import { readAuth } from "../../lib/auth-client";
 import { SUBMIT_EXTENSION_LABEL, SUBMIT_EXTENSION_VERSION } from "../../lib/extension-config";
 import { loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
 import {
@@ -152,7 +153,7 @@ function statusText(statement: CachedStatement | null, error: string) {
   if (statement.status === "model_downloading") return statement.chineseHtml ? "中文缓存可立即阅读 · 后台正在载入校对模型" : statement.message || "首次使用：正在下载本地翻译模型";
   if (statement.status === "translating") return statement.message || "原题已就绪，正在生成中文题面";
   if (statement.status === "ready_original") return statement.message || "原题已就绪，中文翻译稍后重试";
-  if (statement.status === "ready") return "原题面与中文题面均已缓存";
+  if (statement.status === "ready") return statement.translationReviewed ? "中文题面已人工校对" : "原题面与中文题面均已缓存";
   return statement.message || "正在准备题面";
 }
 
@@ -185,8 +186,48 @@ function CachedStatementView({ statement, language }: { statement: CachedStateme
       <span><b>{statement.sourceKind === "codeforces-gym" ? "Codeforces Gym" : statement.sourceKind === "codeforces" ? "Codeforces" : "CF 数据集"}</b> 题面来源</span>
     </div>
     <div className="cf-statement-html" dangerouslySetInnerHTML={{ __html: html }} />
-    <div className="source-callout"><b>{language === "original" ? "原题面" : statement.revalidating ? "中文缓存题面 · 后台校对中" : "中文题面"}</b><p>{language === "original" ? "首次打开后缓存自 Codeforces；公式、样例和图片保持原始结构。" : statement.revalidating ? "先显示上一版可用中文，不再让你等待；新版术语校对完成后会自动替换。" : "由本地模型翻译并缓存。变量、公式与样例保持原样；如有差异请以原题面为准。"}</p></div>
+    <div className="source-callout"><b>{language === "original" ? "原题面" : statement.translationReviewed ? "人工校对中文题面" : statement.revalidating ? "中文缓存题面 · 后台校对中" : "中文题面"}</b><p>{language === "original" ? "首次打开后缓存自 Codeforces；公式、样例和图片保持原始结构。" : statement.translationReviewed ? `管理员已逐段校对并持久保存${statement.translationReviewedAt ? ` · ${new Date(statement.translationReviewedAt).toLocaleDateString("zh-CN")}` : ""}。` : statement.revalidating ? "先显示上一版可用中文，不再让你等待；新版术语校对完成后会自动替换。" : "平台已生成并缓存译文；公式、代码和样例保持原样，待管理员逐段校对。"}</p></div>
   </div>;
+}
+
+function StatementReviewEditor({ statement, onSaved, onCancel }: {
+  statement: CachedStatement;
+  onSaved: (next: CachedStatement) => void;
+  onCancel: () => void;
+}) {
+  const editorRef = useRef<HTMLDivElement>(null);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  async function saveReview() {
+    const chineseHtml = editorRef.current?.innerHTML || "";
+    setSaving(true);
+    setMessage("");
+    try {
+      const next = await submitBrowserTranslation(statement.code, chineseHtml, statement.images);
+      onSaved(next);
+      setMessage("已保存为全站人工校对版");
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "题面校对保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <section className="statement-review-shell">
+    <header><div><small>管理员校对</small><h2>逐段修正中文题面</h2></div><span>公式、图片和样例结构由服务器保护</span></header>
+    <div
+      ref={editorRef}
+      className="statement-review-editor cf-statement-html"
+      contentEditable
+      suppressContentEditableWarning
+      dangerouslySetInnerHTML={{ __html: statement.chineseHtml || "" }}
+    />
+    <footer>
+      <p>{message || "直接修改文字；若误改公式，服务器会拒绝保存。"}</p>
+      <div><button type="button" className="button button-ghost" onClick={onCancel} disabled={saving}>取消</button><button type="button" className="button button-primary" onClick={() => void saveReview()} disabled={saving}>{saving ? "正在保存…" : "保存人工校对版"}</button></div>
+    </footer>
+  </section>;
 }
 
 function GymSubmitDialog({ contestId, archiveContestId, currentIndex, problemCount, titles, onClose }: {
@@ -352,6 +393,9 @@ export default function ProblemDetailPage() {
   const [vpContext, setVpContext] = useState<VpContext | null>(null);
   const [gymSubmitOpen, setGymSubmitOpen] = useState(false);
   const [problemSubmissions, setProblemSubmissions] = useState<PlatformSubmission[]>([]);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [reviewingStatement, setReviewingStatement] = useState(false);
+  const statementReviewRequested = useRef(false);
   const officialProblemUrl = isGym
     ? `https://codeforces.com/gym/${problem.contestId}/problem/${problem.index}`
     : `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
@@ -400,6 +444,7 @@ export default function ProblemDetailPage() {
     setStatement(null);
     setStatementError("");
     setStatementAction("");
+    statementReviewRequested.current = false;
     void refreshStatement();
   }, [refreshStatement]);
 
@@ -434,6 +479,21 @@ export default function ProblemDetailPage() {
       setDifficulty(remote.thinking.difficulty && ["easy", "right", "hard"].includes(remote.thinking.difficulty) ? remote.thinking.difficulty : "right");
     });
   }, [requestedCode]);
+
+  useEffect(() => {
+    const refreshRole = () => setIsAdmin(Boolean(readAuth()?.user.role === "admin" && !readAuth()?.user.mustChangePassword));
+    refreshRole();
+    window.addEventListener("icpc-auth-change", refreshRole);
+    return () => window.removeEventListener("icpc-auth-change", refreshRole);
+  }, []);
+
+  useEffect(() => {
+    if (isAdmin && statement?.chineseHtml && searchParams.get("review") === "1" && !statementReviewRequested.current) {
+      statementReviewRequested.current = true;
+      setLanguage("chinese");
+      setReviewingStatement(true);
+    }
+  }, [isAdmin, searchParams, statement?.chineseHtml]);
   useEffect(() => {
     const timeout = window.setTimeout(() => {
       writeStoredString(`icpc-trainer-draft:${requestedCode}`, code);
@@ -633,13 +693,13 @@ export default function ProblemDetailPage() {
         {tab === "题目" ? <>
           <div className="statement-language-bar" aria-label="题面语言">
             <div className="language-switch"><button className={language === "original" ? "active" : ""} aria-pressed={language === "original"} onClick={() => setLanguage("original")}>原题面 <small>EN</small></button><button className={language === "chinese" ? "active" : ""} aria-pressed={language === "chinese"} onClick={() => setLanguage("chinese")}>中文题面 <small>ZH</small></button></div>
-            <span className={`statement-status status-${statement?.status || "loading"}`}><i />{status}</span>
+            <div className="statement-status-actions"><span className={`statement-status status-${statement?.status || "loading"}`}><i />{status}</span>{isAdmin && statement?.chineseHtml ? <button type="button" className="statement-review-button" onClick={() => { setLanguage("chinese"); setReviewingStatement((value) => !value); }}>{reviewingStatement ? "退出校对" : statement.translationReviewed ? "重新校对" : "人工校对"}</button> : null}</div>
           </div>
           {language === "original" ? statement?.originalHtml ? <CachedStatementView statement={statement} language="original" /> : <div className="statement-body statement-loading-card">
             <div className="statement-loader" /><h2>正在导入原题面</h2><p>这是本题第一次打开。服务器会先尝试 {isGym ? "Codeforces Gym" : "Codeforces 与缓存数据源"}；若服务器访问受限，{SUBMIT_EXTENSION_LABEL} 浏览器扩展会读取公开题面并完成导入。</p>
             {statementError ? <p className="statement-error">{statementError}</p> : null}
             <div className="hero-actions"><button className="button button-primary" onClick={() => void importWithExtension()} disabled={Boolean(statementAction)}>通过扩展重新导入</button><a className="button button-ghost" href={officialProblemUrl} target="_blank" rel="noreferrer">先打开原题完成验证 ↗</a></div>
-          </div> : statement?.chineseHtml ? <CachedStatementView statement={statement} language="chinese" /> : importedStatement ? <CuratedChineseStatement statement={importedStatement} /> : <div className="statement-body statement-loading-card">
+          </div> : statement?.chineseHtml ? reviewingStatement && isAdmin ? <StatementReviewEditor statement={statement} onCancel={() => setReviewingStatement(false)} onSaved={(next) => { setStatement(next); setReviewingStatement(false); setStatementAction("中文题面已人工校对并持久保存"); }} /> : <CachedStatementView statement={statement} language="chinese" /> : importedStatement ? <CuratedChineseStatement statement={importedStatement} /> : <div className="statement-body statement-loading-card">
             {statement?.status !== "ready_original" ? <div className="statement-loader" /> : <Icon name="history" />}<h2>{statement?.status === "ready_original" ? "中文翻译正在排队重试" : "中文题面正在生成"}</h2><p>{statement?.status === "ready_original" ? "原题面可立即阅读，服务器翻译暂未成功并会自动重试。你也可以使用 Chrome 本地翻译，结果会先保存在当前设备，不再因登录或网络失败而丢失。" : statement?.originalHtml ? "原题面已经可以阅读。服务器正在用本地模型翻译，完成后会自动缓存；公式、代码与样例保持原样。" : "中文翻译会在原题导入后自动开始。你可以先切换到原题面阅读。"}</p>
             {statementError ? <p className="statement-error">{statementError}</p> : null}
             {statement?.originalHtml ? <div className="hero-actions"><button className="button button-primary" onClick={() => void translateInBrowser()} disabled={Boolean(statementAction)}>使用 Chrome 本地翻译</button><button className="button button-ghost" onClick={() => void refreshStatement()}>立即重试</button><button className="button button-ghost" onClick={() => setLanguage("original")}>返回原题面</button></div> : null}

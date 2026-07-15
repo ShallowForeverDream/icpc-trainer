@@ -1,4 +1,5 @@
 import { browserApiUrl } from "./browser-api";
+import { authFetch } from "./auth-client";
 
 export type ArchiveStatementBlock =
   | { kind: "paragraph"; text: string }
@@ -46,6 +47,8 @@ export type ArchiveExtractedStatement = {
   status?: "queued" | "importing" | "translating" | "ready_original" | "ready" | "source_required";
   message?: string | null;
   translationCurrent?: boolean;
+  translationReviewed?: boolean;
+  translationReviewedAt?: string | null;
   updatedAt?: string;
 };
 
@@ -160,6 +163,35 @@ export async function loadArchiveStatement(contestId: string, slot: string, requ
   return {
     ...value,
     images: value.images.map((image) => ({
+      ...image,
+      src: image.assetId ? browserApiUrl(`/archive/statements/assets/${image.assetId}`) : image.src,
+    })),
+  };
+}
+
+export async function submitArchiveStatementReview(
+  contestId: string,
+  slot: string,
+  titleZh: string,
+  chinese: ArchiveExtractedStatement["chinese"],
+  images: ArchiveExtractedStatement["images"],
+) {
+  const response = await authFetch("/archive/statements/translation-review", {
+    method: "POST",
+    body: JSON.stringify({
+      contestId,
+      slot,
+      titleZh,
+      chinese,
+      images: images.map(({ assetId, captionZh, imageTextZh }) => ({ assetId, captionZh, imageTextZh })),
+    }),
+  }, 35_000);
+  const payload = await response.json().catch(() => ({})) as { statement?: unknown; error?: string };
+  if (!response.ok) throw new Error(payload.error || `题面校对保存失败（${response.status}）`);
+  if (!isArchiveStatement(payload.statement)) throw new Error("服务器返回的校对题面格式错误");
+  return {
+    ...payload.statement,
+    images: payload.statement.images.map((image) => ({
       ...image,
       src: image.assetId ? browserApiUrl(`/archive/statements/assets/${image.assetId}`) : image.src,
     })),

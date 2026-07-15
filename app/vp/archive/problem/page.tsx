@@ -12,7 +12,9 @@ import {
   ArchiveStatementBlock,
   ArchiveStatementPendingError,
   loadArchiveStatement,
+  submitArchiveStatementReview,
 } from "../../../lib/archive-statement-client";
+import { readAuth } from "../../../lib/auth-client";
 import { ARCHIVE_SESSION_EVENT } from "../../../lib/archive-vp-session";
 import { SUBMIT_EXTENSION_LABEL, SUBMIT_EXTENSION_VERSION } from "../../../lib/extension-config";
 import { createSubmissionRequestId, recordPlatformSubmission } from "../../../lib/platform-submissions";
@@ -79,6 +81,64 @@ function CopySampleButton({ value, label }: { value: string; label: string }) {
       window.setTimeout(() => setCopied(false), 1500);
     });
   }}>{copied ? "已复制 ✓" : label}</button>;
+}
+
+function ArchiveStatementReviewEditor({ statement, onSaved, onCancel }: {
+  statement: ArchiveExtractedStatement;
+  onSaved: (next: ArchiveExtractedStatement) => void;
+  onCancel: () => void;
+}) {
+  const [titleZh, setTitleZh] = useState(statement.titleZh);
+  const [chinese, setChinese] = useState<ArchiveExtractedStatement["chinese"]>(() => JSON.parse(JSON.stringify(statement.chinese)) as ArchiveExtractedStatement["chinese"]);
+  const [images, setImages] = useState<ArchiveExtractedStatement["images"]>(() => JSON.parse(JSON.stringify(statement.images)) as ArchiveExtractedStatement["images"]);
+  const [saving, setSaving] = useState(false);
+  const [message, setMessage] = useState("");
+
+  function updateSectionTitle(sectionIndex: number, value: string) {
+    setChinese((current) => {
+      const next = JSON.parse(JSON.stringify(current)) as ArchiveExtractedStatement["chinese"];
+      next.sections[sectionIndex].title = value;
+      return next;
+    });
+  }
+
+  function updateBlock(sectionIndex: number, blockIndex: number, value: string, itemIndex?: number) {
+    setChinese((current) => {
+      const next = JSON.parse(JSON.stringify(current)) as ArchiveExtractedStatement["chinese"];
+      const block = next.sections[sectionIndex].blocks[blockIndex];
+      if (block.kind === "paragraph") block.text = value;
+      else if (block.kind === "bullets" && itemIndex !== undefined) block.items[itemIndex] = value;
+      return next;
+    });
+  }
+
+  function updateImage(index: number, field: "captionZh" | "imageTextZh", value: string) {
+    setImages((current) => current.map((image, imageIndex) => imageIndex === index ? { ...image, [field]: value } : image));
+  }
+
+  async function save() {
+    setSaving(true);
+    setMessage("");
+    try {
+      const next = await submitArchiveStatementReview(statement.contestId, statement.slot, titleZh, chinese, images);
+      onSaved(next);
+    } catch (error) {
+      setMessage(error instanceof Error ? error.message : "题面校对保存失败");
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return <section className="archive-review-editor">
+    <header><div><small>管理员校对</small><h2>校对历届赛题面</h2></div><span>公式、代码块与段落结构不可改动</span></header>
+    <label className="archive-review-title"><span>中文题名</span><input value={titleZh} maxLength={180} onChange={(event) => setTitleZh(event.target.value)} /></label>
+    <div className="archive-review-sections">{chinese.sections.map((section, sectionIndex) => <section key={`${section.key}-${sectionIndex}`}>
+      <input className="archive-review-section-title" value={section.title} maxLength={80} aria-label={`第 ${sectionIndex + 1} 节标题`} onChange={(event) => updateSectionTitle(sectionIndex, event.target.value)} />
+      {section.blocks.map((block, blockIndex) => block.kind === "code" ? <pre key={blockIndex}><code>{block.code}</code></pre> : block.kind === "bullets" ? <div className="archive-review-bullets" key={blockIndex}>{block.items.map((item, itemIndex) => <label key={itemIndex}><span>•</span><textarea value={item} onChange={(event) => updateBlock(sectionIndex, blockIndex, event.target.value, itemIndex)} /></label>)}</div> : <textarea key={blockIndex} value={block.text} onChange={(event) => updateBlock(sectionIndex, blockIndex, event.target.value)} />)}
+    </section>)}</div>
+    {images.length ? <div className="archive-review-images"><h3>图片文字</h3>{images.map((image, index) => <section key={image.assetId || image.src}><img src={image.src} alt={image.captionZh || image.captionEn} /><div><label>中文图注<input value={image.captionZh || ""} onChange={(event) => updateImage(index, "captionZh", event.target.value)} /></label><label>图中英文翻译<textarea value={image.imageTextZh || ""} onChange={(event) => updateImage(index, "imageTextZh", event.target.value)} /></label></div></section>)}</div> : null}
+    <footer><p>{message || "保存后立即成为全站共享的人工校对版。"}</p><div><button type="button" className="button button-ghost" onClick={onCancel} disabled={saving}>取消</button><button type="button" className="button button-primary" onClick={() => void save()} disabled={saving}>{saving ? "正在保存…" : "保存人工校对版"}</button></div></footer>
+  </section>;
 }
 
 function inlineMarkdown(value: string, keyPrefix = "inline"): ReactNode[] {
@@ -316,12 +376,23 @@ export default function ArchiveProblemPage() {
   const [statement, setStatement] = useState<ArchiveExtractedStatement | null>(null);
   const [statementMessage, setStatementMessage] = useState("");
   const [submitOpen, setSubmitOpen] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
+  const [reviewingStatement, setReviewingStatement] = useState(false);
+  const reviewRequested = useRef(false);
 
   useEffect(() => {
     const session = readStoredJson<ArchiveSession | null>(SESSION_KEY, null, (value): value is ArchiveSession | null => value === null || isArchiveSession(value));
+    reviewRequested.current = false;
     setStarted(Boolean(session?.contestId === contestId && session.startedAt));
     setAttempt(session?.contestId === contestId ? session.attempts[slot] || { wrong: 0 } : { wrong: 0 });
   }, [contestId, slot]);
+
+  useEffect(() => {
+    const refreshRole = () => setIsAdmin(Boolean(readAuth()?.user.role === "admin" && !readAuth()?.user.mustChangePassword));
+    refreshRole();
+    window.addEventListener("icpc-auth-change", refreshRole);
+    return () => window.removeEventListener("icpc-auth-change", refreshRole);
+  }, []);
 
   useEffect(() => {
     const receive = (event: Event) => {
@@ -367,10 +438,19 @@ export default function ArchiveProblemPage() {
     };
   }, [contest?.gymId, contestId, contestName, problemId, problemTitle, qojContestId, slot]);
 
+  useEffect(() => {
+    const canOpen = Boolean(isAdmin && statement?.updatedAt && statement?.chinese.sections.length && !statement?.source.chinesePdfUrl);
+    if (!canOpen || searchParams.get("review") !== "1" || reviewRequested.current) return;
+    reviewRequested.current = true;
+    setLanguage("chinese");
+    setReviewingStatement(true);
+  }, [isAdmin, searchParams, statement]);
+
   if (!contest || !problem) return <AppShell active="模拟赛"><section className="template-not-found"><h1>暂未找到这道题</h1><Link className="button button-primary" href="/vp/archive">返回历届补题</Link></section></AppShell>;
 
   const solved = attempt.solvedAt !== undefined;
   const chineseReady = Boolean(statement?.chinese.sections.length);
+  const canReview = Boolean(isAdmin && statement?.updatedAt && chineseReady && !statement?.source.chinesePdfUrl);
   return <AppShell active="模拟赛">
     <header className="archive-problem-head">
       <div>
@@ -390,14 +470,14 @@ export default function ArchiveProblemPage() {
         <button className={language === "english" ? "active" : ""} onClick={() => setLanguage("english")}>原题面 <small>EN</small></button>
         <button className={language === "chinese" ? "active" : ""} disabled={!chineseReady} onClick={() => setLanguage("chinese")}>{statement?.source.chinesePdfUrl ? "官方中文" : "中文题面"} <small>{chineseReady ? "ZH" : "生成中"}</small></button>
       </div>
-      {statementMessage ? <span className="archive-statement-status"><i />{statementMessage}</span> : null}
+      <div className="archive-statement-status-actions">{statementMessage ? <span className="archive-statement-status"><i />{statementMessage}</span> : statement?.translationReviewed ? <span className="archive-statement-status reviewed"><i />已人工校对</span> : null}{canReview ? <button type="button" onClick={() => { setLanguage("chinese"); setReviewingStatement((value) => !value); }}>{reviewingStatement ? "退出校对" : statement?.translationReviewed ? "重新校对" : "人工校对"}</button> : null}</div>
       <div className={`archive-attempt-state${solved ? " solved" : attempt.wrong ? " attempted" : ""}`}><span>{solved ? "已 AC" : attempt.wrong ? `${attempt.wrong} 次 WA` : "未尝试"}</span><small>{started ? "提交后自动更新" : "VP 开始后计入排名"}</small></div>
     </section>
 
     {!started ? <div className="archive-start-notice"><Icon name="clock" /><span>开始 VP 后，本题结果会计入实时排名。</span><Link href="/vp/archive">返回开始 VP →</Link></div> : null}
 
     <section className="archive-solving-workspace">
-      {statement ? <ArchiveStatementView statement={statement} language={language} /> : <article className="archive-statement-panel archive-statement-loading"><div className="statement-loader" /><h2>正在整理题面</h2><p>{statementMessage || "首次打开会整理正文、公式、样例和图片，完成后自动保存。"}</p><div className="hero-actions"><a className="button button-ghost" href={problem.statementUrl} target="_blank" rel="noreferrer">查看原始题面 ↗</a></div></article>}
+      {statement ? reviewingStatement && canReview ? <ArchiveStatementReviewEditor statement={statement} onCancel={() => setReviewingStatement(false)} onSaved={(nextStatement) => { setStatement(nextStatement); setReviewingStatement(false); setStatementMessage("中文题面已人工校对并持久保存"); }} /> : <ArchiveStatementView statement={statement} language={language} /> : <article className="archive-statement-panel archive-statement-loading"><div className="statement-loader" /><h2>正在整理题面</h2><p>{statementMessage || "首次打开会整理正文、公式、样例和图片，完成后自动保存。"}</p><div className="hero-actions"><a className="button button-ghost" href={problem.statementUrl} target="_blank" rel="noreferrer">查看原始题面 ↗</a></div></article>}
     </section>
 
     <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择文件或粘贴代码，后台代理提交并写入平台记录。</span></div><button type="button" onClick={() => setSubmitOpen(true)}>提交代码 →</button></section>

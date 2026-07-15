@@ -26,6 +26,8 @@ export type CachedStatement = {
   chineseHtml: string | null;
   translationVersion: number;
   translationCurrent: boolean;
+  translationReviewed?: boolean;
+  translationReviewedAt?: string | null;
   revalidating: boolean;
   images: StatementImage[];
   status: "importing" | "source_required" | "model_downloading" | "translating" | "ready_original" | "ready" | string;

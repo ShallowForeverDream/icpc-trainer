@@ -54,6 +54,9 @@ db.exec(`
     original_html TEXT,
     chinese_html TEXT,
     translation_version INTEGER NOT NULL DEFAULT 0,
+    translation_reviewed INTEGER NOT NULL DEFAULT 0,
+    reviewed_at INTEGER,
+    reviewed_by TEXT,
     images_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'importing',
     error TEXT,
@@ -85,6 +88,9 @@ db.exec(`
     original_json TEXT,
     chinese_json TEXT,
     translation_version INTEGER NOT NULL DEFAULT 0,
+    translation_reviewed INTEGER NOT NULL DEFAULT 0,
+    reviewed_at INTEGER,
+    reviewed_by TEXT,
     images_json TEXT NOT NULL DEFAULT '[]',
     status TEXT NOT NULL DEFAULT 'importing',
     error TEXT,
@@ -111,7 +117,13 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS archive_statement_prewarm_contest_idx ON archive_statement_prewarm(contest_slug, requested_at);
 `);
 if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "translation_version")) db.exec("ALTER TABLE problem_statements ADD COLUMN translation_version INTEGER NOT NULL DEFAULT 0");
+if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "translation_reviewed")) db.exec("ALTER TABLE problem_statements ADD COLUMN translation_reviewed INTEGER NOT NULL DEFAULT 0");
+if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "reviewed_at")) db.exec("ALTER TABLE problem_statements ADD COLUMN reviewed_at INTEGER");
+if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "reviewed_by")) db.exec("ALTER TABLE problem_statements ADD COLUMN reviewed_by TEXT");
 if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "chinese_source_url")) db.exec("ALTER TABLE archive_statements ADD COLUMN chinese_source_url TEXT");
+if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "translation_reviewed")) db.exec("ALTER TABLE archive_statements ADD COLUMN translation_reviewed INTEGER NOT NULL DEFAULT 0");
+if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "reviewed_at")) db.exec("ALTER TABLE archive_statements ADD COLUMN reviewed_at INTEGER");
+if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "reviewed_by")) db.exec("ALTER TABLE archive_statements ADD COLUMN reviewed_by TEXT");
 
 const now = () => Date.now();
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -184,6 +196,8 @@ function publicStatement(row) {
     chineseHtml: row.chinese_html || null,
     translationVersion,
     translationCurrent: Boolean(row.chinese_html) && translationVersion >= TRANSLATION_VERSION,
+    translationReviewed: Boolean(row.translation_reviewed),
+    translationReviewedAt: row.reviewed_at ? new Date(row.reviewed_at).toISOString() : null,
     revalidating: Boolean(row.chinese_html) && translationVersion < TRANSLATION_VERSION,
     images: safeImages(row.images_json),
     status: row.status,
@@ -274,6 +288,8 @@ function publicArchiveStatement(row) {
     status: row.status,
     message: row.error || null,
     translationCurrent: Boolean(row.chinese_json) && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION,
+    translationReviewed: Boolean(row.translation_reviewed || row.chinese_source_url),
+    translationReviewedAt: row.reviewed_at ? new Date(row.reviewed_at).toISOString() : null,
     updatedAt: new Date(row.updated_at).toISOString(),
   };
 }
@@ -292,6 +308,9 @@ function upsertArchivePending(metadata) {
       original_json=CASE WHEN archive_statements.source_url <> excluded.source_url THEN NULL ELSE archive_statements.original_json END,
       chinese_json=CASE WHEN archive_statements.source_url <> excluded.source_url AND archive_statements.chinese_source_url IS NULL THEN NULL ELSE archive_statements.chinese_json END,
       translation_version=CASE WHEN archive_statements.source_url <> excluded.source_url AND archive_statements.chinese_source_url IS NULL THEN 0 ELSE archive_statements.translation_version END,
+      translation_reviewed=CASE WHEN archive_statements.source_url <> excluded.source_url AND archive_statements.chinese_source_url IS NULL THEN 0 ELSE archive_statements.translation_reviewed END,
+      reviewed_at=CASE WHEN archive_statements.source_url <> excluded.source_url AND archive_statements.chinese_source_url IS NULL THEN NULL ELSE archive_statements.reviewed_at END,
+      reviewed_by=CASE WHEN archive_statements.source_url <> excluded.source_url AND archive_statements.chinese_source_url IS NULL THEN NULL ELSE archive_statements.reviewed_by END,
       status=CASE WHEN archive_statements.source_url <> excluded.source_url THEN 'importing' ELSE archive_statements.status END,
       chinese_source_url=COALESCE(archive_statements.chinese_source_url, excluded.chinese_source_url),
       updated_at=excluded.updated_at
@@ -538,6 +557,92 @@ function formulasMatch(sourceHtml, translatedHtml) {
   return source.size === translated.size && [...source].every(([formula, count]) => translated.get(formula) === count);
 }
 
+function requireStatementAdmin(request) {
+  const user = authenticateRequest(request);
+  if (user.role !== "admin") throw new HttpError(403, "仅管理员可校对题面");
+  if (user.must_change_password) throw new HttpError(403, "请先在账号中心修改初始密码");
+  return user;
+}
+
+function archiveFormulaTokens(value) {
+  return String(value || "").match(/\${3}[\s\S]*?\${3}|\${2}[\s\S]*?\${2}|\$(?!\$)[^$\n]*?\$/g) || [];
+}
+
+function reviewedArchiveText(value, previous, field) {
+  const text = String(value || "").trim();
+  if (!text || text.length > 30_000) throw new HttpError(400, `${field}内容无效`);
+  const before = archiveFormulaTokens(previous);
+  const after = archiveFormulaTokens(text);
+  if (before.length !== after.length || before.some((formula, index) => formula !== after[index])) {
+    throw new HttpError(400, `${field}中的数学公式发生了改变，已拒绝保存`);
+  }
+  return text;
+}
+
+function normalizeReviewedArchiveChinese(value, current) {
+  const submitted = value && typeof value === "object" ? value : null;
+  if (!submitted || !Array.isArray(submitted.sections) || !Array.isArray(current.sections)
+    || submitted.sections.length !== current.sections.length) throw new HttpError(400, "中文题面结构不完整");
+  const sections = current.sections.map((section, sectionIndex) => {
+    const incoming = submitted.sections[sectionIndex];
+    if (!incoming || incoming.key !== section.key || !Array.isArray(incoming.blocks)
+      || incoming.blocks.length !== section.blocks.length) throw new HttpError(400, "中文题面段落结构发生了改变");
+    const title = String(incoming.title || "").trim().slice(0, 80);
+    if (!title) throw new HttpError(400, "中文题面章节标题不能为空");
+    const blocks = section.blocks.map((block, blockIndex) => {
+      const next = incoming.blocks[blockIndex];
+      if (!next || next.kind !== block.kind) throw new HttpError(400, "中文题面段落类型发生了改变");
+      if (block.kind === "code") {
+        if (String(next.code || "") !== String(block.code || "")) throw new HttpError(400, "代码块不能在题面校对中修改");
+        return { ...block };
+      }
+      if (block.kind === "bullets") {
+        if (!Array.isArray(next.items) || next.items.length !== block.items.length) throw new HttpError(400, "列表项数量发生了改变");
+        return { ...block, items: block.items.map((item, index) => reviewedArchiveText(next.items[index], item, "列表项")) };
+      }
+      return { ...block, text: reviewedArchiveText(next.text, block.text, "段落") };
+    });
+    return { ...section, title, blocks };
+  });
+  const plainText = JSON.stringify(sections);
+  if ((plainText.match(/[\u3400-\u9fff]/g) || []).length < 20) throw new HttpError(400, "中文题面内容过少");
+  return { sections };
+}
+
+function statementReviewQueue(limit = 240) {
+  const safeLimit = Math.max(1, Math.min(500, Number(limit) || 240));
+  const codeforces = db.prepare(`SELECT code, title, source_kind, translation_reviewed, reviewed_at, updated_at
+    FROM problem_statements WHERE chinese_html IS NOT NULL ORDER BY translation_reviewed ASC, updated_at DESC LIMIT ?`).all(safeLimit)
+    .map((row) => ({
+      kind: "codeforces",
+      id: row.code,
+      title: row.title || `Codeforces ${row.code}`,
+      source: row.source_kind === "codeforces-gym" ? "Codeforces Gym" : "Codeforces",
+      reviewed: Boolean(row.translation_reviewed),
+      official: false,
+      href: `/problem/${encodeURIComponent(row.code)}?review=1`,
+      reviewedAt: row.reviewed_at ? new Date(row.reviewed_at).toISOString() : null,
+      updatedAt: new Date(row.updated_at).toISOString(),
+    }));
+  const archive = db.prepare(`SELECT id, contest_slug, slot, contest_name, title_en, title_zh, chinese_source_url,
+      translation_reviewed, reviewed_at, updated_at FROM archive_statements WHERE chinese_json IS NOT NULL
+      ORDER BY translation_reviewed ASC, updated_at DESC LIMIT ?`).all(safeLimit)
+    .map((row) => ({
+      kind: "archive",
+      id: row.id,
+      title: `${row.contest_name} · ${row.slot} · ${row.title_zh || row.title_en}`,
+      source: row.chinese_source_url ? "官方中文题册" : "历届比赛题面",
+      reviewed: Boolean(row.translation_reviewed || row.chinese_source_url),
+      official: Boolean(row.chinese_source_url),
+      href: `/vp/archive/problem?contest=${encodeURIComponent(row.contest_slug)}&slot=${encodeURIComponent(row.slot)}&review=1`,
+      reviewedAt: row.reviewed_at ? new Date(row.reviewed_at).toISOString() : null,
+      updatedAt: new Date(row.updated_at).toISOString(),
+    }));
+  return [...codeforces, ...archive]
+    .sort((left, right) => Number(left.reviewed) - Number(right.reviewed) || Date.parse(right.updatedAt) - Date.parse(left.updatedAt))
+    .slice(0, safeLimit);
+}
+
 function deviceTranslationPreview(row, chineseHtml, images) {
   return {
     ...publicStatement(row),
@@ -545,6 +650,8 @@ function deviceTranslationPreview(row, chineseHtml, images) {
     images,
     translationVersion: 0,
     translationCurrent: false,
+    translationReviewed: false,
+    translationReviewedAt: null,
     revalidating: false,
     status: "ready_preview",
     message: "浏览器本地译文仅保存在当前设备；服务器译文完成后会自动替换",
@@ -587,6 +694,9 @@ function saveOriginal(document) {
       original_html=excluded.original_html,
       images_json=excluded.images_json,
       translation_version=0,
+      translation_reviewed=0,
+      reviewed_at=NULL,
+      reviewed_by=NULL,
       status='translating',
       error=NULL,
       updated_at=excluded.updated_at
@@ -1214,7 +1324,7 @@ async function translateStatement(code) {
   try {
     setStatus(code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在快速生成并校对中文题面");
     const chineseHtml = await translateHtml(row.original_html, row.source_url);
-    db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, now(), code);
+    db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, translation_reviewed = 0, reviewed_at = NULL, reviewed_by = NULL, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, now(), code);
     translationSaved = true;
 
     // Images are enhanced only after the readable Chinese statement has been
@@ -1351,9 +1461,9 @@ async function importArchiveOfficialChinese(metadata, { force = false } = {}) {
       if (!archiveHasChineseText(parsed)) return false;
       const officialTitle = await fetchArchiveOfficialChineseTitle(metadata).catch(() => "");
       db.prepare(`UPDATE archive_statements SET
-        title_zh=?, chinese_json=?, chinese_source_url=?, translation_version=?, status='ready', error=NULL, updated_at=?
+        title_zh=?, chinese_json=?, chinese_source_url=?, translation_version=?, translation_reviewed=1, reviewed_at=?, reviewed_by='official-pdf', status='ready', error=NULL, updated_at=?
         WHERE id=? AND original_json IS NOT NULL`)
-        .run(officialTitle || parsed.title || metadata.title, JSON.stringify({ sections: parsed.sections || [] }), metadata.chineseSourceUrl, ARCHIVE_TRANSLATION_VERSION, now(), metadata.id);
+        .run(officialTitle || parsed.title || metadata.title, JSON.stringify({ sections: parsed.sections || [] }), metadata.chineseSourceUrl, ARCHIVE_TRANSLATION_VERSION, now(), now(), metadata.id);
       return true;
     } catch (error) {
       console.error("official archive Chinese statement unavailable", metadata.id, error instanceof Error ? error.message : error);
@@ -1383,7 +1493,8 @@ async function importArchiveOriginal(metadata, { includeChinese = true } = {}) {
       db.prepare(`
         UPDATE archive_statements SET
           title_en=?, time_limit_text=?, memory_limit_text=?, original_json=?, images_json=?,
-          translation_version=0, status='translating', error='原题面已就绪，正在生成中文题面', updated_at=?
+          translation_version=0, translation_reviewed=0, reviewed_at=NULL, reviewed_by=NULL,
+          status='translating', error='原题面已就绪，正在生成中文题面', updated_at=?
         WHERE id=?
       `).run(parsed.title || metadata.title, parsed.timeLimitText, parsed.memoryLimitText, JSON.stringify({ sections: parsed.sections, sample: parsed.sample, samples: parsed.samples || (parsed.sample ? [parsed.sample] : []) }), JSON.stringify(images), now(), metadata.id);
       if (includeChinese) {
@@ -1460,7 +1571,7 @@ async function translateArchiveStatement(id) {
       for (let index = 0; index < ocrImages.length; index += 1) ocrImages[index].imageTextZh = imageTranslations[index] || null;
     }
     db.prepare(`
-      UPDATE archive_statements SET title_zh=?, chinese_json=?, images_json=?, translation_version=?, status='ready', error=NULL, updated_at=? WHERE id=?
+      UPDATE archive_statements SET title_zh=?, chinese_json=?, images_json=?, translation_version=?, translation_reviewed=0, reviewed_at=NULL, reviewed_by=NULL, status='ready', error=NULL, updated_at=? WHERE id=?
     `).run(titleZh, JSON.stringify({ sections: chinese.sections || [] }), JSON.stringify(images), ARCHIVE_TRANSLATION_VERSION, now(), id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "中文翻译失败";
@@ -1529,6 +1640,43 @@ export function createStatementHandler({ json, clientIp }) {
   return async function handleStatement(request, response, url) {
     if (!url.pathname.startsWith("/codeforces/statements") && !url.pathname.startsWith("/archive/statements")) return false;
     try {
+      if (request.method === "GET" && url.pathname === "/codeforces/statements/review-queue") {
+        requireStatementAdmin(request);
+        return json(response, 200, {
+          items: statementReviewQueue(url.searchParams.get("limit")),
+        }, { "Cache-Control": "no-store" }), true;
+      }
+
+      if (request.method === "POST" && url.pathname === "/archive/statements/translation-review") {
+        const user = requireStatementAdmin(request);
+        const body = await readJsonBody(request, { maxBytes: 2 * 1024 * 1024 });
+        const contestId = String(body.contestId || "").trim().toLowerCase();
+        const slot = String(body.slot || "").trim().toUpperCase();
+        if (!/^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])$/.test(contestId) || !/^[A-Z][0-9]?$/.test(slot)) {
+          return json(response, 400, { error: "历届题目标识无效" }), true;
+        }
+        const id = `${contestId}:${slot}`;
+        const row = archiveStatementRow(id);
+        if (!row?.chinese_json) return json(response, 404, { error: "中文题面尚未生成，暂时无法校对" }), true;
+        if (row.chinese_source_url) return json(response, 409, { error: "该题使用官方中文题册，无需覆盖官方译文" }), true;
+        const current = safeObject(row.chinese_json, { sections: [] });
+        const chinese = normalizeReviewedArchiveChinese(body.chinese, current);
+        const titleZh = reviewedArchiveText(body.titleZh, row.title_zh || row.title_en, "中文标题").slice(0, 180);
+        const images = safeImages(row.images_json);
+        const submittedImages = Array.isArray(body.images) ? body.images : [];
+        for (let index = 0; index < images.length; index += 1) {
+          const submitted = submittedImages.find((item) => item?.assetId && item.assetId === images[index].assetId) || submittedImages[index];
+          if (!submitted) continue;
+          images[index].captionZh = String(submitted.captionZh || "").trim().slice(0, 500);
+          images[index].imageTextZh = String(submitted.imageTextZh || "").trim().slice(0, 4_000) || null;
+        }
+        const timestamp = now();
+        db.prepare(`UPDATE archive_statements SET title_zh=?, chinese_json=?, images_json=?, translation_version=?, translation_reviewed=1,
+          reviewed_at=?, reviewed_by=?, status='ready', error=NULL, updated_at=? WHERE id=?`)
+          .run(titleZh, JSON.stringify(chinese), JSON.stringify(images), ARCHIVE_TRANSLATION_VERSION, timestamp, user.email, timestamp, id);
+        return json(response, 200, { statement: publicArchiveStatement(archiveStatementRow(id)) }, { "Cache-Control": "no-store" }), true;
+      }
+
       if (url.pathname === "/archive/statements/prewarm") {
         if (request.method === "POST") {
           const rate = allowImport(clientIp(request), "archive-prewarm", 12);
@@ -1646,7 +1794,9 @@ export function createStatementHandler({ json, clientIp }) {
           if (matched) image.ocrZh = matched.ocrZh.trim().slice(0, 4000);
         }
         if (user.role === "admin" && !user.must_change_password) {
-          db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, JSON.stringify(existingImages), now(), parsed.code);
+          const timestamp = now();
+          db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, translation_reviewed = 1, reviewed_at = ?, reviewed_by = ?, images_json = ?, status = 'ready', error = NULL, updated_at = ? WHERE code = ?")
+            .run(chineseHtml, TRANSLATION_VERSION, timestamp, user.email, JSON.stringify(existingImages), timestamp, parsed.code);
           return json(response, 200, { statement: publicStatement(statementRow(parsed.code)) }), true;
         }
         return json(response, 200, { statement: deviceTranslationPreview(row, chineseHtml, existingImages) }), true;

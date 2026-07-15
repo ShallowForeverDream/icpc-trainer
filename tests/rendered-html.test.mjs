@@ -166,6 +166,8 @@ test("ships readable Chinese fallbacks and a QOJ-like cached statement reader", 
   assert.match(statementClient, /cacheBrowserTranslation/);
   assert.match(detailPage, /中文题面已保存到当前设备/);
   assert.match(detailPage, /中文翻译正在排队重试/);
+  assert.match(detailPage, /保存人工校对版/);
+  assert.match(detailPage, /translationReviewed/);
   const response = await render("/problem/2176C");
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -400,6 +402,9 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(problemPage, /返回实时榜单/);
   assert.match(problemPage, /ARCHIVE_SESSION_EVENT/);
   assert.match(problemPage, /ArchiveStatementView/);
+  assert.match(problemPage, /ArchiveStatementReviewEditor/);
+  assert.match(problemPage, /图中英文翻译/);
+  assert.match(statementClient, /translation-review/);
   assert.match(problemPage, /下载原始 PDF/);
   assert.doesNotMatch(problemPage, /<iframe/);
   assert.match(statementClient, /force-cache/);

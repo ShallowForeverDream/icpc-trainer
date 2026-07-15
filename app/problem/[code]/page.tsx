@@ -614,12 +614,13 @@ export default function ProblemDetailPage() {
   const ready = Boolean(statement?.originalHtml);
   const status = statementAction || statusText(statement, statementError);
 
-  return <AppShell active="题库">
+  return <AppShell active={archiveContest || vpContext ? "模拟赛" : "题库"}>
     <div className="problem-page-head">
-      <div><Link href={vpContext ? "/vp" : "/problem"}>← {vpContext ? "返回 VP" : "返回题库"}</Link><span>{ready ? "原题面已导入" : "首次打开自动导入"} · {problem.code}</span></div>
+      <div><Link href={vpContext ? "/vp" : archiveContest ? "/vp/archive" : "/problem"}>← {vpContext || archiveContest ? "返回实时榜单" : "返回题库"}</Link><span>{ready ? "原题面已导入" : "首次打开自动导入"} · {problem.code}</span></div>
       <div><a href={officialProblemUrl} target="_blank" rel="noreferrer">查看 {isGym ? "Codeforces Gym" : "Codeforces"} 原题 ↗</a><button className={favorite ? "saved" : ""} onClick={toggleFavorite}>☆ {favorite ? "已收藏" : "收藏"}</button></div>
     </div>
     {vpContext ? <section className="vp-problem-banner"><div><b>VP · Problem {vpContext.slot}</b><span>题面、中文翻译与代码草稿均在站内；提交后榜单会自动更新。</span></div><Link href="/vp">返回实时榜单 →</Link></section> : null}
+    {archiveContest ? <section className="vp-problem-banner archive-problem-banner"><div><b>{archiveContest.name} · Problem {problem.index}</b><span>本站题面、中文翻译、代码提交与队伍排名已连通。</span></div><Link href="/vp/archive">返回实时榜单 →</Link></section> : null}
     <section className={`problem-workspace${isGym ? " gym-statement-workspace" : ""}`}>
       <article className="statement-panel">
         <div className="statement-title">

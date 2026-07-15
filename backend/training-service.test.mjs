@@ -43,6 +43,17 @@ test("records deliberate-practice outcomes and accepts product feedback", async 
     assert.equal(summary.stats.unsolved, 1);
     assert.equal(summary.recent[0].durationMinutes, 47);
 
+    const sprintPlan = { date: "2026-07-15", contestId: "2025-shenyang", slots: ["A", "B", "C"], reflection: "D 题先验证单调性。" };
+    const savePlanResponse = await fetch(`${baseUrl}/state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId, key: "shenyang-sprint", value: sprintPlan }),
+    });
+    assert.equal(savePlanResponse.status, 200);
+    const loadPlanResponse = await fetch(`${baseUrl}/state?clientId=${clientId}&key=shenyang-sprint`);
+    assert.equal(loadPlanResponse.status, 200);
+    assert.deepEqual((await loadPlanResponse.json()).value, sprintPlan);
+
     const feedbackResponse = await fetch(`${baseUrl}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

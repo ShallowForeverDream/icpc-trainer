@@ -31,6 +31,28 @@ test("renders the icpc-trainer product home", async () => {
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/);
 });
 
+test("ships an automatic Shenyang sprint loop driven by persistent submissions", async () => {
+  const [page, backend] = await Promise.all([
+    readFile(new URL("app/sprint/page.tsx", root), "utf8"),
+    readFile(new URL("backend/server.mjs", root), "utf8"),
+  ]);
+  assert.match(page, /loadPlatformSubmissions/);
+  assert.match(page, /startArchivePrewarm/);
+  assert.match(page, /站内题面 · 中文切换 · 直接提交/);
+  assert.match(page, /由平台自动记录/);
+  assert.match(page, /查看代码与评测记录/);
+  assert.doesNotMatch(page, /toggleTask/);
+  assert.match(backend, /shenyang-sprint/);
+
+  const response = await render("/sprint");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /沈阳邀请赛冲刺/);
+  assert.match(html, /今日计划/);
+  assert.match(html, /准确中文/);
+  assert.match(html, /进入整场 VP/);
+});
+
 test("uses a concise white, pink, and violet visual system across the product", async () => {
   const styles = await readFile(new URL("app/globals.css", root), "utf8");
   assert.match(styles, /White, pink and violet product theme/);

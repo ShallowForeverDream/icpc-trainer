@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AppShell, Icon, ProblemRow } from "./components/AppShell";
 import { archiveContests, archiveProblemHref, type ArchiveContest } from "./data/archive-contests";
 import { apiJson } from "./lib/api-client";
+import { loadPlatformSubmissions, subscribePlatformSubmissions, type PlatformSubmission } from "./lib/platform-submissions";
 import { readTrainerPreferences, saveTrainerPreferences, syncTrainerPreferences } from "./lib/preferences";
 import { loadPersistentJson, savePersistentJson } from "./lib/persistent-state";
 import { readStoredJson } from "./lib/storage";
@@ -26,11 +27,11 @@ const fallbackRecommendations: Recommendation[] = [
   { code: "CF 1805C", title: "We Need the Zero", rating: 1200, tags: ["bitmasks", "constructive algorithms"], reason: "异或性质与构造判断" },
 ];
 const featuredContestIds = [
-  "2026-shenzhen-invitational",
-  "2026-wuhan-invitational",
-  "2026-shandong-provincial",
+  "2025-shenyang",
+  "2024-shenyang",
   "2025-chengdu",
   "2025-nanjing",
+  "2025-wuhan",
 ];
 const featuredContests = featuredContestIds.map((id) => archiveContests.find((contest) => contest.id === id)).filter((contest): contest is ArchiveContest => Boolean(contest));
 const ARCHIVE_SESSION_KEY = "icpc-trainer-archive-vp";
@@ -57,6 +58,7 @@ export default function Home() {
   const [syncing, setSyncing] = useState(true);
   const [syncError, setSyncError] = useState("");
   const [archiveSession, setArchiveSession] = useState<ArchiveSession | null>(null);
+  const [platformSubmissions, setPlatformSubmissions] = useState<PlatformSubmission[]>([]);
   const [selectedContestId, setSelectedContestId] = useState(featuredContests[0]?.id ?? "");
   const today = dateKey(new Date());
   const days = useMemo(() => Array.from({ length: 84 }, (_, index) => { const date = new Date(); date.setDate(date.getDate() - 83 + index); return dateKey(date); }), []);
@@ -133,7 +135,22 @@ export default function Home() {
     return () => controller.abort();
   }, []);
 
-  const activity = useMemo(() => Object.fromEntries(days.map((key) => [key, Math.max(manualActivity[key] ?? 0, remoteActivity[key] ?? 0, trainingActivity[key] ?? 0)])), [days, manualActivity, remoteActivity, trainingActivity]);
+  useEffect(() => {
+    void loadPlatformSubmissions().then(setPlatformSubmissions);
+    return subscribePlatformSubmissions(setPlatformSubmissions);
+  }, []);
+
+  const platformActivity = useMemo(() => {
+    const solved = new Map<string, Set<string>>();
+    for (const item of platformSubmissions) {
+      if (item.status !== "accepted" && item.verdict !== "AC") continue;
+      const key = dateKey(new Date(item.updatedAt));
+      if (!solved.has(key)) solved.set(key, new Set());
+      solved.get(key)?.add(`${item.archiveContestId || item.judge}:${item.problemCode}`);
+    }
+    return Object.fromEntries([...solved].map(([key, values]) => [key, values.size]));
+  }, [platformSubmissions]);
+  const activity = useMemo(() => Object.fromEntries(days.map((key) => [key, Math.max(manualActivity[key] ?? 0, remoteActivity[key] ?? 0, trainingActivity[key] ?? 0, platformActivity[key] ?? 0)])), [days, manualActivity, platformActivity, remoteActivity, trainingActivity]);
   const done = activity[today] ?? 0;
   const weeklyActivity = days.slice(-7).reduce((sum, key) => sum + (activity[key] ?? 0), 0);
   let streak = 0;
@@ -146,11 +163,17 @@ export default function Home() {
   const selectedContest = archiveContests.find((contest) => contest.id === selectedContestId) ?? quickContests[0];
   const unvpProblems = useMemo(() => {
     if (!selectedContest) return [];
+    const contestRows = platformSubmissions.filter((item) => item.archiveContestId === selectedContest.id);
+    const acceptedSlots = new Set(contestRows.filter((item) => item.status === "accepted" || item.verdict === "AC").map((item) => item.slot));
     return Array.from({ length: selectedContest.problemCount }, (_, index) => String.fromCharCode(65 + index))
-      .filter((slot) => archiveSession?.contestId !== selectedContest.id || !archiveSession.attempts[slot]?.solvedAt)
+      .filter((slot) => !acceptedSlots.has(slot) && (archiveSession?.contestId !== selectedContest.id || !archiveSession.attempts[slot]?.solvedAt))
       .slice(0, 6)
-      .map((slot) => ({ slot, title: selectedContest.problemTitles?.[slot.charCodeAt(0) - 65] || `Problem ${slot}`, attempt: archiveSession?.contestId === selectedContest.id ? archiveSession.attempts[slot] : undefined }));
-  }, [archiveSession, selectedContest]);
+      .map((slot) => {
+        const sessionAttempt = archiveSession?.contestId === selectedContest.id ? archiveSession.attempts[slot] : undefined;
+        const platformWrong = contestRows.filter((item) => item.slot === slot && (item.status === "rejected" || item.verdict === "WA")).length;
+        return { slot, title: selectedContest.problemTitles?.[slot.charCodeAt(0) - 65] || `Problem ${slot}`, attempt: { wrong: Math.max(sessionAttempt?.wrong || 0, platformWrong), solvedAt: sessionAttempt?.solvedAt } };
+      });
+  }, [archiveSession, platformSubmissions, selectedContest]);
 
   function saveDashboard(nextGoal: number, nextActivity = manualActivity) {
     setGoal(nextGoal);
@@ -173,7 +196,8 @@ export default function Home() {
       <div><span>7 月底目标</span><h2>沈阳邀请赛冲刺</h2><p>优先完成 2025、2024 沈阳站真题 VP，再穿插近年区域赛。</p></div>
       <div className="sprint-home-problems">{["A", "B", "C", "D"].map((slot) => {
         const contest = archiveContests.find((item) => item.id === "2025-shenyang");
-        return contest ? <Link href={archiveProblemHref(contest, slot)} key={slot}><b>{slot}</b><small>做题</small></Link> : null;
+        const solved = platformSubmissions.some((item) => item.archiveContestId === contest?.id && item.slot === slot && (item.status === "accepted" || item.verdict === "AC"));
+        return contest ? <Link href={archiveProblemHref(contest, slot)} className={solved ? "solved" : ""} key={slot}><b>{solved ? "✓" : slot}</b><small>{solved ? "已 AC" : "做题"}</small></Link> : null;
       })}</div>
       <div className="sprint-home-actions"><Link href="/sprint">查看冲刺计划</Link><Link className="button button-primary" href="/vp/archive?contest=2025-shenyang"><Icon name="play" /> 开始沈阳站 VP</Link></div>
     </section>

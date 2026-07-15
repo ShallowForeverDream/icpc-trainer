@@ -1,0 +1,211 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-shenzhen-invitational",
+  "contestName": "ICPC 深圳全国邀请赛",
+  "slot": "F",
+  "problemId": 17758,
+  "titleEn": "Astra",
+  "titleZh": "Astra",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=17758&contest_id=3588",
+    "chinesePdfUrl": "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
+    "chinesePages": [
+      12,
+      13
+    ]
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "“Astra” is a beautiful boardgame where players take turns discovering constellations by marking the stars. This game is a clever mix of tactics and strategy, with a streamlined and intuitive rule set that makes it easy to pick up and quick to play."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Photo by @kavics004 on BoardGameGeek"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Consider a two-player game between Alice and Bob. In this game, there is a tree-shaped constellation, which can be regarded as a connected graph consisting of n stars (numbered from 1 to n) and (n − 1) edges. At the beginning, only one star s is marked. Alice and Bob take turns marking the remaining stars according to the following rule:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Each turn, a player should mark at least 1 star and at most k stars."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Each star can be marked only once."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Let a1 , a2 , · · · , ap be the stars marked in a turn, in the order they are marked:"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "– When marking a1 , it must be a neighbor of a marked star. – For all 2 ≤ i ≤ p, when marking ai , it must be a neighbor of ai−1 ."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Two stars u and v are neighbors if they are directly connected by an edge. The player who marks the last star wins the constellation. Given that Alice is the first to play and both players play optimally, for each 1 ≤ s ≤ n, determine who will win the constellation."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are multiple test cases. The first line of the input contains an integer T (1 ≤ T ≤ 100), indicating the number of test cases. For each test case: The first line contains two integers n and k (2 ≤ n ≤ 2 × 10³ , 1 ≤ k < n), indicating the number of stars and the maximum number of stars marked in each turn."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For the following (n − 1) lines, the i-th line contains two integers ui and vi (1 ≤ ui , vi ≤ n), indicating that there is an edge connecting stars ui and vi . It is guaranteed that the sum of n over all test cases does not exceed 2 × 10³ ."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output one line containing a string d1 d2 · · · dn (di ∈ {0, 1}), where di indicates who will win the constellation when s = i. If Alice will win, then di = 1; otherwise, if Bob will win, then di = 0."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first sample test case is illustrated above."
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Consider s = 1. For the first turn, Alice has three choices: mark {2}, {2, 3}, or {2, 6}. If Alice chooses {2, 6}, Bob can then mark {3}, and 2 separated stars will remain. For the following turns, each player can only mark one star, and Bob will be the winner. Alice’s other choices can be analyzed likewise."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Consider s = 2. For the first turn, Alice has five choices: mark {1}, {3}, {6}, {3, 4}, or {3, 5}. Alice can choose to mark {3}, and 4 separated stars will remain. For the following turns, each player can only mark one star, and Alice will be the winner."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "For the second sample test case, as k = 1, there will be exactly 3 − 1 = 2 turns, so Bob will always be the winner. For the third sample test case, if s = 1 or s = 3, Alice can directly mark the remaining 2 stars and win the constellation."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "《Astra》是一款画风优美的桌游。游戏中，玩家通过轮流标记星星来发现星座。该游戏将规划与行动巧妙结合，规则简洁直观，游玩起来易于上手且节奏紧凑。BoardGameGeek 用户 @kavics004 上传的照片考虑一场由 Alice 和 Bob 进行的二人游戏。游戏中有一个树形星座，可以看作由 n 颗星星（编号从 1 到n）和 (n − 1) 条边组成的连通图。一开始，只有一颗星星 s 被标记。Alice 和 Bob 轮流根据以下规则标记剩余的星星："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "玩家每轮必须标记至少 1 颗，至多 k 颗星星。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "每颗星星只能被标记一次。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "设 a 1 ,a 2 ,··· ,a p 是在一轮中依次被标记的星星：– 标记 a 1 时，它必须与一颗已被标记的星星相邻。– 对于所有 2 ≤ i ≤ p，标记 aᵢ 时，它必须是 aᵢ−1 的邻居。称两颗星星 u 和 v 是邻居，若它们被一条边直接相连。标记最后一颗星星的玩家将赢得该星座。已知 Alice 先手，且两位玩家都以最佳策略进行游戏，对于每个 1 ≤ s ≤ n，确定谁将赢得星座。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有多组测试数据。第一行输入一个整数 T（1 ≤ T ≤ 100），表示测试数据组数。对于每组测试数据：第一行输入两个整数 n 和 k（2 ≤ n ≤ 2 × 10³，1 ≤ k < n），表示星星总数和每轮最多标记的星星数量。对于接下来的 (n − 1) 行，第 i 行输入两个整数 uᵢ 和 vᵢ（1 ≤ uᵢ ,vᵢ ≤ n），表示有一条边连接星星 uᵢ 和v i。保证所有测试数据中 n 的总和不超过 2 × 10³。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "每组测试数据输出一行，包含一个字符串 d 1 d 2 ···d n（dᵢ ∈ {0,1}），其中 dᵢ 表示当 s = i 时谁将赢得星座。如果 Alice 获胜，则 dᵢ = 1；否则如果 Bob 获胜，则 dᵢ = 0。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一组样例数据如上图所示。"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "考虑 s = 1。在第一轮中，Alice 有三个选择：标记 {2}，{2,3} 或 {2,6}。如果 Alice 选择 {2,6}，Bob 可以标记 {3}，这样就会剩下 2 颗独立的星星。在接下来的回合中，每位玩家只能标记一颗星星，Bob 将成为赢家。Alice 的其他选择也可以进行类似的分析。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "考虑 s = 2。在第一轮中，Alice 有五个选择：标记 {1}，{3}，{6}，{3,4} 或 {3,5}。Alice 可以选择标记 {3}，这样就会剩下 4 颗独立的星星。在接下来的回合中，每位玩家只能标记一颗星星，Alice将成为赢家。对于第二组样例数据，由于 k = 1，将会恰好进行 3 − 1 = 2 轮，因此 Bob 总会获胜。对于第三组样例数据，如果 s = 1 或 s = 3，Alice 可以直接标记剩下的 2 颗星星并赢得该星座。"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n6 2\n1 2\n3 2\n3 4\n5 3\n2 6\n3 1\n1 2\n2 3\n3 2\n1 2\n2 3",
+    "output": "011000\n000\n101",
+    "mode": "columns"
+  },
+  "images": [
+    {
+      "src": "/archive-statements/2026-shenzhen-invitational/assets/F-1.jpg",
+      "captionEn": "Astra board game",
+      "captionZh": "Astra 桌游",
+      "imageTextZh": "图片中的英文 Astra 是桌游名称《Astra》。"
+    },
+    {
+      "src": "/archive-statements/2026-shenzhen-invitational/assets/F-2.png",
+      "captionEn": "Example tree constellation",
+      "captionZh": "样例中的树形星座",
+      "imageTextZh": null
+    }
+  ]
+}

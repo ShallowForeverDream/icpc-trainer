@@ -1,0 +1,94 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-shenzhen-invitational",
+  "contestName": "ICPC 深圳全国邀请赛",
+  "slot": "L",
+  "problemId": 17764,
+  "titleEn": "Critical Strike",
+  "titleZh": "暴击",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=17764&contest_id=3588",
+    "chinesePdfUrl": "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
+    "chinesePages": [
+      21,
+      21
+    ]
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In a popular action game, there are n different critical strike equipments available in the shop. The i-th pi equipment has a probability of 100 to trigger a critical strike with multiplier vi , and costs wi coins. Each equipment can be bought only once. When multiple equipments trigger critical strikes simultaneously, only the highest multiplier takes effect. If no equipment triggers a critical strike, the effective multiplier is regarded as 0. You can spend at most m coins to buy some equipments. You need to maximize the expected effective multiplier of the equipments you bought."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are multiple test cases. The first line of the input contains an integer T (1 ≤ T ≤ 300), indicating the number of test cases. For each test case: The first line contains two integers n and m (1 ≤ n, m ≤ 3 × 10³ ), indicating the number of equipments and the maximum number of coins you can spend. For the following n lines, the i-th line contains three integers pi , vi , and wi (1 ≤ pi ≤ 100, 1 ≤ vi ≤ 10⁹ , 1 ≤ wi ≤ 3 × 10³ ), indicating the i-th equipment. It is guaranteed that the sum of n and the sum of m over all test cases do not exceed 3 × 10³ ."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output one line containing a single real number, indicating the maximum expected effective multiplier. Your answer will be considered correct if its absolute or relative error does not exceed 10−6 . Formally speaking, suppose that your answer is a and the jury’s answer is b, your answer is accepted if and only if |a−b| −6 max(1,|b|) ≤ 10 ."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在一款热门动作游戏中，商店里有 n 种不同的暴击装备可供选择。第 i 件装备有 pi 的概率触发暴击，100暴击倍率为 vᵢ，并需要花费 wᵢ 枚金币购买。每件装备只能购买一次。当多件装备同时触发暴击时，只有最高的暴击倍率有效。如果没有装备触发暴击，则有效倍率视为 0。您最多可以花费 m 枚金币购买装备。您需要最大化所购买装备的期望有效倍率。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有多组测试数据。第一行输入一个整数 T（1 ≤ T ≤ 300），表示测试数据组数。对于每组测试数据：第一行输入两个整数 n 和 m（1 ≤ n,m ≤ 3 × 10³），表示装备的数量和您可以花费的最大金币数。对于接下来的 n 行，第 i 行输入三个整数 pᵢ，vᵢ 和 wᵢ（1 ≤ pᵢ ≤ 100，1 ≤ vᵢ ≤ 10⁹，1 ≤ wᵢ ≤ 3 × 10³），表示第 i 件装备。保证所有测试数据中 n 的总和以及 m 的总和均不超过 3 × 10³。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "每组测试数据输出一行，包含一个实数，表示最大的期望有效倍率。如果您的答案的绝对误差或相对误差不超过 10−6，则将被视为正确。更正式地，假设您的输出为 a，标准答案为 b，当且仅当 |a−b| ≤ 10−6 时，您的输出才会被接受。max(1,|b|)"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\n3 15\n75 50 5\n50 100 10\n25 200 15\n2 10\n50 10 100\n70 30 1000",
+    "output": "68.750000000000\n0.000000000000",
+    "mode": "columns"
+  },
+  "images": []
+}

@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-shenzhen-invitational",
+  "contestName": "ICPC 深圳全国邀请赛",
+  "slot": "A",
+  "problemId": 17753,
+  "titleEn": "Greetings from Prof. Chen",
+  "titleZh": "来自陈教授的问候",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=17753&contest_id=3588",
+    "chinesePdfUrl": "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
+    "chinesePages": [
+      3,
+      4
+    ]
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Welcome to CUHK-Shenzhen! Prof. Chen loves to send greetings using strings consisting only of lowercase English letters."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Given an integer n, construct a string consisting only of lowercase English letters such that the sum of the ASCII codes of its characters is equal to n."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are multiple test cases. The first line of the input contains an integer T (1 ≤ T ≤ 5×10³ ), indicating the number of test cases. For each test case: The only line contains an integer n (1 ≤ n ≤ 10⁷ ). It is guaranteed that the sum of n over all test cases does not exceed 10⁷ ."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If it is possible to construct a string consisting only of lowercase English letters whose ASCII sum is equal to n, first output Yes in one line. Then output a second line containing such a string."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Otherwise, if it is impossible to do so, just output No in one line."
+            ]
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Below is the ASCII code table for lowercase English letters:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Letter ASCII Letter ASCII Letter ASCII a 97 j 106 s 115 b 98 k 107 t 116 c 99 l 108 u 117 d 100 m 109 v 118 e 101 n 110 w 119 f 102 o 111 x 120 g 103 p 112 y 121 h 104 q 113 z 122 i 105 r 114"
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "欢迎来到香港中文大学（深圳）！陈教授喜欢用仅由小写英文字母组成的字符串发送问候。给定一个整数 n，构造一个仅由小写英文字母组成的字符串，使字符的 ASCII 码之和恰好等于 n。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有多组测试数据。第一行输入一个整数 T（1 ≤ T ≤ 5 × 10³），表示测试数据组数。对于每组测试数据：仅有的一行输入一个整数 n（1 ≤ n ≤ 10⁷）。保证所有测试数据中 n 的总和不超过 10⁷。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "如果可以构造出一个仅由小写英文字母组成、且其 ASCII 码之和等于 n 的字符串，则首先在一行中输出 Yes，然后在第二行输出这样一个字符串。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "否则，如果无法构造这样的字符串，则仅在一行中输出 No。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "以下是小写英文字母的 ASCII 码对照表：字母 ASCII 字母 ASCII 字母 ASCII a 97 j 106 s 115 b 98 k 107 t 116 c 99 l 108 u 117 d 100 m 109 v 118 e 101 n 110 w 119 f 102 o 111 x 120 g 103 p 112 y 121 h 104 q 113 z 122 i 105 r 114"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n2257\n2269\n96",
+    "output": "Yes\ngreetingsfromprofchen\nYes\nwelcometocuhkshenzhen\nNo",
+    "mode": "columns"
+  },
+  "images": [
+    {
+      "src": "/archive-statements/2026-shenzhen-invitational/assets/A-1.jpg",
+      "captionEn": "CUHK-Shenzhen campus",
+      "captionZh": "香港中文大学（深圳）校园",
+      "imageTextZh": "图片中的英文校名为“香港中文大学（深圳）”。"
+    }
+  ]
+}

@@ -1,0 +1,241 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-shenzhen-invitational",
+  "contestName": "ICPC 深圳全国邀请赛",
+  "slot": "G",
+  "problemId": 17759,
+  "titleEn": "Snake",
+  "titleZh": "贪吃蛇",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=17759&contest_id=3588",
+    "chinesePdfUrl": "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
+    "chinesePages": [
+      14,
+      15
+    ]
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "This is an interactive problem. Remember to flush the output buffer after every print. To flush your output, you can use:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "fflush(stdout) or cout.flush() in C/C++;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "System.out.flush() in Java and Kotlin;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "sys.stdout.flush() in Python."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "You are playing the classic snake game on a grid of size n × m. The rows are numbered 1 to n from top to bottom, and the columns are numbered 1 to m from left to right. We denote the cell at row i and column j as (i, j). The snake can be represented as a sequence of coordinate pairs that determine where its body is located: (x1 , y1 ), (x2 , y2 ), . . . , (xk , yk ). Here, k denotes the length of the snake. The head of the snake is at (x1 , y1 ), the tail is at (xk , yk ), and neighboring parts of the body are located in cells that share a side. Initially, the snake has length 1 and is located at a given cell (rs , cs ). There are 4 types of commands to move the snake:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "U: Command the snake to move one step up. The head will then move to (x1 − 1, y1 )."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "D: Command the snake to move one step down. The head will then move to (x1 + 1, y1 )."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "L: Command the snake to move one step left. The head will then move to (x1 , y1 − 1)."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "R: Command the snake to move one step right. The head will then move to (x1 , y1 + 1)."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "When the head moves, each part of the body also moves accordingly. Specifically, the i-th part of the body (2 ≤ i ≤ k) moves to the position where the (i − 1)-st part was before the command. Meanwhile, the cell previously occupied by the tail becomes empty. The snake cannot move outside the grid. Besides, the snake cannot collide with itself — you must guarantee that no two parts of the body share the same cell after any command. Consider the following corner case: the head is at (x1 , y1 ), and the tail is at (xk , yk ). If the head is moving to (x′1 , y1′ ), then it is allowed that (x′1 , y1′ ) = (xk , yk ): if we think about a real-world scenario, the head moves into the cell just as the tail moves out. In a similar fashion, it is allowed to swap the head and the tail by using a single command when k = 2. There are (nm − 1) apples that will appear one at a time. Each time, an apple appears at some cell (r, c) that is not currently occupied by the snake. You need to output a sequence of commands that moves the snake’s head to the apple. The head must arrive at (r, c) exactly on the last command, and it must not enter (r, c) before that. For each sequence of commands you output, every command except the last one is a normal move: the tail vacates its cell as described above. The last command in the sequence is an eating move: the snake eats the apple when the head arrives at (r, c). On this move, the tail does NOT vacate its cell, so the length of the snake increases by 1. Your task is to successfully eat all (nm − 1) apples."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are multiple test cases. The first line of the input contains an integer T (1 ≤ T ≤ 100), indicating the number of test cases. For each test case: The first line contains four integers n, m, rs , and cs (2 ≤ n, m ≤ 50, nm ≤ 100, 1 ≤ rs ≤ n, 1 ≤ cs ≤ m), indicating the size of the grid and the starting position of the snake."
+          }
+        ]
+      },
+      {
+        "key": "interaction",
+        "title": "Interaction Protocol",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "You need to eat all (nm − 1) apples one by one. For each apple:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Read a line containing two integers r and c (1 ≤ r ≤ n, 1 ≤ c ≤ m), indicating the position of the apple. It is guaranteed that the position of the apple is not currently occupied by the snake."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Output a string consisting of the characters U, D, L, R — the sequence of commands that moves the snake’s head from its current position to (r, c). To make this problem harder, we constrain the length of the string to be at most nm."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "After printing each line, make sure to flush the output. It can be shown that an answer always exists."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The following image illustrates the first sample test case after eating 3 apples."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "这是一道交互题。请注意在每次输出后刷新输出缓冲区。您可以使用以下方式刷新输出："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在 C/C++ 中使用 fflush(stdout) 或 cout.flush()；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在 Java 和 Kotlin 中使用 System.out.flush()；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在 Python 中使用 sys.stdout.flush()。您正在一个 n × m 的网格上玩经典的贪吃蛇游戏。行从上到下编号为 1 到 n，列从左到右编号为 1 到m。我们用 (i,j) 表示第 i 行第 j 列的格子。蛇可以用一系列坐标对 (x 1 ,y 1 ),(x 2 ,y 2 ),...,(x k ,y k ) 表示其身体所在的位置，其中 k 表示蛇的长度。蛇头位于 (x 1 ,y 1 )，蛇尾位于 (x k ,y k )，且相邻的身体部分位于共享一条边的格子中。初始时，蛇的长度为 1，位于给定的格子 (r s ,c s )。有 4 种指令可以移动蛇："
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "U：让蛇向上移动一步。蛇头将移动到 (x 1 − 1,y 1 )。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "D：让蛇向下移动一步。蛇头将移动到 (x 1 + 1,y 1 )。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "L：让蛇向左移动一步。蛇头将移动到 (x 1 ,y 1 − 1)。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "R：让蛇向右移动一步。蛇头将移动到 (x 1 ,y 1 + 1)。当蛇头移动时，身体的每个部分也会相应移动。具体地，身体的第 i 部分（2 ≤ i ≤ k）会移动到第 (i−1)部分在指令执行前所在的位置。同时，蛇尾原先占据的格子变为空格。蛇不能移出网格。此外，蛇不能与自身碰撞——您必须保证在任何指令执行后，身体的任意两部分不会占据同一个格子。考虑如下边界情况：蛇头位于 (x 1 ,y 1 )，蛇尾位于 (x k ,y k )。如果蛇头接下来要移动到(x′ ,y′ )，则允许 (x′ ,y′ ) = (x ,y )：我们可以想象一个现实场景中，蛇头移入该格子的同时蛇尾恰好移1 1 1 1 k k出。类似地，当 k = 2 时，允许通过一条指令交换蛇头和蛇尾的位置。有 (nm − 1) 个苹果会依次出现。每次，一个苹果出现在某个当前未被蛇占据的格子 (r,c) 上。您需要输出一串指令，将蛇头移动到苹果所在的位置。蛇头必须恰好在最后一条指令执行后到达 (r,c)，并且在此之前不能进入 (r,c)。对于您输出的每串指令，除最后一条外都是普通移动：蛇尾如上所述腾出其所在格子。最后一条指令是进食移动：当蛇头到达 (r,c) 时，蛇吃掉苹果。在这次移动中，蛇尾不会腾出其所在格子，因此蛇的长度增加 1。您的任务是成功吃掉所有 (nm − 1) 个苹果。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有多组测试数据。第一行输入一个整数 T（1 ≤ T ≤ 100），表示测试数据组数。对于每组测试数据：第一行输入四个整数 n，m，r s 和 c s（2 ≤ n,m ≤ 50，nm ≤ 100，1 ≤ r s ≤ n，1 ≤ c s ≤ m），表示网格的大小和蛇的初始位置。"
+          }
+        ]
+      },
+      {
+        "key": "interaction",
+        "title": "交互协议",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "您需要依次吃掉所有 (nm − 1) 个苹果。对于每个苹果："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "首先读入一行两个整数 r 和 c（1 ≤ r ≤ n，1 ≤ c ≤ m），表示苹果的位置。保证苹果的位置当前未被蛇占据。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "然后输出一个由字符 U、D、L、R 组成的字符串——将蛇头从当前位置移动到 (r,c) 的指令序列。为了增加难度，我们限制字符串的长度不超过 nm。每输出一行后，不要忘了刷新输出缓冲区。可以证明答案总是存在的。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "下图展示了第一组样例数据吃掉 3 个苹果后的情况。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\n2 3 1 2\n2 1\n\n1 3\n\n2 1\n\n1 1\n\n1 2\n\n2 2 1 1\n2 2\n\n1 1\n\n1 2",
+    "output": "LD\n\nURR\n\nDLL\n\nU\n\nR\n\nRD\n\nLU\n\nR",
+    "mode": "columns"
+  },
+  "images": [
+    {
+      "src": "/archive-statements/2026-shenzhen-invitational/assets/G-1.png",
+      "captionEn": "Snake movement example",
+      "captionZh": "贪吃蛇移动示例",
+      "imageTextZh": null
+    }
+  ]
+}

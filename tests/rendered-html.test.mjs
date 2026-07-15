@@ -208,10 +208,15 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
 });
 
 test("ships historical ICPC upsolving with timestamp-replayed real standings", async () => {
-  const [catalog, page, problemPage, route, scoreboard] = await Promise.all([
+  const [catalog, page, problemPage, statementClient, statementManifest, statementA, statementM, importer, route, scoreboard] = await Promise.all([
     readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
     readFile(new URL("app/vp/archive/page.tsx", root), "utf8"),
     readFile(new URL("app/vp/archive/problem/page.tsx", root), "utf8"),
+    readFile(new URL("app/lib/archive-statement-client.ts", root), "utf8"),
+    readFile(new URL("public/archive-statements/2026-shenzhen-invitational/manifest.json", root), "utf8"),
+    readFile(new URL("public/archive-statements/2026-shenzhen-invitational/A.json", root), "utf8"),
+    readFile(new URL("public/archive-statements/2026-shenzhen-invitational/M.json", root), "utf8"),
+    readFile(new URL("scripts/import_shenzhen_statements.py", root), "utf8"),
     readFile(new URL("app/api/archive/scoreboard/route.ts", root), "utf8"),
     readFile(new URL("app/lib/archive-scoreboard.ts", root), "utf8"),
   ]);
@@ -235,6 +240,18 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(problemPage, /复制代码并打开提交页/);
   assert.match(problemPage, /返回实时榜单/);
   assert.match(problemPage, /savePersistentJson\("archive-vp"/);
+  assert.match(problemPage, /ArchiveStatementView/);
+  assert.match(problemPage, /下载英文原始 PDF/);
+  assert.doesNotMatch(problemPage, /<iframe/);
+  assert.match(statementClient, /force-cache/);
+  assert.equal((statementManifest.match(/"slot":/g) ?? []).length, 13);
+  assert.match(statementA, /来自陈教授的问候/);
+  assert.match(statementA, /A-1\.jpg/);
+  assert.match(statementA, /imageTextZh/);
+  assert.match(statementM, /博物馆奇妙夜/);
+  assert.match(statementM, /M-1\.png/);
+  assert.match(importer, /pdfplumber/);
+  assert.match(importer, /official-pdf-extract/);
   assert.match(route, /archiveScoreboard/);
   assert.match(scoreboard, /run\.json/);
   assert.match(scoreboard, /freezeAtSeconds/);

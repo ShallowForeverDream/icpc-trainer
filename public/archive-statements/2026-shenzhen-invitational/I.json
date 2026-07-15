@@ -1,0 +1,129 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-shenzhen-invitational",
+  "contestName": "ICPC 深圳全国邀请赛",
+  "slot": "I",
+  "problemId": 17761,
+  "titleEn": "Calendar Cubes",
+  "titleZh": "日历立方体",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=17761&contest_id=3588",
+    "chinesePdfUrl": "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
+    "chinesePages": [
+      18,
+      18
+    ]
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Colin is designing a special calendar using two cubes. Each cube has exactly 6 faces, and each face is labeled with a digit from 0 to 8. Using the two cubes, Colin wants to display dates in two-digit format."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For example, the illustration above shows two cubes displaying the integer 16 on the front. One cube shows the digit 1, and the other shows the digit 6. To display an integer d ∈ [01, 99] in two-digit format, choose one cube to show the tens digit (for 01 to 09, the tens digit is 0), and the other should show the units digit. Note that the digit 6 can also represent 9. That is, if a cube has a 6, it can be used as either 6 or 9. Given two cubes, we define their MEX as the smallest positive integer in two-digit format that cannot be displayed. It can be shown that no two cubes can display all integers from 01 to 99 (both inclusive). Given an integer x (given in two-digit format), you need to construct two cubes such that their MEX is exactly x."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are multiple test cases. The first line of the input contains an integer T (1 ≤ T ≤ 99), indicating the number of test cases. For each test case: The only line contains an integer x (01 ≤ x ≤ 99) in two-digit format."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If it is possible to construct two cubes such that their MEX is exactly x, first output Yes in one line. Then output a second line containing 12 integers (from 0 to 8) separated by a space, indicating the two cubes. The first 6 integers are the digits on the first cube, while the last 6 integers are the digits on the second cube."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Otherwise, if it is impossible to do so, just output No in one line."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Colin 正在设计一种使用两个立方体的特殊日历。每个立方体恰好有 6 个面，并且每个面上标有一个从 0 到 8 的数字。Colin 希望用这两个立方体表示两位数的日期。例如，上图展示了两个立方体在正面显示数字 16。其中一个立方体显示数字 1，另一个立方体显示数字6。为了表示一个以两位形式表示的整数 d ∈ [01,99]，需要选一个立方体显示十位数字（对于 01 至 09，十位数字为 0），另一个立方体显示个位数字。注意：数字 6 也可以表示为 9。也就是说，如果一个立方体上有 6，则它可以被用作 6 或 9。给定两个立方体，定义它们的 MEX 为最小的无法以两位数形式表示的正整数。可以证明不存在两个立方体能表示从 01 到 99 的所有整数（含两端）。给定一个整数 x（以两位数的形式给出），您需要构造两个立方体，使得它们的 MEX 恰好为 x。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有多组测试数据。第一行输入一个整数 T（1 ≤ T ≤ 99），表示测试数据组数。对于每组测试数据：仅有的一行输入一个整数 x (01 ≤ x ≤ 99)，以两位数的形式给出。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "如果可以构造两个立方体，使得它们的 MEX 恰好为 x，首先输出一行 Yes。然后在第二行输出 12个由单个空格分隔的整数（从 0 到 8），表示这两个立方体。前 6 个整数是第一个立方体上的数字，而最后 6 个整数是第二个立方体上的数字。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "如果不能做到，则只要输出一行 No。"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "4\n01\n02\n99\n11",
+    "output": "Yes\n0 0 0 0 0 0 0 0 0 0 0 0\nYes\n1 1 1 1 1 1 0 0 0 0 0 0\nNo\nYes\n4 0 5 7 6 8 0 2 3 1 0 0",
+    "mode": "columns"
+  },
+  "images": [
+    {
+      "src": "/archive-statements/2026-shenzhen-invitational/assets/I-1.jpg",
+      "captionEn": "Two calendar cubes displaying 16",
+      "captionZh": "两个日历立方体显示数字 16",
+      "imageTextZh": null
+    }
+  ]
+}

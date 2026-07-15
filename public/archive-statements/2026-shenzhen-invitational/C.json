@@ -1,0 +1,182 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-shenzhen-invitational",
+  "contestName": "ICPC 深圳全国邀请赛",
+  "slot": "C",
+  "problemId": 17755,
+  "titleEn": "One Item Away",
+  "titleZh": "一物之差",
+  "timeLimitText": "1.5 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=17755&contest_id=3588",
+    "chinesePdfUrl": "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
+    "chinesePages": [
+      6,
+      7
+    ]
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "This is an interactive problem. Remember to flush the output buffer after every print. To flush your output, you can use:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "fflush(stdout) or cout.flush() in C/C++;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "System.out.flush() in Java and Kotlin;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "sys.stdout.flush() in Python."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "There are n people and m items. Each item must be assigned to exactly one person. Different people may value items differently. For any collection of items, a person can evaluate their satisfaction with it. You do not know exactly how these evaluations are computed, but you are allowed to query their values. You may ask at most n × m queries. Formally, for each person i, there exists a function ui (S) that assigns a non-negative integer value to any subset S of items. These functions satisfy:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "ui (∅) = 0;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If S ⊆ T , then ui (S) ≤ ui (T )."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "In other words, giving someone more items never makes them less satisfied. However, people can be sensitive. If person i observes that another person j has a strictly better collection of items, they may start to complain. Fortunately, people are also somewhat forgiving: if removing just one item from j’s collection is enough to eliminate this advantage, then no complaint is made. Formally, let si denote the set of items assigned to person i. Your goal is to assign every item to exactly one person so that, for every pair of people i and j, if person i considers j’s collection strictly better than their own, i.e., ui (sj ) > ui (si ), then there exists an item x ∈ sj such that ui (sj \\ {x}) ≤ ui (si )."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There is only one test case in each test file. The first line contains two integers n and m (1 ≤ n ≤ 100, 1 ≤ m ≤ 500), indicating the number of people and the number of items."
+          }
+        ]
+      },
+      {
+        "key": "interaction",
+        "title": "Interaction Protocol",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "You can evaluate values using queries. To ask for the value that person i assigns to a subset of items {x1 , x2 , . . . , xk }, output one line:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "? i k x1 x2 . . . xk"
+          },
+          {
+            "kind": "paragraph",
+            "text": "where 1 ≤ i ≤ n, 0 ≤ k ≤ m, and x1 , x2 , . . . , xk are pairwise distinct integers satisfying 1 ≤ xt ≤ m. After flushing your output, your program should read a single integer v (0 ≤ v ≤ 10⁹ ), which is equal to ui ({x1 , x2 , . . . , xk })."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You may ask at most n × m queries. Also note that the interactor is adaptive. In particular, the answers to your queries may depend on your previous queries, but they are always consistent with some valid set of functions ui (·) satisfying all constraints in the statement. When you are ready to assign items, output one line:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "! a1 a2 . . . am"
+          },
+          {
+            "kind": "paragraph",
+            "text": "where aj is the person to whom item j is assigned, and 1 ≤ aj ≤ n. Assigning items does not count as a query. After flushing your output, your program should terminate immediately."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "这是一道交互题。请注意在每次输出后刷新输出缓冲区。您可以使用以下方式刷新输出："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在 C/C++ 中使用 fflush(stdout) 或 cout.flush()；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在 Java 和 Kotlin 中使用 System.out.flush()；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在 Python 中使用 sys.stdout.flush()。有 n 个人和 m 件物品。每件物品必须被分配给恰好一个人。不同的人对物品集合的满意度可能不同。对于任意一个物品集合，一个人可以评估自己对该集合的满意度。您并不知道这些满意度函数的具体形式，但可以通过询问来获取它们的值。您最多可以进行 n × m次询问。更正式地，对每个人 i，存在一个函数 uᵢ (S)，它为任意物品子集 S 赋予一个非负整数值。该函数满足以下性质："
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "uᵢ(∅) = 0；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "若 S ⊆ T，则 uᵢ (S) ≤ uᵢ (T)。换句话说，给一个人更多的物品不会降低其满意度。然而，人们可能会比较敏感。如果第 i 个人发现另一个人 j 拥有的物品集合严格优于自己的，此人可能会抱怨。幸运的是，人们也具有一定的宽容性：只要从 j 的物品集合中移除某一件物品后，这种优势就不再存在，那么就不会产生抱怨。更正式地，设 sᵢ 表示分配给第 i 个人的物品集合。您的目标是将所有物品分配给各个人，使得对任意两个人 i 和 j，都满足以下条件：如果第 i 个人认为第 j 个人的物品集合严格优于自己的（即 uᵢ (sⱼ ) > uᵢ (sᵢ )），则存在某个物品 x ∈ sⱼ，使得 uᵢ (sⱼ \\ {x}) ≤ uᵢ (sᵢ )。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "每个测试文件中只有一组测试数据。第一行输入两个整数 n 和 m（1 ≤ n ≤ 100，1 ≤ m ≤ 500），分别表示人数和物品数量。"
+          }
+        ]
+      },
+      {
+        "key": "interaction",
+        "title": "交互协议",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "您可以通过询问来获取满意度值。若要询问第 i 个人对物品子集 {x 1 ,x 2 ,...,x k } 给出的满意度值，输出一行：? i k x 1 x 2 ... x k其中 1 ≤ i ≤ n，0 ≤ k ≤ m，且 x 1 ,x 2 ,...,x k 是两两不同的整数，满足 1 ≤ x t ≤ m。在刷新输出缓冲区后，您的程序需要读入一个整数 v（0 ≤ v ≤ 10⁹），其值等于 uᵢ ({x 1 ,x 2 ,...,x k })。您最多可以进行 n × m 次询问。另外需要注意，交互器是自适应的。具体而言，询问的返回结果可能依赖于您之前的询问，但始终与某组满足题面所有约束的函数 uᵢ (·) 一致。当您准备好分配物品时，输出一行：! a 1 a 2 ... a m其中 aⱼ 表示物品 j 被分配给的人（1 ≤ aⱼ ≤ n）。分配物品不算一次询问。在刷新输出缓冲区后，您的程序应立即终止。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2 3\n\n10\n\n20\n\n10\n\n5",
+    "output": "? 1 1 1\n\n? 1 2 2 3\n\n? 2 1 1\n\n? 2 2 2 3\n\n! 2 1 1",
+    "mode": "columns"
+  },
+  "images": []
+}

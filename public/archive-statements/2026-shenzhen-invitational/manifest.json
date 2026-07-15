@@ -1,0 +1,83 @@
+{
+  "contestId": "2026-shenzhen-invitational",
+  "problems": [
+    {
+      "slot": "A",
+      "titleEn": "Greetings from Prof. Chen",
+      "titleZh": "来自陈教授的问候",
+      "path": "/archive-statements/2026-shenzhen-invitational/A.json"
+    },
+    {
+      "slot": "B",
+      "titleEn": "All-Star Showdown",
+      "titleZh": "全明星对抗赛",
+      "path": "/archive-statements/2026-shenzhen-invitational/B.json"
+    },
+    {
+      "slot": "C",
+      "titleEn": "One Item Away",
+      "titleZh": "一物之差",
+      "path": "/archive-statements/2026-shenzhen-invitational/C.json"
+    },
+    {
+      "slot": "D",
+      "titleEn": "City Management",
+      "titleZh": "城市管理",
+      "path": "/archive-statements/2026-shenzhen-invitational/D.json"
+    },
+    {
+      "slot": "E",
+      "titleEn": "Card Checking",
+      "titleZh": "我要验牌",
+      "path": "/archive-statements/2026-shenzhen-invitational/E.json"
+    },
+    {
+      "slot": "F",
+      "titleEn": "Astra",
+      "titleZh": "Astra",
+      "path": "/archive-statements/2026-shenzhen-invitational/F.json"
+    },
+    {
+      "slot": "G",
+      "titleEn": "Snake",
+      "titleZh": "贪吃蛇",
+      "path": "/archive-statements/2026-shenzhen-invitational/G.json"
+    },
+    {
+      "slot": "H",
+      "titleEn": "Telepathy",
+      "titleZh": "心灵感应",
+      "path": "/archive-statements/2026-shenzhen-invitational/H.json"
+    },
+    {
+      "slot": "I",
+      "titleEn": "Calendar Cubes",
+      "titleZh": "日历立方体",
+      "path": "/archive-statements/2026-shenzhen-invitational/I.json"
+    },
+    {
+      "slot": "J",
+      "titleEn": "Crossroads",
+      "titleZh": "交叉路口",
+      "path": "/archive-statements/2026-shenzhen-invitational/J.json"
+    },
+    {
+      "slot": "K",
+      "titleEn": "Sum and Product",
+      "titleZh": "和与积",
+      "path": "/archive-statements/2026-shenzhen-invitational/K.json"
+    },
+    {
+      "slot": "L",
+      "titleEn": "Critical Strike",
+      "titleZh": "暴击",
+      "path": "/archive-statements/2026-shenzhen-invitational/L.json"
+    },
+    {
+      "slot": "M",
+      "titleEn": "Night at the Museum",
+      "titleZh": "博物馆奇妙夜",
+      "path": "/archive-statements/2026-shenzhen-invitational/M.json"
+    }
+  ]
+}

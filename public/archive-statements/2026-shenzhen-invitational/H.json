@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-shenzhen-invitational",
+  "contestName": "ICPC 深圳全国邀请赛",
+  "slot": "H",
+  "problemId": 17760,
+  "titleEn": "Telepathy",
+  "titleZh": "心灵感应",
+  "timeLimitText": "3 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=17760&contest_id=3588",
+    "chinesePdfUrl": "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
+    "chinesePages": [
+      16,
+      17
+    ]
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "This is a multi-pass problem. Alice and Bob are performing a telepathy trick for Christina. Christina chooses a subset S ⊂ {1, 2, . . . , n} such that |S| < n2 . Then, Alice adds a single integer x to this subset, such that x ∈ {1, 2, . . . , n} and x∈/ S. Bob is only given the resulting set after Alice’s addition and needs to deduce the exact integer Alice added."
+          }
+        ]
+      },
+      {
+        "key": "interaction",
+        "title": "Interaction Protocol",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Your solution is executed twice on each test. In the first run, your solution acts as Alice. In the second run, your solution acts as Bob. There are multiple test cases in each run."
+          }
+        ]
+      },
+      {
+        "key": "first-run",
+        "title": "First Run",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains the string Alice. The second line contains an integer T (1 ≤ T ≤ 5 × 10⁵ ), indicating the number of test cases. For each test case: The first line of input contains two integers n and k (3 ≤ n ≤ 10⁶ , 1 ≤ k < n2 ). The second line contains k distinct integers a1 , a2 , . . . , ak (1 ≤ ai ≤ n), indicating the subset chosen by Christina. For each test case, your solution should output one line containing (k + 1) distinct integers b1 , b2 , . . . , bk+1 (1 ≤ bi ≤ n), such that {a1 , a2 , . . . , ak } ⊂ {b1 , b2 , . . . , bk+1 }."
+          }
+        ]
+      },
+      {
+        "key": "second-run",
+        "title": "Second Run",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Your solution will be restarted for the second run. The first line of the input contains the string Bob. The second line contains an integer T (1 ≤ T ≤ 5×10⁵ ), indicating the number of test cases. For each test case: The first line of input contains two integers n and k (3 ≤ n ≤ 10⁶ , 1 ≤ k < n2 ). The second line contains (k + 1) distinct integers b1 , b2 , . . . , bk+1 (1 ≤ bi ≤ n), which is exactly the set you output for this test case in the first run (possibly in a different order). For each test case, your solution should output one line containing a single integer, indicating the integer you added in the first run. Note that the order of test cases in the second run might be different from that in the first run. Your solution is considered correct if you correctly deduce the added integer for all test cases. It is guaranteed that the sum of n over all test cases does not exceed 3 × 10⁶ ."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The example shows two runs of a certain solution on the sample test cases. In the first run, for the first sample test case, Christina has chosen the subset S = {1, 3, 5} (given as 3 1 5) from {1, 2, . . . , 7}, with |S| = 3 < 72 . Alice must add one extra integer not in S and output the resulting set of size 4. She chooses to add the integer 6, so she outputs the set {1, 3, 5, 6} (in the order 5 6 1 3). In the second run, the second sample test case corresponds to the first sample test case in the first run. Bob receives (n, k) = (7, 3) and the set {1, 3, 5, 6} (given as 3 5 1 6). Using the pre-agreed strategy between Alice and Bob, he can deduce that 6 is the added integer and outputs 6."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "这是一道通信题。Alice 和 Bob 正在为 Christina 表演一个心灵感应魔术。Christina 选择一个子集 S ⊂ {1,2,...,n} 满足|S| < n。然后，Alice 向这个子集添加一个整数 x，使得 x ∈ {1,2,...,n} 且 x ∈/ S。Bob 只能获得 Alice 2添加后的结果集合，并需要推断出 Alice 添加的整数。"
+          }
+        ]
+      },
+      {
+        "key": "interaction",
+        "title": "交互协议",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "您的程序在每组测试中将被运行两次。在第一次运行中，您的程序扮演 Alice。在第二次运行中，您的程序扮演 Bob。每次运行包含多组测试数据。"
+          }
+        ]
+      },
+      {
+        "key": "first-run",
+        "title": "第一次运行",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行输入字符串 Alice。第二行输入一个整数 T（1 ≤ T ≤ 5 × 10⁵），表示测试数据组数。对于每组测试数据：第一行输入两个整数 n 和 k（3 ≤ n ≤ 10⁶，1 ≤ k < n 2 ）。第二行输入 k 个互不相同的整数 a 1 ,a 2 ,...,a k（1 ≤ aᵢ ≤ n），表示 Christina 选择的子集。对于每组测试数据，您的程序应输出一行，包含 (k + 1) 个互不相同的整数 b 1 ,b 2 ,...,b k+1 （1 ≤ bᵢ ≤ n），使得 {a 1 ,a 2 ,...,a k } ⊂ {b 1 ,b 2 ,...,b k+1 }。"
+          }
+        ]
+      },
+      {
+        "key": "second-run",
+        "title": "第二次运行",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "您的程序将被重启以进行第二次运行。第一行输入字符串 Bob。第二行输入一个整数 T（1 ≤ T ≤ 5 × 10⁵），表示测试数据组数。对于每组测试数据：第一行输入两个整数 n 和 k（3 ≤ n ≤ 10⁶，1 ≤ k < n）。第二行输入 (k + 1) 个互不相同的整数2 b 1,b 2,...,b k+1（1 ≤ bᵢ≤ n），这正是您在第一次运行中针对该测试数据输出的集合（顺序可能不同）。对于每组测试数据，您的程序应输出一行，包含一个整数，表示您在第一次运行中添加的整数。请注意：第二次运行的测试数据顺序可能和第一次运行时不同。只有您对所有测试数据都正确推断出被添加的整数，您的答案才被视为正确。保证所有测试数据中 n 的总和不超过 3 × 10⁶。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "示例展示了某个解决方案在样例数据上的两次运行。第一次运行中，对于第一组样例数据，Christina 从 {1,2,...,7} 中选择了子集 S = {1,3,5}（以顺序 3 1 5 给出），满足 |S| = 3 < 7。Alice 需要添加一个不在 S 中的整数，并输出大小为 4 的结果集合。她选择2添加整数 6，因此输出集合 {1,3,5,6}（以顺序 5 6 1 3 给出）。第二次运行中，第二组样例数据对应第一次运行中的第一组样例数据。Bob 收到 (n,k) = (7,3) 和集合{1,3,5,6}（以顺序 3 5 1 6 给出）。借助 Alice 与 Bob 事先约定的策略，他能够推断出被添加的整数是6，并输出 6。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "Alice\n2\n7 3\n3 1 5\n5 1\n2\nBob\n2\n5 1\n3 2\n7 3\n3 5 1 6",
+    "output": "5 6 1 3\n3 2\n\n3\n6",
+    "mode": "columns"
+  },
+  "images": []
+}

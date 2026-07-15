@@ -1,0 +1,130 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-shenzhen-invitational",
+  "contestName": "ICPC 深圳全国邀请赛",
+  "slot": "K",
+  "problemId": 17763,
+  "titleEn": "Sum and Product",
+  "titleZh": "和与积",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=17763&contest_id=3588",
+    "chinesePdfUrl": "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
+    "chinesePages": [
+      20,
+      20
+    ]
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Let f (n, k) be the number of integer pairs (a, b) such that:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "0 ≤ a, b < n."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "k(a + b) ≡ ab (mod n)."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Given two integers n and m, you need to calculate"
+          },
+          {
+            "kind": "paragraph",
+            "text": "m X f (n, k) k=0"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Since the answer may be large, output it modulo 998244353."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are multiple test cases. The first line of the input contains an integer T (1 ≤ T ≤ 10⁴ ), indicating the number of test cases. For each test case: The only line contains two integers n and m (1 ≤ n ≤ 1014 , 0 ≤ m < n). It is guaranteed that there are at most 10 test cases with n greater than 108 ."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output one line containing an integer, indicating the answer modulo 998244353."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "设 f(n,k) 表示满足以下条件的整数对 (a,b) 的数量："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "0 ≤ a,b < n。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "k(a + b) ≡ ab (mod n)。给定两个整数 n 和 m，求∑m f(n,k) k=0由于答案可能很大，请将答案对 998244353 取模后输出。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有多组测试数据。第一行输入一个整数 T（1 ≤ T ≤ 10⁴），表示测试数据组数。对于每组测试数据：仅有的一行输入两个整数 n 和 m（1 ≤ n ≤ 1014，0 ≤ m < n）。保证最多有 10 组测试数据满足 n 大于 108。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "每组测试数据输出一行，包含一个整数，表示答案对 998244353 取模的结果。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "4\n7 2\n100 15\n202604 11\n1145141 919810",
+    "output": "25\n2500\n3444208\n165721266",
+    "mode": "columns"
+  },
+  "images": []
+}

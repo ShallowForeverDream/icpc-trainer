@@ -16,6 +16,8 @@ type VpMedal = "gold" | "silver" | "bronze" | null;
 type StandingRow = { id: string; rank: number; handle: string; solved: number; penalty: number; lastSolvedMinutes?: number | null; medal?: VpMedal; problems: Record<string, ProblemStanding>; mine?: boolean; origin?: "original" | "mine"; sourceCount?: number };
 type Standings = { updatedAt: string; elapsedSeconds?: number; freezeAtSeconds?: number; frozen?: boolean; finished?: boolean; pollAfterSeconds?: number; totalRows?: number; originalTeams?: number; medalCutoffs?: { gold: number; silver: number; bronze: number }; participantRows?: StandingRow[]; unavailableContestIds?: number[]; sourceBoards?: Array<{ contestId: number; name: string; selectedProblems: string[]; sampledTeams: number }>; rows: StandingRow[] };
 type Contest = { id: string; handle: string; participants?: string[]; mode: string; seed: string; durationMinutes: number; targetRating: number; thinkingRatio?: number; thinkingCount?: number; sourceContestId: number | null; sourceContests?: SourceContest[]; excludedSolved: number; createdAt: string; startedAt?: number; problems: VpProblem[]; standings?: Standings };
+type RoomTab = "problems" | "standings" | "submissions";
+type TeamSubmission = { id: number; handle: string; createdAt: string; code: string; contestId?: number; index: string; title: string; language: string; verdict: string; timeMs: number; memoryBytes: number };
 
 const STORAGE_KEY = "icpc-trainer-active-vp";
 const modeOptions = [
@@ -29,6 +31,44 @@ const medalText: Record<Exclude<VpMedal, null>, string> = { gold: "金奖", silv
 function usedTimeLabel(minutes?: number | null) {
   if (minutes === null || minutes === undefined) return "—";
   return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+function relativeSubmissionTime(createdAt: string, startedAt?: number) {
+  if (!startedAt) return "—";
+  const seconds = Math.max(0, Math.floor((new Date(createdAt).getTime() - startedAt) / 1000));
+  return `+${String(Math.floor(seconds / 3600)).padStart(2, "0")}:${String(Math.floor(seconds % 3600 / 60)).padStart(2, "0")}:${String(seconds % 60).padStart(2, "0")}`;
+}
+
+function verdictLabel(verdict: string) {
+  const labels: Record<string, string> = {
+    OK: "Accepted",
+    WRONG_ANSWER: "Wrong Answer",
+    TIME_LIMIT_EXCEEDED: "Time Limit",
+    MEMORY_LIMIT_EXCEEDED: "Memory Limit",
+    RUNTIME_ERROR: "Runtime Error",
+    COMPILATION_ERROR: "Compilation Error",
+    IDLENESS_LIMIT_EXCEEDED: "Idleness Limit",
+    TESTING: "Judging",
+    SKIPPED: "Skipped",
+  };
+  return labels[verdict] || verdict.replaceAll("_", " ");
+}
+
+async function fetchTeamSubmissions(contest: Contest, signal: AbortSignal) {
+  if (!contest.startedAt) return [];
+  const handles = contest.participants?.length ? contest.participants : [contest.handle];
+  const problemKeys = new Set(contest.problems.map((problem) => `${problem.contestId}${problem.index}`));
+  const endAt = contest.startedAt + contest.durationMinutes * 60_000;
+  const results = await Promise.allSettled(handles.map(async (handle) => {
+    const data = await vpJson<{ submissions?: Omit<TeamSubmission, "handle">[] }>(`/codeforces/submissions?handle=${encodeURIComponent(handle)}`, { cache: "no-store", signal }, 20_000);
+    return (data.submissions ?? []).map((submission) => ({ ...submission, handle }));
+  }));
+  return results.flatMap((result) => result.status === "fulfilled" ? result.value : [])
+    .filter((submission) => {
+      const submittedAt = new Date(submission.createdAt).getTime();
+      return submittedAt >= (contest.startedAt ?? 0) && submittedAt <= endAt && problemKeys.has(`${submission.contestId}${submission.index}`);
+    })
+    .sort((left, right) => new Date(right.createdAt).getTime() - new Date(left.createdAt).getTime());
 }
 
 async function vpJson<T>(path: string, init: RequestInit = {}, timeoutMs = 30_000) {
@@ -59,6 +99,11 @@ export default function VpPage() {
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "syncing">("idle");
   const [message, setMessage] = useState("");
   const [now, setNow] = useState(Date.now());
+  const [roomTab, setRoomTab] = useState<RoomTab>("problems");
+  const [teamSubmissions, setTeamSubmissions] = useState<TeamSubmission[]>([]);
+  const [standingQuery, setStandingQuery] = useState("");
+  const [mineOnly, setMineOnly] = useState(false);
+  const [submissionHandle, setSubmissionHandle] = useState("all");
   const generateRequest = useRef<AbortController | null>(null);
   const standingsRequest = useRef<AbortController | null>(null);
   const finalSyncFor = useRef("");
@@ -116,6 +161,11 @@ export default function VpPage() {
       const data = await vpJson<Contest>("/vp/generate", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), participants, handle: participants[0], mode, count, targetRating, thinkingRatio, durationMinutes: duration, seed: seed || undefined }), signal: controller.signal }, 30_000);
       if (!isContest(data)) throw new Error("组卷服务返回了无效比赛");
       save(data);
+      setRoomTab("problems");
+      setTeamSubmissions([]);
+      setStandingQuery("");
+      setMineOnly(false);
+      setSubmissionHandle("all");
       finalSyncFor.current = "";
       setSeed(data.seed);
       const preferences = readTrainerPreferences();
@@ -133,6 +183,8 @@ export default function VpPage() {
     const startedAt = Date.now();
     finalSyncFor.current = "";
     save({ ...contest, startedAt });
+    setRoomTab("problems");
+    setTeamSubmissions([]);
     setNow(startedAt);
     void vpJson<{ session: Contest }>("/vp/sessions/start", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), id: contest.id, startedAt }) }).then(({ session }) => { if (isContest(session)) save(session); }).catch(() => setMessage("比赛已在本机开始，但服务器暂时未能保存开始时间"));
   }
@@ -151,9 +203,13 @@ export default function VpPage() {
     if (!silent) setStatus("syncing");
     if (!contest.standings) setMessage("正在加载并合并各题原比赛榜单；首次完成后会写入服务器数据库…");
     try {
-      const data = await vpJson<Standings>("/vp/standings", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), vpId: contest.id, participants: contest.participants?.length ? contest.participants : [contest.handle], startedAt: contest.startedAt, durationMinutes: contest.durationMinutes, problems: contest.problems.map(({ contestId, index, slot }) => ({ contestId, index, slot })) }), signal: controller.signal }, 120_000);
+      const [data, submissions] = await Promise.all([
+        vpJson<Standings>("/vp/standings", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), vpId: contest.id, participants: contest.participants?.length ? contest.participants : [contest.handle], startedAt: contest.startedAt, durationMinutes: contest.durationMinutes, problems: contest.problems.map(({ contestId, index, slot }) => ({ contestId, index, slot })) }), signal: controller.signal }, 120_000),
+        fetchTeamSubmissions(contest, controller.signal),
+      ]);
       if (!Array.isArray(data.rows)) throw new Error("榜单服务返回了无效数据");
       save({ ...contest, standings: data });
+      setTeamSubmissions(submissions);
       setMessage(data.finished ? "比赛结束，最终排名与奖牌已完成结算" : data.frozen ? "最后一小时封榜中；你的提交仍会正常判题" : `已同步 ${data.originalTeams ?? 0} 支正式队伍，排名动态更新`);
       setStatus("idle");
     } catch (error) {
@@ -177,6 +233,10 @@ export default function VpPage() {
     const progress = Math.min(100, elapsedSeconds / Math.max(1, contest.durationMinutes * 60) * 100);
     const freezeProgress = Math.max(0, (contest.durationMinutes * 60 - 3600) / Math.max(1, contest.durationMinutes * 60) * 100);
     const medal = myRow?.medal ?? null;
+    const normalizedStandingQuery = standingQuery.trim().toLowerCase();
+    const visibleRows = rows.filter((row) => (!mineOnly || row.mine) && (!normalizedStandingQuery || row.handle.toLowerCase().includes(normalizedStandingQuery)));
+    const visibleSubmissions = teamSubmissions.filter((submission) => submissionHandle === "all" || submission.handle === submissionHandle);
+    const teamHandles = contest.participants?.length ? contest.participants : [contest.handle];
     return <AppShell active="模拟赛">
       <section className="contest-room-head">
         <div><span className="eyebrow"><span className="live-dot" /> {!contest.startedAt ? "比赛已生成" : finished ? "比赛结束" : settling ? "正在揭榜" : frozen ? "最后一小时封榜" : "实时榜单回放中"}</span><h1>{contest.mode} · {contest.problems.length} 题</h1><p>{(contest.participants ?? [contest.handle]).join(" / ")} · {contest.thinkingCount ?? contest.problems.filter((problem) => problem.thinking).length} 道思维题 · 已排除 {contest.excludedSolved} 道历史 AC</p></div>
@@ -191,15 +251,42 @@ export default function VpPage() {
       {frozen ? <section className="vp-freeze-banner"><b>封榜中</b><span>榜单停在最后一小时前；提交与判题继续，比赛结束后自动揭榜。</span></section> : null}
       {settling ? <section className="vp-freeze-banner"><b>正在揭榜</b><span>正在拉取最后一小时的判题记录并计算最终排名、罚时与奖牌。</span></section> : null}
       {finished ? <section className={`vp-final-result medal-${medal || "none"}`}><div><span>{medal ? medalText[medal] : "本场完成"}</span><h2>第 {rankedMyRow?.rank ?? "—"} 名</h2><p>按 {contest.standings?.originalTeams ?? 0} 支正式队伍计算</p></div><dl><div><dt>解题</dt><dd>{myRow?.solved ?? 0}</dd></div><div><dt>总罚时</dt><dd>{myRow?.penalty ?? 0}</dd></div><div><dt>总用时</dt><dd>{usedTimeLabel(myRow?.lastSolvedMinutes)}</dd></div></dl><small>金奖前 10%，银奖随后 20%，铜奖随后 30%；同罚时并列同奖。</small></section> : null}
-      <section className="vp-rule-strip"><b>榜单规则</b><span>15 秒自动更新</span><span>最后 1 小时封榜</span><span>WA +20 分钟</span><span>金/银/铜 10%/20%/30%</span></section>
-      {contest.startedAt && contest.sourceContests?.length ? <section className="contest-sources"><span>来源参考</span>{contest.sourceContests.map((source) => <a key={source.contestId} href={source.url} target="_blank" rel="noreferrer">CF {source.contestId} · {source.problemCount} 题 · 均分 {source.averageRating} ↗</a>)}</section> : null}
-      <section className="contest-live-layout">
-        <div className="contest-problem-grid">{contest.problems.map((problem) => {
-          const myState = myRow?.problems?.[`${problem.contestId}${problem.index}`];
-          return <article className={`contest-problem-card ${myState?.solved ? "accepted" : ""}`} key={problem.code}><span>{problem.slot}</span><div><small>{contest.startedAt ? problem.code : "START 后显示来源"}</small><h2>{contest.startedAt ? problem.title : `Problem ${problem.slot}`}</h2>{contest.startedAt ? <p>{problem.rating} · {problem.thinking ? "思维题" : "综合题"} · {problem.tags.slice(0, 3).join(" / ")}</p> : null}</div><strong>{myState?.solved ? `+${myState.wrongAttempts}` : myState?.pendingAttempts ? `?${myState.pendingAttempts}` : myState?.wrongAttempts ? `-${myState.wrongAttempts}` : "—"}</strong>{contest.startedAt ? <Link className="vp-problem-open" href={`/problem/${problem.contestId}${problem.index}?vp=${encodeURIComponent(contest.id)}&slot=${problem.slot}`}>站内做题 →</Link> : null}</article>;
-        })}</div>
-        <article className="panel live-standings" style={{ "--problem-count": contest.problems.length } as CSSProperties}><div className="panel-head"><div><h2>{finished ? "最终榜单" : frozen ? "封榜榜单" : "实时榜单"}</h2><p>{contest.standings ? `${new Date(contest.standings.updatedAt).toLocaleTimeString("zh-CN")} · ${contest.standings.originalTeams ?? 0} 支正式队伍 · ${pollSeconds} 秒刷新` : "正在载入原比赛同时间榜单"}</p></div><span className="live-dot" /></div>{contest.standings?.sourceBoards?.length ? <div className="combined-board-sources">{contest.standings.sourceBoards.map((source) => <span key={source.contestId}><b>CF {source.contestId}</b> · {source.selectedProblems.join("/")} · {source.sampledTeams} 队</span>)}</div> : null}<div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者 / 原队伍</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{rows.map((row) => <div className={`standings-row${row.mine ? " mine" : ""}${row.medal ? ` medal-${row.medal}` : ""}`} key={row.id}><strong>{row.rank}</strong><span className="standing-party"><b>{row.handle}</b><small>{row.medal ? `${medalText[row.medal]} · ` : ""}{row.mine ? "当前 VP" : `原比赛${row.sourceCount && row.sourceCount > 1 ? ` · 合并 ${row.sourceCount} 场` : ""}`}</small></span><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.pendingAttempts ? "pending" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.pendingAttempts ? `?${state.pendingAttempts}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div></article>
-      </section>
+      <nav className="vp-room-tabs" aria-label="模拟赛内容" role="tablist">
+        <button type="button" role="tab" aria-selected={roomTab === "problems"} className={roomTab === "problems" ? "active" : ""} onClick={() => setRoomTab("problems")}><span>题目</span><b>{myRow?.solved ?? 0}/{contest.problems.length}</b></button>
+        <button type="button" role="tab" aria-selected={roomTab === "standings"} className={roomTab === "standings" ? "active" : ""} onClick={() => setRoomTab("standings")}><span>{finished ? "最终榜单" : "实时榜单"}</span><b>{rankedMyRow?.rank ? `#${rankedMyRow.rank}` : "LIVE"}</b></button>
+        <button type="button" role="tab" aria-selected={roomTab === "submissions"} className={roomTab === "submissions" ? "active" : ""} onClick={() => { setRoomTab("submissions"); if (contest.startedAt) void syncStandings(true); }}><span>队伍提交</span><b>{teamSubmissions.length}</b></button>
+      </nav>
+
+      {roomTab === "problems" ? <section className="panel vp-room-panel" role="tabpanel">
+        <header className="vp-tab-heading"><div><h2>题目列表</h2><p>{contest.startedAt ? "点击任意题目，在本站阅读、翻译并提交" : "开始比赛后显示题目来源与完整信息"}</p></div><div><span>{contest.thinkingCount ?? contest.problems.filter((problem) => problem.thinking).length} 道思维题</span><span>目标 {contest.targetRating}</span></div></header>
+        <div className="vp-problem-list">
+          <div className="vp-problem-list-head"><span>题号</span><span>题目</span><span>难度</span><span>状态</span><span /></div>
+          {contest.problems.map((problem) => {
+            const myState = myRow?.problems?.[`${problem.contestId}${problem.index}`];
+            const stateLabel = myState?.solved ? `AC${myState.wrongAttempts ? ` · ${myState.wrongAttempts} WA` : ""}` : myState?.pendingAttempts ? "评测中" : myState?.wrongAttempts ? `${myState.wrongAttempts} 次 WA` : "未尝试";
+            const content = <><span className="vp-list-slot">{problem.slot}</span><span className="vp-list-title"><small>{contest.startedAt ? problem.code : "比赛开始后显示来源"}</small><b>{contest.startedAt ? problem.title : `Problem ${problem.slot}`}</b>{contest.startedAt ? <em>{problem.thinking ? "思维题" : "综合题"} · {problem.tags.slice(0, 3).join(" / ")}</em> : null}</span><strong>{contest.startedAt ? problem.rating : "—"}</strong><span className={`vp-list-state${myState?.solved ? " accepted" : myState?.pendingAttempts ? " pending" : myState?.wrongAttempts ? " rejected" : ""}`}>{stateLabel}</span><span className="vp-list-action">{contest.startedAt ? "开始做题 →" : "尚未开始"}</span></>;
+            return contest.startedAt ? <Link className="vp-problem-list-row" href={`/problem/${problem.contestId}${problem.index}?vp=${encodeURIComponent(contest.id)}&slot=${problem.slot}`} key={problem.code}>{content}</Link> : <div className="vp-problem-list-row locked" key={problem.code}>{content}</div>;
+          })}
+        </div>
+      </section> : null}
+
+      {roomTab === "standings" ? <section className="panel vp-room-panel live-standings vp-tab-standings" role="tabpanel" style={{ "--problem-count": contest.problems.length } as CSSProperties}>
+        <header className="vp-tab-heading vp-standings-heading"><div><h2>{finished ? "最终榜单" : frozen ? "封榜榜单" : "实时榜单"}</h2><p>{contest.standings ? `${new Date(contest.standings.updatedAt).toLocaleTimeString("zh-CN")} 更新 · ${contest.standings.originalTeams ?? 0} 支正式队伍 · ${pollSeconds} 秒刷新` : "正在载入原比赛同时间榜单"}</p></div><div className="vp-standings-tools"><label><Icon name="search" /><input value={standingQuery} onChange={(event) => setStandingQuery(event.target.value)} placeholder="搜索队伍" /></label><button type="button" className={mineOnly ? "active" : ""} onClick={() => setMineOnly((value) => !value)}>只看我的队伍</button><button type="button" onClick={() => void syncStandings(false)} disabled={!contest.startedAt || status === "syncing"}>{status === "syncing" ? "刷新中…" : "刷新"}</button></div></header>
+        <section className="vp-rule-strip"><b>ICPC 规则</b><span>{pollSeconds} 秒自动更新</span><span>最后 1 小时封榜</span><span>WA +20 分钟</span><span>金/银/铜 10%/20%/30%</span></section>
+        {contest.startedAt && contest.sourceContests?.length ? <section className="contest-sources"><span>来源</span>{contest.sourceContests.map((source) => <a key={source.contestId} href={source.url} target="_blank" rel="noreferrer">CF {source.contestId} · {source.problemCount} 题 · 均分 {source.averageRating} ↗</a>)}</section> : null}
+        {contest.standings?.sourceBoards?.length ? <div className="combined-board-sources">{contest.standings.sourceBoards.map((source) => <span key={source.contestId}><b>CF {source.contestId}</b> · {source.selectedProblems.join("/")} · {source.sampledTeams} 队</span>)}</div> : null}
+        <div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者 / 原队伍</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{visibleRows.map((row) => <div className={`standings-row${row.mine ? " mine" : ""}${row.medal ? ` medal-${row.medal}` : ""}`} key={row.id}><strong>{row.rank}</strong><span className="standing-party"><b>{row.handle}</b><small>{row.medal ? `${medalText[row.medal]} · ` : ""}{row.mine ? "当前 VP" : `原比赛${row.sourceCount && row.sourceCount > 1 ? ` · 合并 ${row.sourceCount} 场` : ""}`}</small></span><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.pendingAttempts ? "pending" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.pendingAttempts ? `?${state.pendingAttempts}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div>
+        {!visibleRows.length ? <div className="vp-tab-empty"><b>没有匹配的队伍</b><span>清空搜索或关闭“只看我的队伍”</span></div> : null}
+      </section> : null}
+
+      {roomTab === "submissions" ? <section className="panel vp-room-panel" role="tabpanel">
+        <header className="vp-tab-heading"><div><h2>队伍提交记录</h2><p>仅显示本场开始后、当前题目集内的提交</p></div><div className="vp-submission-tools">{teamHandles.length > 1 ? <select value={submissionHandle} onChange={(event) => setSubmissionHandle(event.target.value)}><option value="all">全部队员</option>{teamHandles.map((handle) => <option value={handle} key={handle}>{handle}</option>)}</select> : <span>{teamHandles[0]}</span>}<button type="button" onClick={() => void syncStandings(false)} disabled={!contest.startedAt || status === "syncing"}>{status === "syncing" ? "同步中…" : "同步提交"}</button></div></header>
+        <div className="vp-submission-list">
+          <div className="vp-submission-head"><span>比赛时间</span><span>队员</span><span>题目</span><span>结果</span><span>语言</span><span>用时 / 内存</span></div>
+          {visibleSubmissions.map((submission) => <Link className="vp-submission-row" href={`/problem/${submission.contestId}${submission.index}?vp=${encodeURIComponent(contest.id)}`} key={`${submission.handle}-${submission.id}`}><time>{relativeSubmissionTime(submission.createdAt, contest.startedAt)}</time><b>{submission.handle}</b><span><strong>{contest.problems.find((problem) => problem.contestId === submission.contestId && problem.index === submission.index)?.slot ?? submission.index}</strong>{submission.title}</span><em className={submission.verdict === "OK" ? "accepted" : submission.verdict === "TESTING" ? "pending" : "rejected"}>{verdictLabel(submission.verdict)}</em><span>{submission.language}</span><small>{submission.timeMs} ms · {(submission.memoryBytes / 1024 / 1024).toFixed(1)} MB</small></Link>)}
+        </div>
+        {!contest.startedAt ? <div className="vp-tab-empty"><b>比赛尚未开始</b><span>开始比赛后会自动同步队伍提交</span></div> : !visibleSubmissions.length ? <div className="vp-tab-empty"><b>还没有本场提交</b><span>从“题目”标签进入题目并提交，记录会自动出现在这里</span><button type="button" onClick={() => setRoomTab("problems")}>去做题 →</button></div> : null}
+      </section> : null}
     </AppShell>;
   }
 

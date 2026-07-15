@@ -190,7 +190,9 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(page, /ShallowDream2/);
   assert.match(page, /实时榜单/);
   assert.match(page, /思维题占比/);
-  assert.match(page, /站内做题/);
+  assert.match(page, /题目列表/);
+  assert.match(page, /队伍提交记录/);
+  assert.match(page, /fetchTeamSubmissions/);
   assert.match(page, /最后 1 小时封榜/);
   assert.match(page, /总罚时/);
   assert.match(page, /总用时/);
@@ -198,10 +200,13 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(page, /vp-final-result/);
   assert.match(page, /pollAfterSeconds/);
   assert.match(page, /多场组合/);
-  assert.match(page, /来源参考/);
+  assert.match(page, /vp-room-tabs/);
+  assert.match(page, /只看我的队伍/);
+  assert.match(page, /relativeSubmissionTime/);
   assert.match(detail, /VP · Problem/);
   assert.match(detail, /提交本题（打开 CF）/);
   assert.match(detail, /返回实时榜单/);
+  assert.match(detail, /或直接粘贴代码/);
   assert.match(backendScoring, /teams \* 0\.1/);
   assert.match(backendScoring, /teams \* 0\.2/);
   assert.match(backendScoring, /teams \* 0\.3/);

@@ -28,24 +28,78 @@ type ScoreboardPayload = {
 type MyAttempt = { wrong: number; solvedAt?: number };
 type ArchiveSubmission = { id: string; slot: string; verdict: "WA" | "AC"; atSeconds: number };
 type ArchiveRoomTab = "problems" | "standings" | "submissions";
-type Session = { contestId: string; startedAt?: number; reveal: boolean; group: string; myTeam: string; attempts: Record<string, MyAttempt>; submissions?: ArchiveSubmission[] };
+type VpMedal = "gold" | "silver" | "bronze" | null;
+type ArchiveFinalResult = { rank: number; teamCount: number; solved: number; penalty: number; lastSolvedMinutes: number | null; medal: VpMedal };
+type Session = { id?: string; contestId: string; startedAt?: number; finishedAt?: number; reveal: boolean; group: string; myTeam: string; attempts: Record<string, MyAttempt>; submissions?: ArchiveSubmission[]; finalResult?: ArchiveFinalResult };
+type ArchiveHistoryEntry = Session & { id: string; updatedAt: number };
+type ArchiveHistory = { sessions: ArchiveHistoryEntry[] };
 
 const STORAGE_KEY = "icpc-trainer-archive-vp";
+const HISTORY_KEY = "icpc-trainer-archive-vp-history";
 
 function isSession(value: unknown): value is Session {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<Session>;
   const contest = typeof item.contestId === "string" ? findArchiveContest(item.contestId) : undefined;
   if (!contest || !archiveContestIntegrated(contest) || typeof item.reveal !== "boolean" || typeof item.group !== "string" || item.group.length > 100 || typeof item.myTeam !== "string" || item.myTeam.length > 80 || !item.attempts || typeof item.attempts !== "object") return false;
+  if (item.id !== undefined && !/^[A-Za-z0-9-]{8,100}$/.test(item.id)) return false;
   if (item.startedAt !== undefined && (!Number.isFinite(item.startedAt) || Number(item.startedAt) <= 0)) return false;
+  if (item.finishedAt !== undefined && (!Number.isFinite(item.finishedAt) || Number(item.finishedAt) <= 0)) return false;
+  if (item.finalResult !== undefined) {
+    const result = item.finalResult;
+    if (!Number.isInteger(result?.rank) || result.rank <= 0 || !Number.isInteger(result.teamCount) || result.teamCount <= 0 || !Number.isInteger(result.solved) || result.solved < 0 || !Number.isInteger(result.penalty) || result.penalty < 0 || (result.lastSolvedMinutes !== null && (!Number.isInteger(result.lastSolvedMinutes) || result.lastSolvedMinutes < 0)) || ![null, "gold", "silver", "bronze"].includes(result.medal)) return false;
+  }
   if (item.submissions !== undefined && (!Array.isArray(item.submissions) || item.submissions.length > 500 || !item.submissions.every((submission) => typeof submission?.id === "string" && /^[A-Z]$/.test(submission.slot) && ["WA", "AC"].includes(submission.verdict) && Number.isFinite(submission.atSeconds) && submission.atSeconds >= 0))) return false;
   return Object.entries(item.attempts).length <= 26 && Object.entries(item.attempts).every(([slot, attempt]) => /^[A-Z]$/.test(slot) && Number.isInteger(attempt?.wrong) && attempt.wrong >= 0 && attempt.wrong <= 100 && (attempt.solvedAt === undefined || Number.isFinite(attempt.solvedAt)));
+}
+
+function isArchiveHistory(value: unknown): value is ArchiveHistory {
+  if (!value || typeof value !== "object") return false;
+  const history = value as Partial<ArchiveHistory>;
+  return Array.isArray(history.sessions) && history.sessions.length <= 30 && history.sessions.every((session) => isSession(session) && typeof session.id === "string" && Number.isFinite(session.updatedAt) && session.updatedAt > 0);
+}
+
+function sessionId(contestId: string) {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") return `archive-${crypto.randomUUID()}`;
+  return `archive-${contestId}-${Date.now()}`;
+}
+
+function normalizeSession(session: Session): Session & { id: string } {
+  return { ...session, id: session.id || sessionId(session.contestId) };
+}
+
+function newSession(contestId: string): Session & { id: string } {
+  return { id: sessionId(contestId), contestId, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {}, submissions: [] };
+}
+
+function mergeHistory(...sources: ArchiveHistory[]): ArchiveHistory {
+  const rows = new Map<string, ArchiveHistoryEntry>();
+  for (const source of sources) for (const row of source.sessions) {
+    const current = rows.get(row.id);
+    if (!current || row.updatedAt >= current.updatedAt) rows.set(row.id, row);
+  }
+  return { sessions: [...rows.values()].sort((left, right) => right.updatedAt - left.updatedAt).slice(0, 30) };
 }
 
 function clock(seconds: number) {
   const value = Math.max(0, Math.floor(seconds));
   return `${String(Math.floor(value / 3600)).padStart(2, "0")}:${String(Math.floor(value % 3600 / 60)).padStart(2, "0")}:${String(value % 60).padStart(2, "0")}`;
 }
+
+function usedTimeLabel(minutes: number | null) {
+  if (minutes === null) return "—";
+  return `${Math.floor(minutes / 60)}:${String(minutes % 60).padStart(2, "0")}`;
+}
+
+function medalForRank(rank: number, teamCount: number): VpMedal {
+  if (!rank || !teamCount) return null;
+  if (rank <= Math.max(1, Math.ceil(teamCount * .1))) return "gold";
+  if (rank <= Math.max(1, Math.ceil(teamCount * .3))) return "silver";
+  if (rank <= Math.max(1, Math.ceil(teamCount * .6))) return "bronze";
+  return null;
+}
+
+const medalText: Record<Exclude<VpMedal, null>, string> = { gold: "金奖", silver: "银奖", bronze: "铜奖" };
 
 export default function ArchiveVpPage() {
   const [year, setYear] = useState<2024 | 2025 | 2026>(2026);
@@ -61,41 +115,67 @@ export default function ArchiveVpPage() {
   const [prewarm, setPrewarm] = useState<ArchivePrewarmProgress | null>(null);
   const [prewarmError, setPrewarmError] = useState("");
   const [platformSubmissions, setPlatformSubmissions] = useState<PlatformSubmission[]>([]);
+  const [history, setHistory] = useState<ArchiveHistory>({ sessions: [] });
   const scoreboardRequest = useRef<AbortController | null>(null);
 
   const prewarmContestId = session?.contestId || "";
+  const persistHistory = useCallback((nextSession: Session) => {
+    const normalized = normalizeSession(nextSession);
+    setHistory((current) => {
+      const next = mergeHistory(current, { sessions: [{ ...normalized, updatedAt: Date.now() }] });
+      void savePersistentJson("archive-vp-history", HISTORY_KEY, next);
+      return next;
+    });
+    return normalized;
+  }, []);
+
+  const saveSession = useCallback((next: Session | null) => {
+    if (next) {
+      const normalized = persistHistory(next);
+      setSession(normalized);
+      void savePersistentJson("archive-vp", STORAGE_KEY, normalized).then((savedOk) => { if (!savedOk) setMessage("本场补题进度未能持久保存"); });
+    } else {
+      setSession(null);
+      void clearPersistentJson("archive-vp", STORAGE_KEY);
+    }
+  }, [persistHistory]);
+
   useEffect(() => {
     setNow(Date.now());
-    const saved = readStoredJson<Session | null>(STORAGE_KEY, null, (value): value is Session | null => value === null || isSession(value));
-    const requestedId = new URLSearchParams(window.location.search).get("contest");
-    const requestedContest = requestedId ? findArchiveContest(requestedId) : undefined;
-    if (requestedContest && archiveContestIntegrated(requestedContest)) {
-      const next: Session = { contestId: requestedContest.id, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {}, submissions: [] };
-      setSession(next);
-      void savePersistentJson("archive-vp", STORAGE_KEY, next).then((savedOk) => { if (!savedOk) setMessage("本场补题进度未能持久保存"); });
-      window.history.replaceState({}, "", window.location.pathname);
-    } else {
-      if (saved) setSession(saved);
-      void loadPersistentJson<Session | null>("archive-vp", STORAGE_KEY, saved, (value): value is Session | null => value === null || isSession(value)).then((remote) => { if (remote) setSession(remote); });
-    }
-    return () => scoreboardRequest.current?.abort();
+    let active = true;
+    const restore = async () => {
+      const localHistory = readStoredJson<ArchiveHistory>(HISTORY_KEY, { sessions: [] }, isArchiveHistory);
+      const localSession = readStoredJson<Session | null>(STORAGE_KEY, null, (value): value is Session | null => value === null || isSession(value));
+      const requestedId = new URLSearchParams(window.location.search).get("contest");
+      const requestedContest = requestedId ? findArchiveContest(requestedId) : undefined;
+      const [remoteHistory, remoteSession] = await Promise.all([
+        loadPersistentJson<ArchiveHistory>("archive-vp-history", HISTORY_KEY, localHistory, isArchiveHistory),
+        requestedContest ? Promise.resolve(localSession) : loadPersistentJson<Session | null>("archive-vp", STORAGE_KEY, localSession, (value): value is Session | null => value === null || isSession(value)),
+      ]);
+      if (!active) return;
+      const remembered = requestedContest ? remoteHistory.sessions.find((item) => item.contestId === requestedContest.id && !item.finalResult) : undefined;
+      const selected = requestedContest && archiveContestIntegrated(requestedContest)
+        ? localSession?.contestId === requestedContest.id ? normalizeSession(localSession) : remembered ? normalizeSession(remembered) : newSession(requestedContest.id)
+        : remoteSession ? normalizeSession(remoteSession) : null;
+      const merged = selected ? mergeHistory(localHistory, remoteHistory, { sessions: [{ ...selected, updatedAt: Date.now() }] }) : mergeHistory(localHistory, remoteHistory);
+      setHistory(merged);
+      setSession(selected);
+      void savePersistentJson("archive-vp-history", HISTORY_KEY, merged);
+      if (selected) void savePersistentJson("archive-vp", STORAGE_KEY, selected);
+      if (requestedContest) window.history.replaceState({}, "", window.location.pathname);
+    };
+    void restore();
+    return () => { active = false; scoreboardRequest.current?.abort(); };
   }, []);
 
   useEffect(() => {
     const receive = (event: Event) => {
       const next = (event as CustomEvent<Session>).detail;
-      if (isSession(next)) setSession(next);
+      if (isSession(next)) saveSession(next);
     };
     window.addEventListener(ARCHIVE_SESSION_EVENT, receive);
     return () => window.removeEventListener(ARCHIVE_SESSION_EVENT, receive);
-  }, []);
-
-  const saveSession = useCallback((next: Session | null) => {
-    setSession(next);
-    if (next) {
-      void savePersistentJson("archive-vp", STORAGE_KEY, next).then((savedOk) => { if (!savedOk) setMessage("本场补题进度未能持久保存"); });
-    } else void clearPersistentJson("archive-vp", STORAGE_KEY);
-  }, []);
+  }, [saveSession]);
 
   const duration = scoreboard?.durationSeconds ?? 5 * 60 * 60;
   const elapsed = session?.startedAt ? Math.min(duration, Math.max(0, Math.floor((now - session.startedAt) / 1000))) : 0;
@@ -246,11 +326,32 @@ export default function ArchiveVpPage() {
     }).reverse();
   }, [platformSubmissions, session]);
   const prewarmBySlot = useMemo(() => new Map((prewarm?.items || []).map((item) => [item.slot, item])), [prewarm]);
+  const mine = combinedRows.find((row) => row.mine);
+  const formalTeamCount = scoreboard?.contest.teamCount || scoreboard?.rows.length || 0;
+  const liveFinalResult = finished && session?.reveal && mine && formalTeamCount ? {
+    rank: mine.rank,
+    teamCount: formalTeamCount,
+    solved: mine.solved,
+    penalty: mine.penalty,
+    lastSolvedMinutes: mine.lastSolvedMinutes,
+    medal: medalForRank(mine.rank, formalTeamCount),
+  } satisfies ArchiveFinalResult : null;
+  const finalResult = session?.finalResult || liveFinalResult;
+
+  useEffect(() => {
+    if (!session?.startedAt || !finished || session.reveal) return;
+    saveSession({ ...session, reveal: true });
+  }, [finished, saveSession, session]);
+
+  useEffect(() => {
+    if (!session || !liveFinalResult || session.finalResult) return;
+    saveSession({ ...session, finishedAt: Date.now(), finalResult: liveFinalResult });
+  }, [liveFinalResult, saveSession, session]);
 
   function chooseContest(contestId: string) {
     const selected = findArchiveContest(contestId);
     if (!selected || !archiveContestIntegrated(selected)) return;
-    saveSession({ contestId, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {}, submissions: [] });
+    saveSession(newSession(contestId));
     setRoomTab("problems");
     setScoreboard(null);
   }
@@ -273,10 +374,14 @@ export default function ArchiveVpPage() {
       </article>;
     })}</section>
     {!filteredContests.length ? <p className="archive-empty">当前筛选下没有赛事，请更换年份、类型或搜索词。</p> : null}
+    {history.sessions.length ? <section className="panel archive-vp-history"><header><div><h2>我的历届 VP</h2><p>进度、提交与最终成绩均已保存，可跨设备继续。</p></div><strong>{history.sessions.length} 场</strong></header><div>{history.sessions.map((entry) => {
+      const contest = findArchiveContest(entry.contestId);
+      const solved = entry.finalResult?.solved ?? Object.values(entry.attempts).filter((attempt) => attempt.solvedAt !== undefined).length;
+      return <article key={entry.id}><span className={entry.finalResult ? "finished" : entry.startedAt ? "running" : "ready"}>{entry.finalResult ? entry.finalResult.medal ? medalText[entry.finalResult.medal] : "已完成" : entry.startedAt ? "进行中" : "未开始"}</span><div><b>{contest?.name || entry.contestId}</b><small>{entry.startedAt ? new Date(entry.startedAt).toLocaleString("zh-CN") : "赛前准备"} · {solved} 题</small></div>{entry.finalResult ? <em>第 {entry.finalResult.rank} 名 · {entry.finalResult.penalty} 罚时</em> : <em>{Object.keys(entry.attempts).length ? "已有作答" : "等待开赛"}</em>}<button type="button" onClick={() => saveSession(entry)}>{entry.finalResult ? "查看结果" : "继续 VP"} →</button></article>;
+    })}</div></section> : null}
   </AppShell>;
 
   const contest = findArchiveContest(session.contestId);
-  const mine = combinedRows.find((row) => row.mine);
   const remaining = Math.max(0, duration - elapsed);
   const groupOptions = Object.entries(scoreboard?.contest.groups || {});
   const progress = Math.min(100, elapsed / Math.max(1, duration) * 100);
@@ -294,6 +399,7 @@ export default function ArchiveVpPage() {
       {session.reveal ? <button className="button button-ghost" onClick={() => saveSession({ ...session, reveal: false })}>恢复封榜视图</button> : null}
       <span className={status === "error" ? "form-error" : ""}>{message}</span>
     </section>
+    {finished && finalResult ? <section className={`vp-final-result archive-final-result medal-${finalResult.medal || "none"}`}><div><span>{finalResult.medal ? medalText[finalResult.medal] : "本场完成"}</span><h2>第 {finalResult.rank} 名</h2><p>按 {finalResult.teamCount} 支正式队伍计算</p></div><dl><div><dt>解题</dt><dd>{finalResult.solved}</dd></div><div><dt>总罚时</dt><dd>{finalResult.penalty}</dd></div><div><dt>总用时</dt><dd>{usedTimeLabel(finalResult.lastSolvedMinutes)}</dd></div></dl><small>比赛结束后自动揭榜；金奖前 10%，银奖随后 20%，铜奖随后 30%，同分并列同奖。</small></section> : null}
     <section className={`archive-freeze-state ${scoreboard?.frozen ? "active" : ""}`}><b>{scoreboard?.frozen ? "榜单已进入原场封榜时段" : "榜单按原场时间推进"}</b><span>{scoreboard?.frozen ? "封榜后的提交显示为待定，不提前泄露结果；比赛结束后可手动揭榜。" : `当前重放至 ${clock(elapsed)}，下一次自动同步不超过 10 秒。`}</span></section>
     {prewarm ? <section className={`archive-prewarm${prewarm.status === "ready" ? " ready" : ""}`}><div><b>{prewarm.status === "ready" ? "整场题面已就绪" : "正在准备整场题面"}</b><span>{prewarm.readyOriginal}/{prewarm.total} 原题 · {prewarm.readyChinese}/{prewarm.total} 中文 · {prewarm.officialChinese} 题官方中文</span></div><strong>{prewarm.progress}%</strong><i><span style={{ width: `${prewarm.progress}%` }} /></i></section> : prewarmError ? <section className="archive-prewarm error"><div><b>题面预热稍后重试</b><span>{prewarmError}</span></div></section> : null}
 

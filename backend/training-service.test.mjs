@@ -54,6 +54,13 @@ test("records deliberate-practice outcomes and accepts product feedback", async 
     assert.equal(loadPlanResponse.status, 200);
     assert.deepEqual((await loadPlanResponse.json()).value, sprintPlan);
 
+    const historyResponse = await fetch(`${baseUrl}/state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId, key: "archive-vp-history", value: { sessions: [] } }),
+    });
+    assert.equal(historyResponse.status, 200);
+
     const feedbackResponse = await fetch(`${baseUrl}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

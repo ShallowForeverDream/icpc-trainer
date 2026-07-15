@@ -305,6 +305,14 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(page, /ArchiveSubmission/);
   assert.match(page, /正在准备整场题面/);
   assert.match(page, /prewarmBySlot/);
+  assert.match(page, /medalForRank/);
+  assert.match(page, /比赛结束后自动揭榜/);
+  assert.match(page, /总罚时/);
+  assert.match(page, /总用时/);
+  assert.match(page, /finishedAt/);
+  assert.match(page, /archive-vp-history/);
+  assert.match(page, /我的历届 VP/);
+  assert.match(page, /继续 VP/);
   assert.match(page, /题面与提交已接入/);
   assert.doesNotMatch(page, />\+ WA</);
   assert.doesNotMatch(page, />标记 AC</);

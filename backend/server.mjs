@@ -457,7 +457,7 @@ function requestOwners(request, clientIdValue, { allowGuest = false } = {}) {
 
 function personalStateKey(value) {
   const key = String(value || "").trim();
-  if (["preferences", "dashboard", "favorites", "active-vp", "archive-vp", "shenyang-sprint"].includes(key)) return key;
+  if (["preferences", "dashboard", "favorites", "active-vp", "archive-vp", "archive-vp-history", "shenyang-sprint"].includes(key)) return key;
   if (/^problem:\d{1,7}[A-Z][0-9]?$/.test(key)) return key;
   throw new HttpError(400, "个人数据类型无效");
 }

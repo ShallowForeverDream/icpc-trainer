@@ -404,6 +404,9 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(problemPage, /提交代码/);
   assert.match(problemPage, /或直接粘贴代码/);
   assert.match(problemPage, /请选择代码文件或直接粘贴代码/);
+  assert.match(problemPage, /archive-draft:/);
+  assert.match(problemPage, /loadPersistentJson/);
+  assert.match(problemPage, /草稿自动保存/);
   assert.match(problemPage, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
   assert.match(problemPage, /ArchiveSubmission/);
   assert.match(problemPage, /提交后自动更新/);

@@ -61,6 +61,17 @@ test("records deliberate-practice outcomes and accepts product feedback", async 
     });
     assert.equal(historyResponse.status, 200);
 
+    const archiveDraft = { sourceCode: "int main() { return 0; }", languageValue: "C++20", fileName: "main.cpp" };
+    const saveDraftResponse = await fetch(`${baseUrl}/state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId, key: "archive-draft:2025-shenyang:A", value: archiveDraft }),
+    });
+    assert.equal(saveDraftResponse.status, 200);
+    const loadDraftResponse = await fetch(`${baseUrl}/state?clientId=${clientId}&key=archive-draft%3A2025-shenyang%3AA`);
+    assert.equal(loadDraftResponse.status, 200);
+    assert.deepEqual((await loadDraftResponse.json()).value, archiveDraft);
+
     const feedbackResponse = await fetch(`${baseUrl}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

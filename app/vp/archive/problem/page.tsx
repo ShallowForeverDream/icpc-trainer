@@ -17,6 +17,7 @@ import {
 import { readAuth } from "../../../lib/auth-client";
 import { ARCHIVE_SESSION_EVENT } from "../../../lib/archive-vp-session";
 import { SUBMIT_EXTENSION_LABEL, SUBMIT_EXTENSION_VERSION } from "../../../lib/extension-config";
+import { loadPersistentJson, savePersistentJson } from "../../../lib/persistent-state";
 import { createSubmissionRequestId, recordPlatformSubmission } from "../../../lib/platform-submissions";
 import { readStoredJson } from "../../../lib/storage";
 
@@ -47,6 +48,24 @@ const SUBMIT_LANGUAGES: SubmitLanguage[] = [
   { value: "Kotlin", label: "Kotlin", extensions: ["kt", "kts"] },
   { value: "Rust", label: "Rust", extensions: ["rs"] },
 ];
+const ARCHIVE_INITIAL_CODE = `#include <bits/stdc++.h>
+using namespace std;
+
+int main() {
+    ios::sync_with_stdio(false);
+    cin.tie(nullptr);
+
+    return 0;
+}`;
+type ArchiveDraft = { sourceCode: string; languageValue: string; fileName: string };
+
+function isArchiveDraft(value: unknown): value is ArchiveDraft {
+  if (!value || typeof value !== "object") return false;
+  const draft = value as Partial<ArchiveDraft>;
+  return typeof draft.sourceCode === "string" && draft.sourceCode.length <= 500_000
+    && typeof draft.languageValue === "string" && SUBMIT_LANGUAGES.some((language) => language.value === draft.languageValue)
+    && typeof draft.fileName === "string" && draft.fileName.length <= 180;
+}
 
 function isArchiveSession(value: unknown): value is ArchiveSession {
   if (!value || typeof value !== "object") return false;
@@ -232,12 +251,38 @@ function ArchiveStatementView({ statement, language }: { statement: ArchiveExtra
 function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest: ArchiveContest; currentSlot: string; slots: string[]; onClose: () => void }) {
   const [selectedSlot, setSelectedSlot] = useState(currentSlot);
   const [languageValue, setLanguageValue] = useState("C++20");
-  const [sourceCode, setSourceCode] = useState("");
+  const [sourceCode, setSourceCode] = useState(ARCHIVE_INITIAL_CODE);
   const [fileName, setFileName] = useState("");
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [extensionReady, setExtensionReady] = useState(false);
+  const [draftLoadedFor, setDraftLoadedFor] = useState("");
   const requestIdRef = useRef("");
+  const draftStateKey = `archive-draft:${contest.id}:${selectedSlot}`;
+  const draftLocalKey = `icpc-trainer-archive-draft:${contest.id}:${selectedSlot}`;
+
+  useEffect(() => {
+    let cancelled = false;
+    setDraftLoadedFor("");
+    setStatus("");
+    setError("");
+    void loadPersistentJson<ArchiveDraft>(draftStateKey, draftLocalKey, { sourceCode: ARCHIVE_INITIAL_CODE, languageValue: "C++20", fileName: "" }, isArchiveDraft).then((draft) => {
+      if (cancelled) return;
+      setSourceCode(draft.sourceCode || ARCHIVE_INITIAL_CODE);
+      setLanguageValue(draft.languageValue);
+      setFileName(draft.fileName);
+      setDraftLoadedFor(draftStateKey);
+    });
+    return () => { cancelled = true; };
+  }, [draftLocalKey, draftStateKey]);
+
+  useEffect(() => {
+    if (draftLoadedFor !== draftStateKey) return;
+    const timer = window.setTimeout(() => {
+      void savePersistentJson(draftStateKey, draftLocalKey, { sourceCode, languageValue, fileName });
+    }, 700);
+    return () => window.clearTimeout(timer);
+  }, [draftLoadedFor, draftLocalKey, draftStateKey, fileName, languageValue, sourceCode]);
 
   useEffect(() => {
     const listener = (event: MessageEvent) => {
@@ -262,11 +307,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
     const file = event.target.files?.[0];
     setError("");
     setStatus("");
-    if (!file) {
-      setFileName("");
-      setSourceCode("");
-      return;
-    }
+    if (!file) return;
     if (file.size > 500_000) {
       setError("代码文件不能超过 500 KB");
       event.target.value = "";
@@ -327,7 +368,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       setStatus(`正在后台连接${judgeName}并提交…`);
       return;
     }
-    setStatus(`需要安装并重新加载 ${SUBMIT_EXTENSION_LABEL} 提交扩展；代码已复制，不会丢失。`);
+    setStatus(`需要安装并重新加载 ${SUBMIT_EXTENSION_LABEL} 提交扩展；代码已保存到平台草稿，不会丢失。`);
   }
 
   const currentProblem = archivePracticeProblem(contest, selectedSlot);
@@ -351,7 +392,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
-      <footer><span>{extensionReady ? `${SUBMIT_EXTENSION_LABEL} 扩展已连接 · 凭据只留在浏览器` : <>未检测到 {SUBMIT_EXTENSION_LABEL} 扩展<Link href="/extension">安装并检查提交扩展 →</Link></>}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
+      <footer><span>{extensionReady ? `${SUBMIT_EXTENSION_LABEL} 已连接 · 草稿自动保存` : <>草稿已自动保存<Link href="/extension">安装并检查提交扩展 →</Link></>}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
     </section>
   </div>;
 }

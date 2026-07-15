@@ -296,6 +296,7 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(page, /vp-final-result/);
   assert.match(page, /pollAfterSeconds/);
   assert.match(page, /多场组合/);
+  assert.match(page, /按各原场同百分位队伍配对，只统计已选题目/);
   assert.match(page, /vp-room-tabs/);
   assert.match(page, /只看我的队伍/);
   assert.match(page, /relativeSubmissionTime/);
@@ -308,6 +309,8 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(backendScoring, /teams \* 0\.2/);
   assert.match(backendScoring, /teams \* 0\.3/);
   assert.match(backendScoring, /lastSolvedMinutes/);
+  assert.match(backendScoring, /组合参考/);
+  assert.match(backendScoring, /percentileIndex/);
   assert.match(catalog, /个性化推荐/);
   assert.match(catalog, /目标 Rating/);
   assert.match(catalog, /selectedTags/);
@@ -578,8 +581,9 @@ test("ships the 2024 Shenyang regional as instant official bilingual statements"
 });
 
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {
-  const [backend, persistence, persistentClient, statements, archiveClient, archiveCatalog, archiveHtmlParser, compose, dockerfile, nginx, browserApi, worker, updater] = await Promise.all([
+  const [backend, backendScoring, persistence, persistentClient, statements, archiveClient, archiveCatalog, archiveHtmlParser, compose, dockerfile, nginx, browserApi, worker, updater] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
+    readFile(new URL("backend/vp-scoring.mjs", root), "utf8"),
     readFile(new URL("backend/persistence.mjs", root), "utf8"),
     readFile(new URL("app/lib/persistent-state.ts", root), "utf8"),
     readFile(new URL("backend/statements.mjs", root), "utf8"),
@@ -601,7 +605,7 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(backend, /\/vp\/standings/);
   assert.match(backend, /pickThinkingSet/);
   assert.match(backend, /thinkingCount/);
-  assert.match(backend, /pendingAttempts/);
+  assert.match(backendScoring, /pendingAttempts/);
   assert.match(backend, /contest\.standings/);
   assert.match(backend, /buildOriginalVpRows/);
   assert.match(backend, /CF_STANDINGS_CACHE_DIR/);

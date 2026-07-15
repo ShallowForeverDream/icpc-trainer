@@ -3,7 +3,7 @@ import type { CodeforcesContestStandings, CodeforcesParty, CodeforcesSubmission 
 export type VpStandingProblem = { contestId: number; index: string; slot: string };
 export type VpStandingState = { solved: boolean; wrongAttempts: number; pendingAttempts: number; solvedMinutes: number | null; penalty: number };
 export type VpMedal = "gold" | "silver" | "bronze" | null;
-export type VpStandingRow = { id: string; handle: string; solved: number; penalty: number; lastSolvedMinutes: number | null; problems: Record<string, VpStandingState>; sourceCount: number; sourceContests: number[]; origin: "original" | "mine"; mine: boolean; rank?: number; medal?: VpMedal };
+export type VpStandingRow = { id: string; handle: string; solved: number; penalty: number; lastSolvedMinutes: number | null; problems: Record<string, VpStandingState>; sourceCount: number; sourceContests: number[]; sourceTeams?: Array<{ contestId: number; handle: string }>; origin: "original" | "mine"; mine: boolean; rank?: number; medal?: VpMedal };
 
 export function vpProblemKey(problem: Pick<VpStandingProblem, "contestId" | "index">) {
   return `${problem.contestId}${problem.index}`;
@@ -46,39 +46,61 @@ function originalPartyIdentity(party: CodeforcesParty) {
   return { id: `original:${identity}`, handle: party.teamName || handles.join(" + ") };
 }
 
-export function buildOriginalVpRows(problems: VpStandingProblem[], sourceBoards: CodeforcesContestStandings[], elapsedSeconds: number) {
-  const combined = new Map<string, VpStandingRow & { sourceSet: Set<number> }>();
-  for (const source of sourceBoards) {
-    const selected = problems.filter((problem) => problem.contestId === source.contest.id);
-    if (!selected.length) continue;
-    const positions = new Map(source.problems.map((problem, index) => [problem.index, index]));
-    for (const sourceRow of source.rows) {
-      const identity = originalPartyIdentity(sourceRow.party);
-      if (!identity) continue;
-      let row = combined.get(identity.id);
-      if (!row) {
-        row = { ...identity, solved: 0, penalty: 0, lastSolvedMinutes: null, problems: emptyVpStates(problems), sourceCount: 0, sourceContests: [], sourceSet: new Set(), origin: "original", mine: false };
-        combined.set(identity.id, row);
-      }
-      row.sourceSet.add(source.contest.id);
-      for (const problem of selected) {
-        const position = positions.get(problem.index);
-        const result = position === undefined ? undefined : sourceRow.problemResults[position];
-        if (!result) continue;
-        const solvedAt = Number(result.bestSubmissionTimeSeconds);
-        const rejected = Math.max(0, Number(result.rejectedAttemptCount) || 0);
-        const state = row.problems[vpProblemKey(problem)];
-        if (Number(result.points) > 0 && Number.isFinite(solvedAt) && solvedAt >= 0 && solvedAt <= elapsedSeconds) {
-          state.solved = true;
-          state.wrongAttempts = rejected;
-          state.solvedMinutes = Math.floor(solvedAt / 60);
-          state.penalty = state.solvedMinutes + rejected * 20;
-        } else if (elapsedSeconds >= Number(source.contest.durationSeconds || 0)) state.wrongAttempts = rejected;
-      }
+function replaySourceBoard(problems: VpStandingProblem[], source: CodeforcesContestStandings, elapsedSeconds: number) {
+  const selected = problems.filter((problem) => problem.contestId === source.contest.id);
+  if (!selected.length) return null;
+  const positions = new Map(source.problems.map((problem, index) => [problem.index, index]));
+  const rows: VpStandingRow[] = [];
+  for (const sourceRow of source.rows) {
+    const identity = originalPartyIdentity(sourceRow.party);
+    if (!identity) continue;
+    const states = emptyVpStates(problems);
+    for (const problem of selected) {
+      const position = positions.get(problem.index);
+      const result = position === undefined ? undefined : sourceRow.problemResults[position];
+      if (!result) continue;
+      const solvedAt = Number(result.bestSubmissionTimeSeconds);
+      const rejected = Math.max(0, Number(result.rejectedAttemptCount) || 0);
+      const state = states[vpProblemKey(problem)];
+      if (Number(result.points) > 0 && Number.isFinite(solvedAt) && solvedAt >= 0 && solvedAt <= elapsedSeconds) {
+        state.solved = true;
+        state.wrongAttempts = rejected;
+        state.solvedMinutes = Math.floor(solvedAt / 60);
+        state.penalty = state.solvedMinutes + rejected * 20;
+      } else if (elapsedSeconds >= Number(source.contest.durationSeconds || 0)) state.wrongAttempts = rejected;
     }
+    rows.push({ ...identity, ...summarize(states), problems: states, sourceCount: 1, sourceContests: [source.contest.id], origin: "original", mine: false });
   }
-  return [...combined.values()].map(({ sourceSet, ...row }) => {
-    return { ...row, sourceCount: sourceSet.size, sourceContests: [...sourceSet], ...summarize(row.problems) };
+  rows.sort((left, right) => right.solved - left.solved || left.penalty - right.penalty || (left.lastSolvedMinutes ?? Number.MAX_SAFE_INTEGER) - (right.lastSolvedMinutes ?? Number.MAX_SAFE_INTEGER) || left.handle.localeCompare(right.handle));
+  return { contestId: source.contest.id, selected, rows };
+}
+
+export function buildOriginalVpRows(problems: VpStandingProblem[], sourceBoards: CodeforcesContestStandings[], elapsedSeconds: number) {
+  const replays = sourceBoards.map((source) => replaySourceBoard(problems, source, elapsedSeconds)).filter((source): source is NonNullable<typeof source> => Boolean(source?.rows.length));
+  if (!replays.length) return [];
+  if (replays.length === 1) return replays[0].rows;
+
+  const referenceCount = Math.min(500, ...replays.map((source) => source.rows.length));
+  return Array.from({ length: referenceCount }, (_, index): VpStandingRow => {
+    const states = emptyVpStates(problems);
+    const sourceTeams: Array<{ contestId: number; handle: string }> = [];
+    for (const replay of replays) {
+      const percentileIndex = Math.min(replay.rows.length - 1, Math.floor((index + 0.5) * replay.rows.length / referenceCount));
+      const sourceRow = replay.rows[percentileIndex];
+      sourceTeams.push({ contestId: replay.contestId, handle: sourceRow.handle });
+      for (const problem of replay.selected) states[vpProblemKey(problem)] = { ...sourceRow.problems[vpProblemKey(problem)] };
+    }
+    return {
+      id: `combined:${index + 1}`,
+      handle: `组合参考 #${String(index + 1).padStart(3, "0")}`,
+      ...summarize(states),
+      problems: states,
+      sourceCount: replays.length,
+      sourceContests: replays.map((source) => source.contestId),
+      sourceTeams,
+      origin: "original",
+      mine: false,
+    };
   });
 }
 

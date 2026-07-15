@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildParticipantVpRows, medalCutoffs, medalForRank, rankVpRows } from "./vp-scoring.mjs";
+import { buildOriginalVpRows, buildParticipantVpRows, medalCutoffs, medalForRank, rankVpRows } from "./vp-scoring.mjs";
 
 test("calculates ICPC penalty, freeze cutoffs, ranks, and 10/20/30 percent medals", () => {
   const startedAt = 1_700_000_000_000;
@@ -32,4 +32,51 @@ test("calculates ICPC penalty, freeze cutoffs, ranks, and 10/20/30 percent medal
   const mine = ranked.rows.find((row) => row.mine);
   assert.equal(mine.rank, 10);
   assert.equal(mine.medal, "gold");
+});
+
+test("pairs same-percentile teams into a full multi-contest reference board", () => {
+  const problems = [
+    { slot: "A", contestId: 101, index: "A" },
+    { slot: "B", contestId: 101, index: "B" },
+    { slot: "C", contestId: 202, index: "A" },
+    { slot: "D", contestId: 202, index: "C" },
+  ];
+  const party = (handle) => ({ participantType: "CONTESTANT", members: [{ handle }] });
+  const result = (points, seconds, rejected = 0) => ({ points, bestSubmissionTimeSeconds: seconds, rejectedAttemptCount: rejected });
+  const sourceBoards = [
+    {
+      contest: { id: 101, durationSeconds: 18_000 },
+      problems: [{ index: "A" }, { index: "B" }, { index: "C" }],
+      rows: [
+        { party: party("alpha"), problemResults: [result(1, 300), result(1, 900, 1), result(1, 1200)] },
+        { party: party("beta"), problemResults: [result(1, 1000), result(0, 0, 2), result(1, 800)] },
+        { party: party("gamma"), problemResults: [result(0, 0, 1), result(0, 0), result(1, 700)] },
+      ],
+    },
+    {
+      contest: { id: 202, durationSeconds: 18_000 },
+      problems: [{ index: "A" }, { index: "B" }, { index: "C" }],
+      rows: [
+        { party: party("delta"), problemResults: [result(1, 240), result(1, 200), result(1, 1200)] },
+        { party: party("epsilon"), problemResults: [result(1, 700, 1), result(1, 100), result(0, 0, 3)] },
+      ],
+    },
+  ];
+
+  const rows = buildOriginalVpRows(problems, sourceBoards, 18_000);
+  assert.equal(rows.length, 2);
+  assert.equal(rows[0].handle, "组合参考 #001");
+  assert.equal(rows[0].sourceCount, 2);
+  assert.deepEqual(rows[0].sourceContests, [101, 202]);
+  assert.equal(rows[0].solved, 4);
+  assert.equal(rows[0].problems["101A"].solved, true);
+  assert.equal(rows[0].problems["101B"].solved, true);
+  assert.equal(rows[0].problems["202A"].solved, true);
+  assert.equal(rows[0].problems["202C"].solved, true);
+  assert.equal(rows.some((row) => row.handle === "alpha" || row.handle === "delta"), false);
+
+  const beforeSecondSolve = buildOriginalVpRows(problems.slice(0, 2), sourceBoards.slice(0, 1), 600);
+  assert.equal(beforeSecondSolve[0].handle, "alpha");
+  assert.equal(beforeSecondSolve[0].solved, 1);
+  assert.equal(beforeSecondSolve[0].problems["101B"].solved, false);
 });

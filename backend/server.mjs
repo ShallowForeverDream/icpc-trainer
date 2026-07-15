@@ -6,7 +6,7 @@ import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } fr
 import { createArchiveScoreboardHandler } from "./archive-scoreboards.mjs";
 import { createStatementHandler } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
-import { buildParticipantVpRows, rankVpRows, summarizeVpStates } from "./vp-scoring.mjs";
+import { buildOriginalVpRows, buildParticipantVpRows, rankVpRows } from "./vp-scoring.mjs";
 import {
   finishVpSession,
   createPlatformSubmission,
@@ -551,58 +551,6 @@ async function generateVp(body, ownerKey) {
   const contest = { id: `vp-${randomUUID()}`, handle, participants, mode, seed, durationMinutes, targetRating, thinkingRatio, thinkingCount: selected.filter(isThinkingProblem).length, sourceContestId, sourceContests, excludedSolved: solved.size, createdAt: new Date().toISOString(), problems: selected.map((problem, index) => ({ slot: String.fromCharCode(65 + index), ...publicProblem(problem), thinking: isThinkingProblem(problem) })) };
   persistVpSession(ownerKey, contest);
   return contest;
-}
-
-function vpProblemKey(problem) {
-  return `${problem.contestId}${problem.index}`;
-}
-
-function emptyVpStates(problems) {
-  return Object.fromEntries(problems.map((problem) => [vpProblemKey(problem), { solved: false, wrongAttempts: 0, pendingAttempts: 0, solvedMinutes: null, penalty: 0 }]));
-}
-
-function originalPartyIdentity(party) {
-  if (party?.participantType && party.participantType !== "CONTESTANT") return null;
-  const handles = (party?.members || []).map((member) => String(member?.handle || "").trim()).filter(Boolean);
-  if (!handles.length) return null;
-  const identity = [...handles].map((handle) => handle.toLowerCase()).sort().join("+");
-  return { id: `original:${identity}`, handle: String(party.teamName || handles.join(" + ")) };
-}
-
-function buildOriginalVpRows(problems, sourceBoards, elapsedSeconds) {
-  const combined = new Map();
-  for (const source of sourceBoards) {
-    const selected = problems.filter((problem) => problem.contestId === source.contest.id);
-    if (!selected.length) continue;
-    const positions = new Map(source.problems.map((problem, index) => [problem.index, index]));
-    for (const sourceRow of source.rows) {
-      const identity = originalPartyIdentity(sourceRow.party);
-      if (!identity) continue;
-      let row = combined.get(identity.id);
-      if (!row) {
-        row = { ...identity, solved: 0, penalty: 0, problems: emptyVpStates(problems), sourceContests: new Set(), origin: "original", mine: false };
-        combined.set(identity.id, row);
-      }
-      row.sourceContests.add(source.contest.id);
-      for (const problem of selected) {
-        const position = positions.get(problem.index);
-        const result = position === undefined ? null : sourceRow.problemResults?.[position];
-        if (!result) continue;
-        const solvedAt = Number(result.bestSubmissionTimeSeconds);
-        const rejected = Math.max(0, Number(result.rejectedAttemptCount) || 0);
-        const state = row.problems[vpProblemKey(problem)];
-        if (Number(result.points) > 0 && Number.isFinite(solvedAt) && solvedAt >= 0 && solvedAt <= elapsedSeconds) {
-          state.solved = true;
-          state.wrongAttempts = rejected;
-          state.solvedMinutes = Math.floor(solvedAt / 60);
-          state.penalty = state.solvedMinutes + rejected * 20;
-        } else if (elapsedSeconds >= Number(source.contest.durationSeconds || 0)) state.wrongAttempts = rejected;
-      }
-    }
-  }
-  return [...combined.values()].map((row) => {
-    return { ...row, sourceCount: row.sourceContests.size, sourceContests: [...row.sourceContests], ...summarizeVpStates(row.problems) };
-  });
 }
 
 async function buildVpStandings(body, ownerKey) {

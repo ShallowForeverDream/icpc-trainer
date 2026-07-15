@@ -136,7 +136,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "1.0.0");
+  assert.equal(manifest.version, "1.1.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -159,6 +159,9 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(bridge, /archiveContestId/);
   assert.match(fill, /archiveContestId/);
   assert.match(background, /archiveContestId/);
+  assert.match(background, /trainerSubmissionResults/);
+  assert.match(bridge, /replayStoredResults/);
+  assert.match(bridge, /\.\.\.result, source: "icpc-trainer-extension", type: "ICPC_TRAINER_SUBMIT_RESULT"/);
 });
 
 test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {

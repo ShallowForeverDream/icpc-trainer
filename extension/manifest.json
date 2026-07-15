@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "icpc-trainer Browser Bridge",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Import statements and securely submit to Codeforces or Universal Cup from icpc-trainer.",
   "permissions": ["storage", "tabs"],
   "background": { "service_worker": "background.js" },

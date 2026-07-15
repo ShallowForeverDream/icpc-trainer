@@ -18,6 +18,17 @@ function validRequestId(value) {
   return typeof value === "string" && /^[A-Za-z0-9-]{8,80}$/.test(value);
 }
 
+let resultQueue = Promise.resolve();
+function rememberTrainerResult(result) {
+  resultQueue = resultQueue.then(async () => {
+    const stored = await chrome.storage.local.get("trainerSubmissionResults");
+    const timestamp = Date.now();
+    const current = Array.isArray(stored.trainerSubmissionResults) ? stored.trainerSubmissionResults : [];
+    const next = [...current.filter((item) => item && timestamp - Number(item.createdAt || 0) < 7 * 24 * 60 * 60 * 1000), { ...result, createdAt: timestamp }].slice(-200);
+    await chrome.storage.local.set({ trainerSubmissionResults: next });
+  }).catch(() => undefined);
+}
+
 async function openJudgeTab(message, sender, sendResponse) {
   const isCodeforces = message.type === "OPEN_CODEFORCES_SUBMIT";
   const validUrl = isCodeforces
@@ -46,7 +57,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "JUDGE_SUBMIT_STATUS") {
     if (!trustedJudgeSender(sender, message.judge) || !validRequestId(message.requestId)
       || !Number.isInteger(message.originTabId) || !["submitted", "judged", "failed", "needs_login"].includes(message.stage)) return;
-    chrome.tabs.sendMessage(message.originTabId, {
+    const result = {
       type: "ICPC_TRAINER_SUBMIT_STATUS",
       requestId: message.requestId,
       ok: ["submitted", "judged"].includes(message.stage),
@@ -58,7 +69,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       slot: typeof message.slot === "string" && /^[A-Z][0-9]?$/.test(message.slot) ? message.slot : undefined,
       verdict: ["AC", "WA"].includes(message.verdict) ? message.verdict : undefined,
       submissionId: Number.isInteger(message.submissionId) ? message.submissionId : undefined,
-    }).catch(() => undefined);
+    };
+    rememberTrainerResult(result);
+    chrome.tabs.sendMessage(message.originTabId, result).catch(() => undefined);
     if (message.stage === "judged" && sender.tab?.id !== undefined) {
       const judgeTabId = sender.tab.id;
       setTimeout(() => chrome.tabs.remove(judgeTabId).catch(() => undefined), 1200);

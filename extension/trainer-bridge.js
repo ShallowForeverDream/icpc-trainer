@@ -11,7 +11,16 @@ function validRequestId(value) {
 }
 
 function postSubmitResult(result) {
-  window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_SUBMIT_RESULT", ...result }, window.location.origin);
+  window.postMessage({ ...result, source: "icpc-trainer-extension", type: "ICPC_TRAINER_SUBMIT_RESULT" }, window.location.origin);
+}
+
+async function replayStoredResults() {
+  const stored = await chrome.storage.local.get("trainerSubmissionResults");
+  const timestamp = Date.now();
+  const results = Array.isArray(stored.trainerSubmissionResults) ? stored.trainerSubmissionResults : [];
+  const recent = results.filter((item) => item && validRequestId(item.requestId) && timestamp - Number(item.createdAt || 0) < 7 * 24 * 60 * 60 * 1000).slice(-200);
+  if (recent.length !== results.length) await chrome.storage.local.set({ trainerSubmissionResults: recent });
+  for (const result of recent) postSubmitResult(result);
 }
 
 chrome.runtime.onMessage.addListener((message) => {
@@ -26,7 +35,8 @@ window.addEventListener("message", async (event) => {
   if (!message || message.source !== "icpc-trainer") return;
 
   if (message.type === "ICPC_TRAINER_PING") {
-    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.0.0" }, window.location.origin);
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.1.0" }, window.location.origin);
+    await replayStoredResults();
     return;
   }
 

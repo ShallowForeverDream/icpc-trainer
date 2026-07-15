@@ -200,9 +200,9 @@ function GymSubmitDialog({ contestId, archiveContestId, currentIndex, problemCou
     const listener = (event: MessageEvent) => {
       if (event.source !== window || event.origin !== window.location.origin || event.data?.source !== "icpc-trainer-extension") return;
       if (event.data.type === "ICPC_TRAINER_PONG") {
-        const current = event.data.version === "1.0.0";
+        const current = event.data.version === "1.1.0";
         setExtensionReady(current);
-        if (!current) setStatus("检测到旧版扩展，请下载 v1.0 并在扩展管理页重新加载");
+        if (!current) setStatus("检测到旧版扩展，请下载 v1.1 并在扩展管理页重新加载");
       }
       if (event.data.type === "ICPC_TRAINER_SUBMIT_RESULT" && event.data.requestId === requestIdRef.current) {
         const stage = event.data.stage as "queued" | "submitted" | "judged" | "failed" | "needs_login";
@@ -257,7 +257,7 @@ function GymSubmitDialog({ contestId, archiveContestId, currentIndex, problemCou
       setStatus("正在后台连接 Codeforces Gym 并提交…");
       return;
     }
-    setStatus("需要安装并重新加载 v1.0 提交扩展；代码已复制，不会丢失。 ");
+    setStatus("需要安装并重新加载 v1.1 提交扩展；代码已复制，不会丢失。 ");
   }
 
   return <div className="archive-submit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -279,7 +279,7 @@ function GymSubmitDialog({ contestId, archiveContestId, currentIndex, problemCou
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
-      <footer><span>{extensionReady ? "v1.0 扩展已连接 · 凭据只留在浏览器" : "未检测到 v1.0 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
+      <footer><span>{extensionReady ? "v1.1 扩展已连接 · 凭据只留在浏览器" : "未检测到 v1.1 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
     </section>
   </div>;
 }
@@ -540,7 +540,7 @@ export default function ProblemDetailPage() {
     if (submitTimeout.current) window.clearTimeout(submitTimeout.current);
     submitTimeout.current = window.setTimeout(() => {
       setSubmitState("missing");
-      setSubmitMessage("未检测到 v1.0 扩展，请安装或在扩展管理页点击重新加载");
+      setSubmitMessage("未检测到 v1.1 扩展，请安装或在扩展管理页点击重新加载");
     }, 1800);
   }, [archiveContest, code, isGym, problem.contestId, problem.index, problem.title, requestedCode]);
 
@@ -609,7 +609,7 @@ export default function ProblemDetailPage() {
             <span className={`statement-status status-${statement?.status || "loading"}`}><i />{status}</span>
           </div>
           {language === "original" ? statement?.originalHtml ? <CachedStatementView statement={statement} language="original" /> : <div className="statement-body statement-loading-card">
-            <div className="statement-loader" /><h2>正在导入原题面</h2><p>这是本题第一次打开。服务器会先尝试 {isGym ? "Codeforces Gym" : "Codeforces 与缓存数据源"}；若服务器访问受限，v1.0 浏览器扩展会读取公开题面并完成导入。</p>
+            <div className="statement-loader" /><h2>正在导入原题面</h2><p>这是本题第一次打开。服务器会先尝试 {isGym ? "Codeforces Gym" : "Codeforces 与缓存数据源"}；若服务器访问受限，v1.1 浏览器扩展会读取公开题面并完成导入。</p>
             {statementError ? <p className="statement-error">{statementError}</p> : null}
             <div className="hero-actions"><button className="button button-primary" onClick={() => void importWithExtension()} disabled={Boolean(statementAction)}>通过扩展重新导入</button><a className="button button-ghost" href={officialProblemUrl} target="_blank" rel="noreferrer">先打开原题完成验证 ↗</a></div>
           </div> : statement?.chineseHtml ? <CachedStatementView statement={statement} language="chinese" /> : importedStatement ? <CuratedChineseStatement statement={importedStatement} /> : <div className="statement-body statement-loading-card">
@@ -633,7 +633,7 @@ export default function ProblemDetailPage() {
         </section> : null}
         <div className="editor-head"><div><span className="active-dot" /> {submitFileName || "main.cpp"}</div><div className="editor-head-actions"><label className="editor-file-button"><input type="file" accept=".cpp,.cc,.cxx,.c,.py,.java,.kt,.kts,.rs,.txt" onChange={(event) => void selectEditorFile(event)} />选择文件</label><select aria-label="编译语言"><option>GNU C++20</option></select></div></div>
         <textarea className="code-editor" value={code} onChange={(event) => { setCode(event.target.value); setSubmitFileName(""); }} spellCheck={false} aria-label="C++ 代码编辑器" />
-        <div className="editor-footer"><div><Link href="/templates">＋ 打开模板库</Link><span>草稿已自动保存</span></div><p className="submit-safety-note">点击后由 v1.0 扩展在后台代理提交；评测站密码与 Cookie 不会上传到平台。</p>{submitMessage ? <p className={submitState === "missing" ? "statement-error" : "submit-progress"} role="status">{submitMessage}</p> : submitState === "empty" ? <p className="statement-error" role="alert">请先填写代码。</p> : null}<button className="submit-button" onClick={sendToExtension} disabled={submitState === "sending"}>{submitState === "sent" ? <><Icon name="check" /> 已提交</> : submitState === "sending" ? <>正在提交…</> : <>直接提交 <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">安装或更新 v1.0 提交扩展 →</a></div>
+        <div className="editor-footer"><div><Link href="/templates">＋ 打开模板库</Link><span>草稿已自动保存</span></div><p className="submit-safety-note">点击后由 v1.1 扩展在后台代理提交；评测站密码与 Cookie 不会上传到平台。</p>{submitMessage ? <p className={submitState === "missing" ? "statement-error" : "submit-progress"} role="status">{submitMessage}</p> : submitState === "empty" ? <p className="statement-error" role="alert">请先填写代码。</p> : null}<button className="submit-button" onClick={sendToExtension} disabled={submitState === "sending"}>{submitState === "sent" ? <><Icon name="check" /> 已提交</> : submitState === "sending" ? <>正在提交…</> : <>直接提交 <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">安装或更新 v1.1 提交扩展 →</a></div>
       </aside> : null}
     </section>
     {isGym && archiveContest ? <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择文件或粘贴代码，后台代理提交到 Codeforces Gym。</span></div><button type="button" onClick={() => setGymSubmitOpen(true)}>提交代码 →</button></section> : null}

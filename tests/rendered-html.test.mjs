@@ -41,6 +41,39 @@ test("uses a concise white, pink, and violet visual system across the product", 
   assert.match(styles, /\.dashboard-archive-section/);
 });
 
+test("ships a readable contest template catalog and dedicated code reader", async () => {
+  const [catalog, page, detail, styles] = await Promise.all([
+    readFile(new URL("app/templates/data.ts", root), "utf8"),
+    readFile(new URL("app/templates/page.tsx", root), "utf8"),
+    readFile(new URL("app/templates/[slug]/page.tsx", root), "utf8"),
+    readFile(new URL("app/globals.css", root), "utf8"),
+  ]);
+  assert.equal((catalog.match(/^    slug: "/gm) ?? []).length, 12);
+  assert.match(catalog, /BinaryLiftingLCA/);
+  assert.match(catalog, /TarjanSCC/);
+  assert.match(catalog, /ModInt/);
+  assert.match(catalog, /\/\/ BFS 建树/);
+  assert.match(page, /打开模板/);
+  assert.doesNotMatch(page, /template-code-preview/);
+  assert.match(detail, /接口速查/);
+  assert.match(detail, /template-code-line/);
+  assert.match(detail, /复制完整代码/);
+  assert.match(styles, /font:500 15px\/26px var\(--font-geist-mono\)/);
+
+  const catalogResponse = await render("/templates");
+  assert.equal(catalogResponse.status, 200);
+  const catalogHtml = await catalogResponse.text();
+  assert.match(catalogHtml, /份精选模板/);
+  assert.match(catalogHtml, /打开模板/);
+
+  const detailResponse = await render("/templates/dijkstra");
+  assert.equal(detailResponse.status, 200);
+  const detailHtml = await detailResponse.text();
+  assert.match(detailHtml, /非负权最短路/);
+  assert.match(detailHtml, /复制完整代码/);
+  assert.match(detailHtml, /恢复最短路径/);
+});
+
 test("keeps twenty readable offline statement fallback records", async () => {
   const source = await readFile(new URL("app/data/problems.ts", root), "utf8");
   assert.equal((source.match(/\{ code: "CF /g) ?? []).length, 20);

@@ -191,7 +191,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://www.luogu.com.cn/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "1.4.0");
+  assert.equal(manifest.version, "1.4.1");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -305,6 +305,7 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(detail, /autoSubmit: true/);
   assert.match(detail, /返回实时榜单/);
   assert.match(detail, /或直接粘贴代码/);
+  assert.match(await readFile(new URL("app/lib/archive-vp-session.ts", root), "utf8"), /submittedAt/);
   assert.match(backendScoring, /teams \* 0\.1/);
   assert.match(backendScoring, /teams \* 0\.2/);
   assert.match(backendScoring, /teams \* 0\.3/);

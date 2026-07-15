@@ -35,7 +35,7 @@ window.addEventListener("message", async (event) => {
   if (!message || message.source !== "icpc-trainer") return;
 
   if (message.type === "ICPC_TRAINER_PING") {
-    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.4.0" }, window.location.origin);
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.4.1" }, window.location.origin);
     await replayStoredResults();
     return;
   }
@@ -43,9 +43,9 @@ window.addEventListener("message", async (event) => {
   if (message.type === "ICPC_TRAINER_HEALTH_CHECK") {
     try {
       const result = await chrome.runtime.sendMessage({ type: "CHECK_JUDGE_SESSIONS" });
-      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.0", sessions: result?.sessions || {} }, window.location.origin);
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.1", sessions: result?.sessions || {} }, window.location.origin);
     } catch {
-      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.0", sessions: {} }, window.location.origin);
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.1", sessions: {} }, window.location.origin);
     }
     return;
   }

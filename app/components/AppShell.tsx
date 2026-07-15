@@ -42,7 +42,13 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
           judgeSubmissionId: Number.isInteger(data.submissionId) ? data.submissionId : undefined,
         });
         if (["ucup", "codeforces", "luogu"].includes(data.judge) && typeof data.archiveContestId === "string" && typeof data.slot === "string") {
-          void applyArchiveJudgeVerdict({ contestId: data.archiveContestId, slot: data.slot, verdict: data.verdict, requestId: data.requestId });
+          void applyArchiveJudgeVerdict({
+            contestId: data.archiveContestId,
+            slot: data.slot,
+            verdict: data.verdict,
+            requestId: data.requestId,
+            submittedAt: Number.isFinite(data.submittedAt) ? data.submittedAt : undefined,
+          });
         }
       }
     };

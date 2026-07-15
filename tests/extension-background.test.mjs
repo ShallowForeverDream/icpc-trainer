@@ -76,6 +76,8 @@ test("keeps concurrent judge submissions isolated by their background tab", asyn
 
   await dispatch({ type: "JUDGE_SUBMIT_STATUS", judge: "codeforces", requestId: firstJob.requestId, originTabId: 10, stage: "judged", message: "Accepted", verdict: "AC", submissionId: 123456 }, { url: "https://codeforces.com/submissions/user", tab: { id: firstJob.judgeTabId } });
   await new Promise((resolve) => setTimeout(resolve, 20));
+  const delivered = sentMessages.find((item) => item.message?.requestId === firstJob.requestId && item.message?.stage === "judged");
+  assert.equal(delivered.message.submittedAt, firstJob.createdAt);
   assert.equal(storage.pendingJudgeSubmissions.some((item) => item.requestId === firstJob.requestId), false);
   assert.equal(storage.pendingJudgeSubmissions.some((item) => item.requestId === secondJob.requestId), true);
   assert.equal(storage.trainerSubmissionResults.at(-1).verdict, "AC");

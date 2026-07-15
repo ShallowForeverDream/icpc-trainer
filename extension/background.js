@@ -192,6 +192,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         archiveContestId: typeof pending.archiveContestId === "string" ? pending.archiveContestId.slice(0, 80) : undefined,
         qojContestId: Number.isInteger(pending.qojContestId) ? pending.qojContestId : undefined,
         slot: typeof pending.slot === "string" && /^[A-Z][0-9]?$/.test(pending.slot) ? pending.slot : undefined,
+        submittedAt: Number.isFinite(pending.createdAt) ? pending.createdAt : undefined,
         verdict: ["AC", "WA"].includes(message.verdict) ? message.verdict : undefined,
         submissionId: Number.isInteger(message.submissionId) ? message.submissionId : undefined,
       };

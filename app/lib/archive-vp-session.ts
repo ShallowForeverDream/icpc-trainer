@@ -26,14 +26,17 @@ export function isArchiveVpSession(value: unknown): value is ArchiveVpSession {
     && Boolean(item.attempts) && typeof item.attempts === "object";
 }
 
-export async function applyArchiveJudgeVerdict(input: { contestId: string; slot: string; verdict: "WA" | "AC"; requestId: string }) {
+export async function applyArchiveJudgeVerdict(input: { contestId: string; slot: string; verdict: "WA" | "AC"; requestId: string; submittedAt?: number }) {
   const session = readStoredJson<ArchiveVpSession | null>(ARCHIVE_SESSION_KEY, null, (value): value is ArchiveVpSession | null => value === null || isArchiveVpSession(value));
   if (!session?.startedAt || session.contestId !== input.contestId || !/^[A-Z][0-9]?$/.test(input.slot)) return null;
   if (session.submissions?.some((submission) => submission.id === input.requestId)) return session;
 
   const current = session.attempts[input.slot] || { wrong: 0 };
   if (current.solvedAt !== undefined) return session;
-  const atSeconds = Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000));
+  const resultTime = Number.isFinite(input.submittedAt) && Number(input.submittedAt) >= session.startedAt
+    ? Math.min(Date.now(), Number(input.submittedAt))
+    : Date.now();
+  const atSeconds = Math.max(0, Math.floor((resultTime - session.startedAt) / 1000));
   const attempts = { ...session.attempts };
   attempts[input.slot] = input.verdict === "AC" ? { ...current, solvedAt: atSeconds } : { ...current, wrong: current.wrong + 1 };
   const submissions = [...(session.submissions ?? []), { id: input.requestId, slot: input.slot, verdict: input.verdict, atSeconds }].slice(-500);

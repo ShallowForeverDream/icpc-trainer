@@ -64,7 +64,7 @@ export function archiveProblemUrl(contest: ArchiveContest, slot: string) {
 
 export function archiveProblemHref(contest: ArchiveContest, slot: string) {
   const problemId = contest.qojProblemIds?.[slot.charCodeAt(0) - 65];
-  if (contest.qojContestId && problemId) return `/vp/archive/${contest.id}/${slot}`;
+  if (contest.qojContestId && problemId) return `/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
   if (contest.gymId) return `/problem/${contest.gymId}${slot}?archive=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
   return archiveProblemUrl(contest, slot);
 }

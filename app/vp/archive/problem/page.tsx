@@ -2,12 +2,12 @@
 /* eslint-disable react-hooks/set-state-in-effect */
 
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useSearchParams } from "next/navigation";
 import { useEffect, useMemo, useState } from "react";
-import { AppShell, Icon } from "../../../../components/AppShell";
-import { archivePracticeProblem, findArchiveContest } from "../../../../data/archive-contests";
-import { loadPersistentJson, savePersistentJson } from "../../../../lib/persistent-state";
-import { readStoredJson, readStoredString, writeStoredJson, writeStoredString } from "../../../../lib/storage";
+import { AppShell, Icon } from "../../../components/AppShell";
+import { archivePracticeProblem, findArchiveContest } from "../../../data/archive-contests";
+import { loadPersistentJson, savePersistentJson } from "../../../lib/persistent-state";
+import { readStoredJson, readStoredString, writeStoredJson, writeStoredString } from "../../../lib/storage";
 
 type Attempt = { wrong: number; solvedAt?: number };
 type ArchiveSession = {
@@ -50,9 +50,9 @@ function isArchiveSession(value: unknown): value is ArchiveSession {
 }
 
 export default function ArchiveProblemPage() {
-  const params = useParams<{ contestId: string; slot: string }>();
-  const contestId = decodeURIComponent(String(params.contestId || ""));
-  const slot = decodeURIComponent(String(params.slot || "A")).toUpperCase();
+  const searchParams = useSearchParams();
+  const contestId = searchParams.get("contest") || "";
+  const slot = (searchParams.get("slot") || "A").toUpperCase();
   const contest = findArchiveContest(contestId);
   const problem = contest && /^[A-Z]$/.test(slot) ? archivePracticeProblem(contest, slot) : null;
   const problemIndex = slot.charCodeAt(0) - 65;
@@ -132,8 +132,8 @@ export default function ArchiveProblemPage() {
         <p>{contest.name} · 官方题面直接在本站阅读</p>
       </div>
       <nav>
-        {problemIndex > 0 ? <Link href={`/vp/archive/${contest.id}/${previous}`}>← {previous}</Link> : <span />}
-        {problemIndex < slots.length - 1 ? <Link href={`/vp/archive/${contest.id}/${next}`}>{next} →</Link> : <span />}
+        {problemIndex > 0 ? <Link href={`/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${previous}`}>← {previous}</Link> : <span />}
+        {problemIndex < slots.length - 1 ? <Link href={`/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${next}`}>{next} →</Link> : <span />}
       </nav>
     </header>
 

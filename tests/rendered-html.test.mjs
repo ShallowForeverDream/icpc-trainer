@@ -211,7 +211,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   const [catalog, page, problemPage, route, scoreboard] = await Promise.all([
     readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
     readFile(new URL("app/vp/archive/page.tsx", root), "utf8"),
-    readFile(new URL("app/vp/archive/[contestId]/[slot]/page.tsx", root), "utf8"),
+    readFile(new URL("app/vp/archive/problem/page.tsx", root), "utf8"),
     readFile(new URL("app/api/archive/scoreboard/route.ts", root), "utf8"),
     readFile(new URL("app/lib/archive-scoreboard.ts", root), "utf8"),
   ]);
@@ -248,7 +248,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(html, /ICPC 武汉全国邀请赛/);
   assert.match(html, /省赛/);
 
-  const problemResponse = await render("/vp/archive/2026-shenzhen-invitational/A");
+  const problemResponse = await render("/vp/archive/problem?contest=2026-shenzhen-invitational&slot=A");
   assert.equal(problemResponse.status, 200);
   const problemHtml = await problemResponse.text();
   assert.match(problemHtml, /Greetings from Prof\. Chen/);

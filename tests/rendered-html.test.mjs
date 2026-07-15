@@ -20,15 +20,27 @@ test("renders the icpc-trainer product home", async () => {
   assert.match(html, /icpc-trainer/i);
   assert.match(html, /今日训练/);
   assert.match(html, /今日目标/);
+  assert.match(html, /仅按 AC 自动统计/);
   assert.match(html, /历届补题/);
   assert.match(html, /思维题推荐/);
   assert.match(html, /待 VP/);
+  assert.doesNotMatch(html, /手动记一题/);
   assert.match(html, /RATING/);
   assert.match(html, /constructive algorithms/);
   assert.doesNotMatch(html, /最近完成/);
   assert.doesNotMatch(html, /中文精选题/);
   assert.doesNotMatch(html, /WORKSPACE|CODEFORCES API/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/);
+});
+
+test("counts unique completed problems automatically without unsolved or manual activity", async () => {
+  const page = await readFile(new URL("app/page.tsx", root), "utf8");
+  assert.match(page, /canonicalProblemCode/);
+  assert.match(page, /rememberFirstCompletion/);
+  assert.match(page, /item\.outcome === "unsolved"/);
+  assert.match(page, /firstCompletion/);
+  assert.match(page, /count=1000/);
+  assert.doesNotMatch(page, /manualActivity|recordProblem|savePersistentJson/);
 });
 
 test("ships an automatic Shenyang sprint loop driven by persistent submissions", async () => {

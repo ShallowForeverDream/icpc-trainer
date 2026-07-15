@@ -798,8 +798,9 @@ const server = http.createServer(async (request, response) => {
     }
     if (request.method === "GET" && url.pathname === "/codeforces/submissions") {
       const handle = (url.searchParams.get("handle") || "").trim();
+      const count = boundedInteger(url.searchParams.get("count"), { min: 1, max: 1000, fallback: 100 });
       if (!/^[A-Za-z0-9_.-]{3,24}$/.test(handle)) return json(response, 400, { error: "请输入有效的 Codeforces Handle" });
-      const submissions = (await getSubmissions(handle, 100)).map(publicSubmission);
+      const submissions = (await getSubmissions(handle, count)).map(publicSubmission);
       return json(response, 200, { source: "codeforces", handle, syncedAt: new Date().toISOString(), submissions });
     }
     if (request.method === "POST" && url.pathname === "/vp/generate") {

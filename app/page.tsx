@@ -8,7 +8,7 @@ import { archiveContests, archiveProblemHref, type ArchiveContest } from "./data
 import { apiJson } from "./lib/api-client";
 import { loadPlatformSubmissions, subscribePlatformSubmissions, type PlatformSubmission } from "./lib/platform-submissions";
 import { readTrainerPreferences, saveTrainerPreferences, syncTrainerPreferences } from "./lib/preferences";
-import { loadPersistentJson, savePersistentJson } from "./lib/persistent-state";
+import { loadPersistentJson } from "./lib/persistent-state";
 import { readStoredJson } from "./lib/storage";
 import { getTrainingClientId, loadTrainingSummary, type TrainingSummary } from "./lib/training-client";
 
@@ -46,12 +46,21 @@ function dateKey(date: Date) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;
 }
 
+function canonicalProblemCode(code: string) {
+  return code.toUpperCase().replace(/[^A-Z0-9]/g, "").replace(/^CF(?=\d)/, "");
+}
+
+function rememberFirstCompletion(completions: Map<string, number>, problemId: string, createdAt: string) {
+  const timestamp = Date.parse(createdAt);
+  if (!problemId || !Number.isFinite(timestamp)) return;
+  const current = completions.get(problemId);
+  if (current === undefined || timestamp < current) completions.set(problemId, timestamp);
+}
+
 export default function Home() {
   const [handle, setHandle] = useState("ShallowDream2");
   const [goal, setGoal] = useState(4);
-  const [manualActivity, setManualActivity] = useState<Record<string, number>>({});
-  const [remoteActivity, setRemoteActivity] = useState<Record<string, number>>({});
-  const [trainingActivity, setTrainingActivity] = useState<Record<string, number>>({});
+  const [codeforcesSubmissions, setCodeforcesSubmissions] = useState<Submission[]>([]);
   const [trainingSummary, setTrainingSummary] = useState<TrainingSummary | null>(null);
   const [recommendations, setRecommendations] = useState<Recommendation[]>(fallbackRecommendations);
   const [batch, setBatch] = useState(0);
@@ -68,14 +77,6 @@ export default function Home() {
     setHandle(preferences.codeforcesHandle);
     setGoal(preferences.dailyGoal);
     void syncTrainerPreferences().then((remote) => { setHandle(remote.codeforcesHandle); setGoal(remote.dailyGoal); });
-
-    const saved = readStoredJson<{ activity?: Record<string, number> }>("icpc-trainer-dashboard", {});
-    if (saved.activity && typeof saved.activity === "object") {
-      setManualActivity(Object.fromEntries(Object.entries(saved.activity).filter(([key, value]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && Number.isInteger(value) && value >= 0 && value <= 100)));
-    }
-    void loadPersistentJson<{ activity?: Record<string, number> }>("dashboard", "icpc-trainer-dashboard", saved).then((remote) => {
-      if (remote.activity && typeof remote.activity === "object") setManualActivity(Object.fromEntries(Object.entries(remote.activity).filter(([key, value]) => /^\d{4}-\d{2}-\d{2}$/.test(key) && Number.isInteger(value) && value >= 0 && value <= 100)));
-    });
 
     const localArchive = readStoredJson<ArchiveSession | null>(ARCHIVE_SESSION_KEY, null, (value): value is ArchiveSession | null => value === null || isArchiveSession(value));
     if (localArchive) {
@@ -100,7 +101,7 @@ export default function Home() {
       clientId,
     });
     Promise.allSettled([
-      apiJson<{ submissions?: Submission[] }>(`/codeforces/submissions?handle=${encodeURIComponent(preferences.codeforcesHandle)}`, { cache: "no-store", signal: controller.signal }),
+      apiJson<{ submissions?: Submission[] }>(`/codeforces/submissions?handle=${encodeURIComponent(preferences.codeforcesHandle)}&count=1000`, { cache: "no-store", signal: controller.signal }),
       apiJson<{ problems?: Recommendation[] }>(`/codeforces/recommendations?${recommendationParams}`, { cache: "no-store", signal: controller.signal }),
       loadTrainingSummary(preferences.codeforcesHandle, controller.signal),
     ]).then(([submissionResult, recommendationResult, summaryResult]) => {
@@ -108,27 +109,12 @@ export default function Home() {
       let failed = 0;
       const submissionData = submissionResult.status === "fulfilled" ? submissionResult.value : (failed += 1, {});
       const nextSubmissions = Array.isArray(submissionData.submissions) ? submissionData.submissions as Submission[] : [];
-      const solvedPerDay: Record<string, number> = {};
-      const seen = new Set<string>();
-      for (const item of nextSubmissions) {
-        if (item.verdict !== "OK" || seen.has(item.code)) continue;
-        seen.add(item.code);
-        const key = dateKey(new Date(item.createdAt));
-        solvedPerDay[key] = (solvedPerDay[key] ?? 0) + 1;
-      }
-      setRemoteActivity(solvedPerDay);
+      setCodeforcesSubmissions(nextSubmissions.slice(0, 10_000));
 
       const recommendationData = recommendationResult.status === "fulfilled" ? recommendationResult.value : (failed += 1, {});
       if (Array.isArray(recommendationData.problems) && recommendationData.problems.length) setRecommendations(recommendationData.problems);
       if (summaryResult.status === "fulfilled") {
-        const summaryData = summaryResult.value;
-        setTrainingSummary(summaryData);
-        const trainedPerDay: Record<string, number> = {};
-        for (const item of summaryData.recent) {
-          const key = dateKey(new Date(item.createdAt));
-          trainedPerDay[key] = (trainedPerDay[key] ?? 0) + 1;
-        }
-        setTrainingActivity(trainedPerDay);
+        setTrainingSummary(summaryResult.value);
       } else failed += 1;
       if (failed) setSyncError(failed === 3 ? "实时数据暂时不可用" : "部分数据同步失败");
     }).finally(() => { if (!controller.signal.aborted) setSyncing(false); });
@@ -140,17 +126,33 @@ export default function Home() {
     return subscribePlatformSubmissions(setPlatformSubmissions);
   }, []);
 
-  const platformActivity = useMemo(() => {
-    const solved = new Map<string, Set<string>>();
+  const activity = useMemo(() => {
+    const firstCompletion = new Map<string, number>();
+    for (const item of codeforcesSubmissions) {
+      if (item.verdict !== "OK") continue;
+      rememberFirstCompletion(firstCompletion, `cf:${canonicalProblemCode(item.code)}`, item.createdAt);
+    }
     for (const item of platformSubmissions) {
       if (item.status !== "accepted" && item.verdict !== "AC") continue;
-      const key = dateKey(new Date(item.updatedAt));
-      if (!solved.has(key)) solved.set(key, new Set());
-      solved.get(key)?.add(`${item.archiveContestId || item.judge}:${item.problemCode}`);
+      const archiveId = item.archiveContestId && item.slot
+        ? `archive:${item.archiveContestId}:${item.slot.toUpperCase()}`
+        : "";
+      const problemId = archiveId || (item.judge === "codeforces"
+        ? `cf:${canonicalProblemCode(item.problemCode)}`
+        : `${item.judge}:${canonicalProblemCode(item.problemCode)}`);
+      rememberFirstCompletion(firstCompletion, problemId, item.updatedAt);
     }
-    return Object.fromEntries([...solved].map(([key, values]) => [key, values.size]));
-  }, [platformSubmissions]);
-  const activity = useMemo(() => Object.fromEntries(days.map((key) => [key, Math.max(manualActivity[key] ?? 0, remoteActivity[key] ?? 0, trainingActivity[key] ?? 0, platformActivity[key] ?? 0)])), [days, manualActivity, platformActivity, remoteActivity, trainingActivity]);
+    for (const item of trainingSummary?.recent ?? []) {
+      if (item.outcome === "unsolved") continue;
+      rememberFirstCompletion(firstCompletion, `cf:${canonicalProblemCode(item.code)}`, item.createdAt);
+    }
+    const counts = Object.fromEntries(days.map((key) => [key, 0]));
+    for (const timestamp of firstCompletion.values()) {
+      const key = dateKey(new Date(timestamp));
+      if (key in counts) counts[key] += 1;
+    }
+    return counts;
+  }, [codeforcesSubmissions, days, platformSubmissions, trainingSummary]);
   const done = activity[today] ?? 0;
   const weeklyActivity = days.slice(-7).reduce((sum, key) => sum + (activity[key] ?? 0), 0);
   let streak = 0;
@@ -175,15 +177,9 @@ export default function Home() {
       });
   }, [archiveSession, platformSubmissions, selectedContest]);
 
-  function saveDashboard(nextGoal: number, nextActivity = manualActivity) {
+  function saveDashboard(nextGoal: number) {
     setGoal(nextGoal);
-    setManualActivity(nextActivity);
     try { saveTrainerPreferences({ codeforcesHandle: handle, dailyGoal: nextGoal }); } catch (error) { setSyncError(error instanceof Error ? error.message : "训练目标未能保存"); }
-    void savePersistentJson("dashboard", "icpc-trainer-dashboard", { activity: nextActivity }).then((savedOk) => { if (!savedOk) setSyncError("训练记录未能保存"); });
-  }
-
-  function recordProblem() {
-    saveDashboard(goal, { ...manualActivity, [today]: (manualActivity[today] ?? 0) + 1 });
   }
 
   return <AppShell active="训练台">
@@ -218,7 +214,7 @@ export default function Home() {
         <div className="panel-head"><div><h2>今日目标</h2><p>{syncing ? "同步中…" : syncError || `连续 ${streak} 天`}</p></div><strong>{weeklyActivity}<small>本周</small></strong></div>
         <div className="today-goal-summary">
           <div className="today-goal-ring" style={{ "--progress": `${Math.min(100, done / Math.max(1, goal) * 100)}%` } as CSSProperties}><span><b>{done}</b><small>/ {goal}</small></span></div>
-          <div><h3>{done >= goal ? "今日目标已完成" : `还差 ${goal - done} 题`}</h3><div className="today-goal-controls"><button type="button" aria-label="减少每日目标" onClick={() => saveDashboard(Math.max(1, goal - 1))}>−</button><strong>{goal} 题/天</strong><button type="button" aria-label="增加每日目标" onClick={() => saveDashboard(goal + 1)}>＋</button></div><button className="today-record-button" type="button" onClick={recordProblem}>手动记一题</button></div>
+          <div><h3>{done >= goal ? "今日目标已完成" : `还差 ${goal - done} 题`}</h3><div className="today-goal-controls"><button type="button" aria-label="减少每日目标" onClick={() => saveDashboard(Math.max(1, goal - 1))}>−</button><strong>{goal} 题/天</strong><button type="button" aria-label="增加每日目标" onClick={() => saveDashboard(goal + 1)}>＋</button></div><Link className="today-submission-link" href="/submissions">仅按 AC 自动统计 · 查看提交 →</Link></div>
         </div>
         <div className="today-heatmap-head"><b>近 12 周</b><span>少 {[0, 1, 2, 3, 4].map((value) => <i key={value} className={`heat-${value}`} />)} 多</span></div>
         <div className="heatmap today-heatmap" aria-label="训练活跃热力图">{days.map((key) => <i key={key} className={`heat-${Math.min(4, activity[key] ?? 0)}`} title={`${key}: ${activity[key] ?? 0} 道`} />)}</div>

@@ -37,6 +37,31 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS personal_state_updated_idx ON personal_state(updated_at);
 
+  CREATE TABLE IF NOT EXISTS platform_submissions (
+    owner_key TEXT NOT NULL,
+    request_id TEXT NOT NULL,
+    judge TEXT NOT NULL CHECK (judge IN ('codeforces', 'ucup')),
+    problem_code TEXT NOT NULL,
+    problem_title TEXT NOT NULL,
+    problem_href TEXT NOT NULL,
+    contest_id INTEGER NOT NULL,
+    problem_index TEXT NOT NULL,
+    language TEXT NOT NULL,
+    source_payload BLOB,
+    source_bytes INTEGER NOT NULL DEFAULT 0,
+    status TEXT NOT NULL CHECK (status IN ('queued', 'submitted', 'accepted', 'rejected', 'failed', 'needs_login')),
+    verdict TEXT,
+    message TEXT NOT NULL,
+    judge_submission_id INTEGER,
+    archive_contest_id TEXT,
+    slot TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    PRIMARY KEY (owner_key, request_id)
+  );
+  CREATE INDEX IF NOT EXISTS platform_submissions_owner_updated_idx ON platform_submissions(owner_key, updated_at DESC);
+  CREATE INDEX IF NOT EXISTS platform_submissions_problem_idx ON platform_submissions(owner_key, problem_code, updated_at DESC);
+
   CREATE TABLE IF NOT EXISTS vp_sessions (
     id TEXT PRIMARY KEY,
     owner_key TEXT NOT NULL,
@@ -148,6 +173,106 @@ export function writePersonalState(ownerKey, stateKey, value) {
     .run(ownerKey, stateKey, encode(value, PERSONAL_STATE_LIMIT), now);
 }
 
+function publicPlatformSubmission(row, { includeSource = false } = {}) {
+  if (!row) return null;
+  let sourceCode;
+  if (includeSource && row.source_payload) {
+    try { sourceCode = decode(row.source_payload); }
+    catch { sourceCode = ""; }
+  }
+  return {
+    requestId: row.request_id,
+    judge: row.judge,
+    problemCode: row.problem_code,
+    problemTitle: row.problem_title,
+    problemHref: row.problem_href,
+    contestId: Number(row.contest_id),
+    problemIndex: row.problem_index,
+    language: row.language,
+    status: row.status,
+    verdict: row.verdict || null,
+    message: row.message,
+    judgeSubmissionId: row.judge_submission_id === null ? null : Number(row.judge_submission_id),
+    archiveContestId: row.archive_contest_id || null,
+    slot: row.slot || null,
+    sourceBytes: Number(row.source_bytes) || 0,
+    ...(includeSource ? { sourceCode: typeof sourceCode === "string" ? sourceCode : "" } : {}),
+    createdAt: new Date(Number(row.created_at)).toISOString(),
+    updatedAt: new Date(Number(row.updated_at)).toISOString(),
+  };
+}
+
+function copyPlatformSubmission(row, ownerKey) {
+  db.prepare(`INSERT OR IGNORE INTO platform_submissions (
+    owner_key, request_id, judge, problem_code, problem_title, problem_href, contest_id, problem_index,
+    language, source_payload, source_bytes, status, verdict, message, judge_submission_id,
+    archive_contest_id, slot, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+    .run(ownerKey, row.request_id, row.judge, row.problem_code, row.problem_title, row.problem_href,
+      row.contest_id, row.problem_index, row.language, row.source_payload, row.source_bytes, row.status,
+      row.verdict, row.message, row.judge_submission_id, row.archive_contest_id, row.slot, row.created_at, row.updated_at);
+}
+
+export function createPlatformSubmission(ownerKey, submission) {
+  const now = Date.now();
+  const sourceCode = String(submission.sourceCode || "");
+  db.prepare(`INSERT INTO platform_submissions (
+    owner_key, request_id, judge, problem_code, problem_title, problem_href, contest_id, problem_index,
+    language, source_payload, source_bytes, status, verdict, message, judge_submission_id,
+    archive_contest_id, slot, created_at, updated_at
+  ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NULL, ?, NULL, ?, ?, ?, ?)
+  ON CONFLICT(owner_key, request_id) DO UPDATE SET
+    problem_title = excluded.problem_title, problem_href = excluded.problem_href, language = excluded.language,
+    source_payload = COALESCE(excluded.source_payload, platform_submissions.source_payload),
+    source_bytes = MAX(excluded.source_bytes, platform_submissions.source_bytes), updated_at = excluded.updated_at`)
+    .run(ownerKey, submission.requestId, submission.judge, submission.problemCode, submission.problemTitle,
+      submission.problemHref, submission.contestId, submission.problemIndex, submission.language,
+      sourceCode ? encode(sourceCode, 512 * 1024) : null, Buffer.byteLength(sourceCode), submission.status,
+      submission.message, submission.archiveContestId || null, submission.slot || null, now, now);
+  db.prepare(`DELETE FROM platform_submissions WHERE owner_key = ? AND request_id IN (
+    SELECT request_id FROM platform_submissions WHERE owner_key = ? ORDER BY created_at DESC LIMIT -1 OFFSET 250
+  )`).run(ownerKey, ownerKey);
+  return readPlatformSubmission({ primary: ownerKey, fallback: null }, submission.requestId, { includeSource: true });
+}
+
+export function updatePlatformSubmissionStatus(ownerKey, requestId, update) {
+  const row = db.prepare("SELECT status FROM platform_submissions WHERE owner_key = ? AND request_id = ?").get(ownerKey, requestId);
+  if (!row) return null;
+  const terminal = new Set(["accepted", "rejected", "failed", "needs_login"]);
+  if ((terminal.has(row.status) && !terminal.has(update.status)) || (row.status === "submitted" && update.status === "queued")) {
+    return readPlatformSubmission({ primary: ownerKey, fallback: null }, requestId);
+  }
+  db.prepare(`UPDATE platform_submissions SET status = ?, message = ?,
+    verdict = COALESCE(?, verdict), judge_submission_id = COALESCE(?, judge_submission_id), updated_at = ?
+    WHERE owner_key = ? AND request_id = ?`)
+    .run(update.status, update.message, update.verdict || null, update.judgeSubmissionId || null, Date.now(), ownerKey, requestId);
+  return readPlatformSubmission({ primary: ownerKey, fallback: null }, requestId);
+}
+
+export function listPlatformSubmissions(owners, { limit = 100, problemCode = "" } = {}) {
+  const requestedLimit = Math.max(1, Math.min(250, Number(limit) || 100));
+  if (owners.fallback && owners.fallback !== owners.primary) {
+    const fallbackRows = db.prepare("SELECT * FROM platform_submissions WHERE owner_key = ? ORDER BY created_at ASC").all(owners.fallback);
+    for (const row of fallbackRows) copyPlatformSubmission(row, owners.primary);
+  }
+  const rows = problemCode
+    ? db.prepare("SELECT * FROM platform_submissions WHERE owner_key = ? AND problem_code = ? ORDER BY created_at DESC LIMIT ?").all(owners.primary, problemCode, requestedLimit)
+    : db.prepare("SELECT * FROM platform_submissions WHERE owner_key = ? ORDER BY created_at DESC LIMIT ?").all(owners.primary, requestedLimit);
+  return rows.map((row) => publicPlatformSubmission(row));
+}
+
+export function readPlatformSubmission(owners, requestId, options = {}) {
+  let row = db.prepare("SELECT * FROM platform_submissions WHERE owner_key = ? AND request_id = ?").get(owners.primary, requestId);
+  if (!row && owners.fallback) {
+    row = db.prepare("SELECT * FROM platform_submissions WHERE owner_key = ? AND request_id = ?").get(owners.fallback, requestId);
+    if (row) {
+      copyPlatformSubmission(row, owners.primary);
+      row = db.prepare("SELECT * FROM platform_submissions WHERE owner_key = ? AND request_id = ?").get(owners.primary, requestId);
+    }
+  }
+  return publicPlatformSubmission(row, options);
+}
+
 export function persistVpSession(ownerKey, session) {
   const now = Date.now();
   const startedAt = Number(session.startedAt) || null;
@@ -240,9 +365,10 @@ function pruneVpData(now = Date.now()) {
 export function persistenceStats() {
   const row = db.prepare(`SELECT
     (SELECT COUNT(*) FROM personal_state) AS personal_states,
+    (SELECT COUNT(*) FROM platform_submissions) AS platform_submissions,
     (SELECT COUNT(*) FROM vp_sessions WHERE status IN ('ready', 'running')) AS active_vps,
     (SELECT COUNT(*) FROM vp_standing_snapshots) AS vp_snapshots`).get();
-  return { personalStates: Number(row.personal_states), activeVps: Number(row.active_vps), vpSnapshots: Number(row.vp_snapshots) };
+  return { personalStates: Number(row.personal_states), platformSubmissions: Number(row.platform_submissions), activeVps: Number(row.active_vps), vpSnapshots: Number(row.vp_snapshots) };
 }
 
 export function closePersistenceForTests() {

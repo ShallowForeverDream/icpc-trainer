@@ -8,6 +8,7 @@ import { archiveContestIntegrated, archiveContests, archivePracticeProblem, arch
 import { type ArchivePrewarmProgress, loadArchivePrewarm, startArchivePrewarm } from "../../lib/archive-statement-client";
 import { ARCHIVE_SESSION_EVENT } from "../../lib/archive-vp-session";
 import { clearPersistentJson, loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
+import { loadPlatformSubmissions, subscribePlatformSubmissions, type PlatformSubmission } from "../../lib/platform-submissions";
 import { readTrainerPreferences } from "../../lib/preferences";
 import { readStoredJson } from "../../lib/storage";
 
@@ -59,6 +60,7 @@ export default function ArchiveVpPage() {
   const [roomTab, setRoomTab] = useState<ArchiveRoomTab>("problems");
   const [prewarm, setPrewarm] = useState<ArchivePrewarmProgress | null>(null);
   const [prewarmError, setPrewarmError] = useState("");
+  const [platformSubmissions, setPlatformSubmissions] = useState<PlatformSubmission[]>([]);
   const scoreboardRequest = useRef<AbortController | null>(null);
 
   const prewarmContestId = session?.contestId || "";
@@ -181,6 +183,13 @@ export default function ArchiveVpPage() {
     };
   }, [prewarmContestId]);
 
+  useEffect(() => {
+    let active = true;
+    void loadPlatformSubmissions().then((rows) => { if (active) setPlatformSubmissions(rows); });
+    const unsubscribe = subscribePlatformSubmissions(setPlatformSubmissions);
+    return () => { active = false; unsubscribe(); };
+  }, []);
+
   const filteredContests = useMemo(() => archiveContests.filter((contest) => contest.year === year && (type === "全部" || contest.type === type) && (!query.trim() || `${contest.name}${contest.city}`.toLowerCase().includes(query.trim().toLowerCase()))), [query, type, year]);
 
   const combinedRows = useMemo(() => {
@@ -222,13 +231,20 @@ export default function ArchiveVpPage() {
   }, [combinedRows, teamQuery]);
 
   const submissionRows = useMemo(() => {
+    const records = new Map<string, { id: string; slot: string; verdict: "WA" | "AC" | "PENDING" | "FAILED"; atSeconds: number; detailHref?: string }>();
+    for (const row of platformSubmissions) {
+      if (!session?.startedAt || row.archiveContestId !== session.contestId || !row.slot) continue;
+      const verdict = row.status === "accepted" ? "AC" : row.status === "rejected" ? "WA" : ["failed", "needs_login"].includes(row.status) ? "FAILED" : "PENDING";
+      records.set(row.requestId, { id: row.requestId, slot: row.slot, verdict, atSeconds: Math.max(0, Math.floor((Date.parse(row.createdAt) - session.startedAt) / 1000)), detailHref: `/submissions/${row.requestId}` });
+    }
+    for (const submission of session?.submissions ?? []) records.set(submission.id, { ...records.get(submission.id), ...submission });
     const wrongBySlot: Record<string, number> = {};
-    return [...(session?.submissions ?? [])].sort((left, right) => left.atSeconds - right.atSeconds).map((submission) => {
+    return [...records.values()].sort((left, right) => left.atSeconds - right.atSeconds).map((submission) => {
       const wrongBefore = wrongBySlot[submission.slot] ?? 0;
       if (submission.verdict === "WA") wrongBySlot[submission.slot] = wrongBefore + 1;
       return { ...submission, wrongBefore };
     }).reverse();
-  }, [session?.submissions]);
+  }, [platformSubmissions, session]);
   const prewarmBySlot = useMemo(() => new Map((prewarm?.items || []).map((item) => [item.slot, item])), [prewarm]);
 
   function chooseContest(contestId: string) {
@@ -316,11 +332,13 @@ export default function ArchiveVpPage() {
     {roomTab === "submissions" ? <section className="panel vp-room-panel archive-submission-panel" role="tabpanel">
       <header className="vp-tab-heading"><div><h2>队伍提交记录</h2><p>站内提交后自动同步判题结果、比赛用时与罚时</p></div><div><span>{session.myTeam || "我的队伍"}</span><span>{submissionRows.length} 条</span></div></header>
       <div className="archive-submission-list"><div className="archive-submission-head"><span>比赛时间</span><span>队伍</span><span>题目</span><span>结果</span><span>罚时影响</span></div>{submissionRows.map((submission) => {
-        const href = contest ? archiveProblemHref(contest, submission.slot) : "#";
+        const href = submission.detailHref || (contest ? archiveProblemHref(contest, submission.slot) : "#");
         const practice = contest ? archivePracticeProblem(contest, submission.slot) : null;
         const title = practice?.title || contest?.problemTitles?.[submission.slot.charCodeAt(0) - 65] || `Problem ${submission.slot}`;
         const penalty = submission.verdict === "AC" ? Math.floor(submission.atSeconds / 60) + submission.wrongBefore * 20 : null;
-        return <Link className="archive-submission-row" href={href} key={submission.id}><time>+{clock(submission.atSeconds)}</time><b>{session.myTeam || "我的队伍"}</b><span><strong>{submission.slot}</strong>{title}</span><em className={submission.verdict === "AC" ? "accepted" : "rejected"}>{submission.verdict === "AC" ? "Accepted" : "Wrong Answer"}</em><small>{penalty === null ? "通过后计入 +20" : `${penalty} 分钟`}</small></Link>;
+        const result = submission.verdict === "AC" ? "Accepted" : submission.verdict === "WA" ? "Wrong Answer" : submission.verdict === "FAILED" ? "提交未送达" : "评测中";
+        const impact = penalty !== null ? `${penalty} 分钟` : submission.verdict === "WA" ? "通过后计入 +20" : submission.verdict === "PENDING" ? "判题后自动计算" : "不计罚时";
+        return <Link className="archive-submission-row" href={href} key={submission.id}><time>+{clock(submission.atSeconds)}</time><b>{session.myTeam || "我的队伍"}</b><span><strong>{submission.slot}</strong>{title}</span><em className={submission.verdict === "AC" ? "accepted" : submission.verdict === "PENDING" ? "pending" : "rejected"}>{result}</em><small>{impact}</small></Link>;
       })}</div>
       {!submissionRows.length ? <div className="vp-tab-empty"><b>还没有提交记录</b><span>从“题目”标签进入题面并直接提交，判题完成后会自动显示</span><button type="button" onClick={() => setRoomTab("problems")}>去做题 →</button></div> : null}
     </section> : null}

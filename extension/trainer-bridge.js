@@ -35,7 +35,7 @@ window.addEventListener("message", async (event) => {
   if (!message || message.source !== "icpc-trainer") return;
 
   if (message.type === "ICPC_TRAINER_PING") {
-    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.1.0" }, window.location.origin);
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.2.0" }, window.location.origin);
     await replayStoredResults();
     return;
   }

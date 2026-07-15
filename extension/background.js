@@ -18,6 +18,61 @@ function validRequestId(value) {
   return typeof value === "string" && /^[A-Za-z0-9-]{8,80}$/.test(value);
 }
 
+const PENDING_KEY = "pendingJudgeSubmissions";
+let storageQueue = Promise.resolve();
+
+function withStorageLock(task) {
+  const next = storageQueue.then(task, task);
+  storageQueue = next.catch(() => undefined);
+  return next;
+}
+
+function validPendingJob(item) {
+  return item && validRequestId(item.requestId) && ["codeforces", "ucup"].includes(item.judge)
+    && Number.isInteger(item.originTabId) && Number.isInteger(item.judgeTabId)
+    && Number.isFinite(item.createdAt) && Date.now() - item.createdAt < 30 * 60 * 1000;
+}
+
+async function readPendingJobs() {
+  const stored = await chrome.storage.local.get(PENDING_KEY);
+  return (Array.isArray(stored[PENDING_KEY]) ? stored[PENDING_KEY] : []).filter(validPendingJob).slice(-32);
+}
+
+async function mutatePendingJobs(mutator) {
+  return withStorageLock(async () => {
+    const current = await readPendingJobs();
+    const result = await mutator(current);
+    const jobs = Array.isArray(result?.jobs) ? result.jobs.filter(validPendingJob).slice(-32) : current;
+    await chrome.storage.local.set({ [PENDING_KEY]: jobs });
+    return result?.value;
+  });
+}
+
+function addPendingJob(job) {
+  return mutatePendingJobs((jobs) => ({ jobs: [...jobs.filter((item) => item.requestId !== job.requestId && item.judgeTabId !== job.judgeTabId), job], value: job }));
+}
+
+function pendingJobForTab(tabId, judge) {
+  return mutatePendingJobs((jobs) => ({ jobs, value: jobs.find((item) => item.judgeTabId === tabId && item.judge === judge) || null }));
+}
+
+function updatePendingJob(tabId, requestId, patch) {
+  return mutatePendingJobs((jobs) => {
+    let value = null;
+    const next = jobs.map((item) => {
+      if (item.judgeTabId !== tabId || item.requestId !== requestId) return item;
+      value = { ...item, ...patch };
+      if (patch.sourceCode === undefined && Object.prototype.hasOwnProperty.call(patch, "sourceCode")) delete value.sourceCode;
+      return value;
+    });
+    return { jobs: next, value };
+  });
+}
+
+function removePendingJob(tabId, requestId = "") {
+  return mutatePendingJobs((jobs) => ({ jobs: jobs.filter((item) => item.judgeTabId !== tabId || (requestId && item.requestId !== requestId)), value: true }));
+}
+
 let resultQueue = Promise.resolve();
 function rememberTrainerResult(result) {
   resultQueue = resultQueue.then(async () => {
@@ -41,43 +96,77 @@ async function openJudgeTab(message, sender, sendResponse) {
     return;
   }
 
-  const storageKey = isCodeforces ? "pendingSubmission" : "pendingArchiveSubmission";
-  const pending = { ...submission, originTabId: sender.tab.id, createdAt: Date.now() };
+  let tab;
   try {
-    await chrome.storage.local.set({ [storageKey]: pending });
-    await chrome.tabs.create({ url: message.url, active: false });
+    tab = await chrome.tabs.create({ url: "about:blank", active: false });
+    if (!Number.isInteger(tab.id)) throw new Error("无法创建评测标签页");
+    const pending = {
+      ...submission,
+      judge: isCodeforces ? "codeforces" : "ucup",
+      originTabId: sender.tab.id,
+      judgeTabId: tab.id,
+      createdAt: Date.now(),
+    };
+    await addPendingJob(pending);
+    await chrome.tabs.update(tab.id, { url: message.url });
     sendResponse({ ok: true, requestId: submission.requestId });
   } catch (error) {
-    await chrome.storage.local.remove(storageKey);
+    if (Number.isInteger(tab?.id)) {
+      await removePendingJob(tab.id).catch(() => undefined);
+      await chrome.tabs.remove(tab.id).catch(() => undefined);
+    }
     sendResponse({ ok: false, error: error instanceof Error ? error.message : "无法连接评测站" });
   }
 }
 
+chrome.tabs.onRemoved.addListener((tabId) => { void removePendingJob(tabId).catch(() => undefined); });
+
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.type === "GET_PENDING_SUBMISSION") {
+    if (!trustedJudgeSender(sender, message.judge) || sender.tab?.id === undefined) return;
+    void pendingJobForTab(sender.tab.id, message.judge).then((submission) => sendResponse({ submission })).catch(() => sendResponse({ submission: null }));
+    return true;
+  }
+
+  if (message?.type === "UPDATE_PENDING_SUBMISSION") {
+    if (!trustedJudgeSender(sender, message.judge) || sender.tab?.id === undefined || !validRequestId(message.requestId)) return;
+    const patch = {};
+    if (message.phase === "tracking") patch.phase = "tracking";
+    if (Number.isInteger(message.submissionId) && message.submissionId > 0) patch.submissionId = message.submissionId;
+    if (message.removeSource === true) patch.sourceCode = undefined;
+    void updatePendingJob(sender.tab.id, message.requestId, patch).then((submission) => sendResponse({ ok: Boolean(submission) })).catch(() => sendResponse({ ok: false }));
+    return true;
+  }
+
   if (message?.type === "JUDGE_SUBMIT_STATUS") {
-    if (!trustedJudgeSender(sender, message.judge) || !validRequestId(message.requestId)
+    if (!trustedJudgeSender(sender, message.judge) || sender.tab?.id === undefined || !validRequestId(message.requestId)
       || !Number.isInteger(message.originTabId) || !["submitted", "judged", "failed", "needs_login"].includes(message.stage)) return;
-    const result = {
-      type: "ICPC_TRAINER_SUBMIT_STATUS",
-      requestId: message.requestId,
-      ok: ["submitted", "judged"].includes(message.stage),
-      stage: message.stage,
-      message: typeof message.message === "string" ? message.message.slice(0, 240) : "",
-      judge: message.judge,
-      archiveContestId: typeof message.archiveContestId === "string" ? message.archiveContestId.slice(0, 80) : undefined,
-      qojContestId: Number.isInteger(message.qojContestId) ? message.qojContestId : undefined,
-      slot: typeof message.slot === "string" && /^[A-Z][0-9]?$/.test(message.slot) ? message.slot : undefined,
-      verdict: ["AC", "WA"].includes(message.verdict) ? message.verdict : undefined,
-      submissionId: Number.isInteger(message.submissionId) ? message.submissionId : undefined,
-    };
-    rememberTrainerResult(result);
-    chrome.tabs.sendMessage(message.originTabId, result).catch(() => undefined);
-    if (message.stage === "judged" && sender.tab?.id !== undefined) {
-      const judgeTabId = sender.tab.id;
-      setTimeout(() => chrome.tabs.remove(judgeTabId).catch(() => undefined), 1200);
-    } else if (["failed", "needs_login"].includes(message.stage) && sender.tab?.id !== undefined) {
-      chrome.tabs.update(sender.tab.id, { active: true }).catch(() => undefined);
-    }
+    void (async () => {
+      const pending = await pendingJobForTab(sender.tab.id, message.judge);
+      if (!pending || pending.requestId !== message.requestId || pending.originTabId !== message.originTabId) return;
+      const result = {
+        type: "ICPC_TRAINER_SUBMIT_STATUS",
+        requestId: pending.requestId,
+        ok: ["submitted", "judged"].includes(message.stage),
+        stage: message.stage,
+        message: typeof message.message === "string" ? message.message.slice(0, 240) : "",
+        judge: pending.judge,
+        archiveContestId: typeof pending.archiveContestId === "string" ? pending.archiveContestId.slice(0, 80) : undefined,
+        qojContestId: Number.isInteger(pending.qojContestId) ? pending.qojContestId : undefined,
+        slot: typeof pending.slot === "string" && /^[A-Z][0-9]?$/.test(pending.slot) ? pending.slot : undefined,
+        verdict: ["AC", "WA"].includes(message.verdict) ? message.verdict : undefined,
+        submissionId: Number.isInteger(message.submissionId) ? message.submissionId : undefined,
+      };
+      rememberTrainerResult(result);
+      chrome.tabs.sendMessage(pending.originTabId, result).catch(() => undefined);
+      if (["judged", "failed", "needs_login"].includes(message.stage)) await removePendingJob(sender.tab.id, pending.requestId);
+      if (message.stage === "judged") {
+        const judgeTabId = sender.tab.id;
+        setTimeout(() => chrome.tabs.remove(judgeTabId).catch(() => undefined), 1200);
+      } else if (["failed", "needs_login"].includes(message.stage)) {
+        chrome.tabs.update(sender.tab.id, { active: true }).catch(() => undefined);
+      }
+    })().catch(() => undefined);
     return;
   }
 

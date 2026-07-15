@@ -31,9 +31,16 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
     const receiveJudgeStatus = (event: MessageEvent) => {
       const data = event.data;
       if (event.source !== window || event.origin !== window.location.origin || data?.source !== "icpc-trainer-extension" || data.type !== "ICPC_TRAINER_SUBMIT_RESULT" || typeof data.requestId !== "string") return;
+      const message = typeof data.message === "string" ? data.message : "提交状态已更新";
+      if (["queued", "submitted", "failed", "needs_login"].includes(data.stage)) {
+        void updatePlatformSubmission(data.requestId, data.stage, message);
+      }
       if (data.stage === "judged" && ["AC", "WA"].includes(data.verdict)) {
         const status = data.verdict === "AC" ? "accepted" : "rejected";
-        void updatePlatformSubmission(data.requestId, status, typeof data.message === "string" ? data.message : data.verdict);
+        void updatePlatformSubmission(data.requestId, status, message, {
+          verdict: data.verdict,
+          judgeSubmissionId: Number.isInteger(data.submissionId) ? data.submissionId : undefined,
+        });
         if (["ucup", "codeforces"].includes(data.judge) && typeof data.archiveContestId === "string" && typeof data.slot === "string") {
           void applyArchiveJudgeVerdict({ contestId: data.archiveContestId, slot: data.slot, verdict: data.verdict, requestId: data.requestId });
         }

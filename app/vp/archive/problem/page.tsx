@@ -13,7 +13,7 @@ import {
   loadArchiveStatement,
 } from "../../../lib/archive-statement-client";
 import { ARCHIVE_SESSION_EVENT } from "../../../lib/archive-vp-session";
-import { createSubmissionRequestId, recordPlatformSubmission, updatePlatformSubmission } from "../../../lib/platform-submissions";
+import { createSubmissionRequestId, recordPlatformSubmission } from "../../../lib/platform-submissions";
 import { readStoredJson } from "../../../lib/storage";
 
 type Attempt = { wrong: number; solvedAt?: number };
@@ -151,15 +151,13 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       if (event.source !== window || event.origin !== window.location.origin) return;
       if (event.data?.source !== "icpc-trainer-extension") return;
       if (event.data.type === "ICPC_TRAINER_PONG") {
-        const current = event.data.version === "1.1.0";
+        const current = event.data.version === "1.2.0";
         setExtensionReady(current);
-        if (!current) setStatus("检测到旧版扩展，请下载 v1.1 并在扩展管理页重新加载");
+        if (!current) setStatus("检测到旧版扩展，请下载 v1.2 并在扩展管理页重新加载");
       }
       if (event.data.type === "ICPC_TRAINER_SUBMIT_RESULT" && event.data.requestId === requestIdRef.current) {
-        const stage = event.data.stage as "queued" | "submitted" | "judged" | "failed" | "needs_login";
         const message = typeof event.data.message === "string" ? event.data.message : "提交状态已更新";
         setStatus(message);
-        if (stage === "queued" || stage === "submitted" || stage === "failed" || stage === "needs_login") void updatePlatformSubmission(event.data.requestId, stage, message);
       }
     };
     window.addEventListener("message", listener);
@@ -205,11 +203,13 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       const requestId = createSubmissionRequestId();
       requestIdRef.current = requestId;
       const title = contest.problemTitles?.[selectedSlot.charCodeAt(0) - 65] || `Problem ${selectedSlot}`;
-      void recordPlatformSubmission({
+      setStatus("正在保存提交任务…");
+      await recordPlatformSubmission({
         requestId, judge: "ucup", problemCode: `${contest.id}-${selectedSlot}`, problemTitle: title,
         problemHref: `/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(selectedSlot)}`,
         contestId: contest.qojContestId, problemIndex: selectedSlot, language: selectedLanguage.label,
         status: "queued", message: "正在连接 Universal Cup / QOJ",
+        archiveContestId: contest.id, slot: selectedSlot, sourceCode,
       });
       window.postMessage({
         source: "icpc-trainer",
@@ -231,7 +231,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       setStatus("正在后台连接 Universal Cup / QOJ 并提交…");
       return;
     }
-    setStatus("需要安装并重新加载 v1.1 提交扩展；代码已复制，不会丢失。");
+    setStatus("需要安装并重新加载 v1.2 提交扩展；代码已复制，不会丢失。");
   }
 
   return <div className="archive-submit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -253,7 +253,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
-      <footer><span>{extensionReady ? "v1.1 扩展已连接 · 凭据只留在浏览器" : "未检测到 v1.1 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
+      <footer><span>{extensionReady ? "v1.2 扩展已连接 · 凭据只留在浏览器" : "未检测到 v1.2 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
     </section>
   </div>;
 }

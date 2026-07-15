@@ -136,7 +136,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "1.1.0");
+  assert.equal(manifest.version, "1.2.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -160,6 +160,10 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(fill, /archiveContestId/);
   assert.match(background, /archiveContestId/);
   assert.match(background, /trainerSubmissionResults/);
+  assert.match(background, /pendingJudgeSubmissions/);
+  assert.match(background, /GET_PENDING_SUBMISSION/);
+  assert.match(background, /judgeTabId/);
+  assert.match(background, /url: "about:blank"/);
   assert.match(bridge, /replayStoredResults/);
   assert.match(bridge, /\.\.\.result, source: "icpc-trainer-extension", type: "ICPC_TRAINER_SUBMIT_RESULT"/);
 });
@@ -367,12 +371,14 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(backend, /\/state/);
   assert.match(persistence, /CREATE TABLE IF NOT EXISTS runtime_cache/);
   assert.match(persistence, /CREATE TABLE IF NOT EXISTS personal_state/);
+  assert.match(persistence, /CREATE TABLE IF NOT EXISTS platform_submissions/);
   assert.match(persistence, /CREATE TABLE IF NOT EXISTS vp_sessions/);
   assert.match(persistence, /CREATE TABLE IF NOT EXISTS vp_standing_snapshots/);
   assert.match(persistence, /gzipSync/);
   assert.match(persistentClient, /loadPersistentJson/);
   assert.match(persistentClient, /authFetch/);
   assert.match(backend, /selectedProblems/);
+  assert.match(backend, /\/platform-submissions/);
   assert.match(backend, /createStatementHandler/);
   assert.match(statements, /problem_statements/);
   assert.match(statements, /statement_assets/);
@@ -444,6 +450,34 @@ test("uses one validated training profile across dashboard, catalog, submissions
   assert.match(preferences, /validCodeforcesHandle/);
   assert.match(preferences, /dailyGoal/);
   for (const source of [home, catalog, submissions, vp]) assert.match(source, /readTrainerPreferences/);
+});
+
+test("keeps platform submissions, source code, final verdicts, and problem history inside the product", async () => {
+  const [client, shell, problem, archiveProblem, list, detail, backend, persistence] = await Promise.all([
+    readFile(new URL("app/lib/platform-submissions.ts", root), "utf8"),
+    readFile(new URL("app/components/AppShell.tsx", root), "utf8"),
+    readFile(new URL("app/problem/[code]/page.tsx", root), "utf8"),
+    readFile(new URL("app/vp/archive/problem/page.tsx", root), "utf8"),
+    readFile(new URL("app/submissions/page.tsx", root), "utf8"),
+    readFile(new URL("app/submissions/[requestId]/page.tsx", root), "utf8"),
+    readFile(new URL("backend/server.mjs", root), "utf8"),
+    readFile(new URL("backend/persistence.mjs", root), "utf8"),
+  ]);
+  assert.match(client, /\/platform-submissions/);
+  assert.match(client, /sourceCode/);
+  assert.match(client, /queueRemote/);
+  assert.match(shell, /judgeSubmissionId/);
+  assert.match(shell, /applyArchiveJudgeVerdict/);
+  assert.match(problem, /本题提交记录/);
+  assert.match(problem, /选择文件/);
+  assert.match(problem, /submitLanguage/);
+  assert.match(archiveProblem, /sourceCode/);
+  assert.match(list, /\/submissions\/\$\{row\.requestId\}/);
+  assert.match(detail, /复制代码/);
+  assert.match(detail, /评测站提交编号/);
+  assert.match(backend, /platform-submissions\/status/);
+  assert.match(persistence, /source_payload/);
+  assert.match(persistence, /updatePlatformSubmissionStatus/);
 });
 
 test("ships a deliberate-practice loop and collects user experience feedback", async () => {

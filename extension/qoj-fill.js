@@ -1,5 +1,5 @@
 (async () => {
-  const { pendingArchiveSubmission } = await chrome.storage.local.get("pendingArchiveSubmission");
+  const pendingArchiveSubmission = (await chrome.runtime.sendMessage({ type: "GET_PENDING_SUBMISSION", judge: "ucup" }))?.submission;
   if (!pendingArchiveSubmission || Date.now() - pendingArchiveSubmission.createdAt > 30 * 60 * 1000) return;
 
   const report = (stage, message, extra = {}) => chrome.runtime.sendMessage({
@@ -15,14 +15,13 @@
     ...extra,
   });
   const finishWithError = async (stage, message) => {
-    await chrome.storage.local.remove("pendingArchiveSubmission");
     await report(stage, message);
   };
 
   if (pendingArchiveSubmission.phase === "tracking") {
     const submissionsPath = new RegExp(`^/contest/${pendingArchiveSubmission.qojContestId}/submissions/?$`);
     if (!submissionsPath.test(location.pathname)) return;
-    for (let attempt = 0; attempt < 240; attempt += 1) {
+    for (let attempt = 0; attempt < 2400; attempt += 1) {
       const rows = [...document.querySelectorAll("table tbody tr")];
       let row = null;
       if (Number.isInteger(pendingArchiveSubmission.submissionId)) {
@@ -36,7 +35,7 @@
         const idMatch = idLink?.getAttribute("href")?.match(/^\/submission\/(\d+)$/);
         if (idMatch) {
           pendingArchiveSubmission.submissionId = Number(idMatch[1]);
-          await chrome.storage.local.set({ pendingArchiveSubmission });
+          await chrome.runtime.sendMessage({ type: "UPDATE_PENDING_SUBMISSION", judge: "ucup", requestId: pendingArchiveSubmission.requestId, submissionId: pendingArchiveSubmission.submissionId });
         }
       }
 
@@ -45,22 +44,19 @@
         if (scoreLink) {
           const score = Number(scoreLink.textContent?.trim());
           const verdict = Number.isFinite(score) && score >= 99.999 ? "AC" : "WA";
-          await chrome.storage.local.remove("pendingArchiveSubmission");
           await report("judged", verdict === "AC" ? "Accepted · 已自动计入 VP 排名" : `未通过（${Number.isFinite(score) ? score : 0} 分）· 已自动计入罚时`, { verdict, submissionId: pendingArchiveSubmission.submissionId });
           return;
         }
         const resultLink = [...row.querySelectorAll("a.small[href^='/submission/']")].find((item) => item.getAttribute("href") === `/submission/${pendingArchiveSubmission.submissionId}`);
         const resultText = resultLink?.textContent?.trim() || "";
         if (resultText && !/Waiting|Judging|Rejudge|Queued/i.test(resultText)) {
-          await chrome.storage.local.remove("pendingArchiveSubmission");
           await report("judged", `${resultText} · 已自动计入罚时`, { verdict: "WA", submissionId: pendingArchiveSubmission.submissionId });
           return;
         }
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
-    await chrome.storage.local.remove("pendingArchiveSubmission");
-    await report("judged", "判题时间较长，可在平台提交记录中继续查看");
+    await report("submitted", "判题超过 20 分钟，请在平台提交记录中稍后刷新");
     return;
   }
 
@@ -115,7 +111,7 @@
     }
     pendingArchiveSubmission.phase = "tracking";
     delete pendingArchiveSubmission.sourceCode;
-    await chrome.storage.local.set({ pendingArchiveSubmission });
+    await chrome.runtime.sendMessage({ type: "UPDATE_PENDING_SUBMISSION", judge: "ucup", requestId: pendingArchiveSubmission.requestId, phase: "tracking", removeSource: true });
     await report("submitted", "代码已送达 Universal Cup / QOJ，正在等待判题");
     submitButton.click();
     return;
@@ -123,5 +119,4 @@
 
   fields.source.scrollIntoView({ behavior: "smooth", block: "center" });
   fields.source.style.outline = "3px solid #c67ad8";
-  await chrome.storage.local.remove("pendingArchiveSubmission");
 })();

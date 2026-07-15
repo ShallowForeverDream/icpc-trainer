@@ -9,17 +9,21 @@ import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBo
 import { buildParticipantVpRows, rankVpRows, summarizeVpStates } from "./vp-scoring.mjs";
 import {
   finishVpSession,
+  createPlatformSubmission,
+  listPlatformSubmissions,
   ownerKeys,
   persistVpSession,
   persistenceStats,
   readActiveVpSession,
   readPersonalState,
+  readPlatformSubmission,
   readRuntimeCache,
   readVpSession,
   readVpSnapshot,
   runtimeCacheStats,
   standingSnapshotKey,
   startVpSession,
+  updatePlatformSubmissionStatus,
   writePersonalState,
   writeRuntimeCache,
   writeVpSnapshot,
@@ -458,6 +462,57 @@ function personalStateKey(value) {
   throw new HttpError(400, "个人数据类型无效");
 }
 
+const SUBMISSION_STATUSES = new Set(["queued", "submitted", "accepted", "rejected", "failed", "needs_login"]);
+
+function submissionRequestId(value) {
+  const requestId = String(value || "").trim();
+  if (!/^[A-Za-z0-9-]{8,80}$/.test(requestId)) throw new HttpError(400, "提交请求编号无效");
+  return requestId;
+}
+
+function submissionText(value, maxLength, label) {
+  const text = String(value || "").trim();
+  if (!text || text.length > maxLength) throw new HttpError(400, `${label}无效`);
+  return text;
+}
+
+function normalizePlatformSubmission(body) {
+  const judge = String(body.judge || "");
+  if (!["codeforces", "ucup"].includes(judge)) throw new HttpError(400, "评测站无效");
+  const contestId = Number(body.contestId);
+  if (!Number.isInteger(contestId) || contestId < 1 || contestId > 100_000_000) throw new HttpError(400, "比赛编号无效");
+  const problemIndex = String(body.problemIndex || "").trim().toUpperCase();
+  if (!/^[A-Z][0-9]?$/.test(problemIndex)) throw new HttpError(400, "题号无效");
+  const problemCode = submissionText(body.problemCode, 100, "题目标识");
+  if (!/^[A-Za-z0-9 .:_-]+$/.test(problemCode)) throw new HttpError(400, "题目标识无效");
+  const problemHref = submissionText(body.problemHref, 1200, "站内题目地址");
+  if (!/^\/(?:problem\/[A-Za-z0-9]+|vp\/archive\/problem)(?:\?[^\s#]*)?$/.test(problemHref)) throw new HttpError(400, "站内题目地址无效");
+  const sourceCode = String(body.sourceCode || "");
+  if (!sourceCode.trim() || Buffer.byteLength(sourceCode) > 500_000) throw new HttpError(400, "提交代码为空或超过 500 KB");
+  const status = String(body.status || "queued");
+  if (!SUBMISSION_STATUSES.has(status)) throw new HttpError(400, "提交状态无效");
+  const archiveContestId = body.archiveContestId === undefined || body.archiveContestId === null ? "" : String(body.archiveContestId).trim();
+  if (archiveContestId && !/^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])$/.test(archiveContestId)) throw new HttpError(400, "历届赛事标识无效");
+  const slot = body.slot === undefined || body.slot === null ? "" : String(body.slot).trim().toUpperCase();
+  if (slot && !/^[A-Z][0-9]?$/.test(slot)) throw new HttpError(400, "VP 题号无效");
+  return {
+    requestId: submissionRequestId(body.requestId), judge, problemCode,
+    problemTitle: submissionText(body.problemTitle, 180, "题目名称"), problemHref, contestId, problemIndex,
+    language: submissionText(body.language, 80, "编译语言"), sourceCode, status,
+    message: submissionText(body.message, 240, "提交状态说明"), archiveContestId, slot,
+  };
+}
+
+function normalizePlatformSubmissionUpdate(body) {
+  const status = String(body.status || "");
+  if (!SUBMISSION_STATUSES.has(status)) throw new HttpError(400, "提交状态无效");
+  const verdict = body.verdict === undefined || body.verdict === null ? "" : String(body.verdict).trim().toUpperCase();
+  if (verdict && !["AC", "WA"].includes(verdict)) throw new HttpError(400, "判题结果无效");
+  const judgeSubmissionId = body.judgeSubmissionId === undefined || body.judgeSubmissionId === null ? null : Number(body.judgeSubmissionId);
+  if (judgeSubmissionId !== null && (!Number.isInteger(judgeSubmissionId) || judgeSubmissionId < 1)) throw new HttpError(400, "评测站提交编号无效");
+  return { requestId: submissionRequestId(body.requestId), status, verdict, judgeSubmissionId, message: submissionText(body.message, 240, "提交状态说明") };
+}
+
 async function generateVp(body, ownerKey) {
   const participants = normalizeParticipants(body.participants || body.handle, "ShallowDream2");
   const handle = participants[0];
@@ -668,6 +723,32 @@ const server = http.createServer(async (request, response) => {
       const owners = requestOwners(request, body.clientId);
       writePersonalState(owners.primary, key, body.value ?? null);
       return json(response, 200, { ok: true, updatedAt: new Date().toISOString() });
+    }
+    if (request.method === "GET" && url.pathname === "/platform-submissions") {
+      const owners = requestOwners(request, url.searchParams.get("clientId"));
+      const limit = boundedInteger(url.searchParams.get("limit"), { min: 1, max: 250, fallback: 100 });
+      const problemCode = String(url.searchParams.get("problem") || "").trim().slice(0, 100);
+      return json(response, 200, { submissions: listPlatformSubmissions(owners, { limit, problemCode }) });
+    }
+    if (request.method === "POST" && url.pathname === "/platform-submissions") {
+      const body = await readJsonBody(request, { maxBytes: 1200 * 1024 });
+      const owners = requestOwners(request, body.clientId);
+      const submission = createPlatformSubmission(owners.primary, normalizePlatformSubmission(body));
+      return json(response, 201, { submission });
+    }
+    if (request.method === "POST" && url.pathname === "/platform-submissions/status") {
+      const body = await readBody(request);
+      const owners = requestOwners(request, body.clientId);
+      const update = normalizePlatformSubmissionUpdate(body);
+      let submission = updatePlatformSubmissionStatus(owners.primary, update.requestId, update);
+      if (!submission && owners.fallback && readPlatformSubmission(owners, update.requestId)) submission = updatePlatformSubmissionStatus(owners.primary, update.requestId, update);
+      return submission ? json(response, 200, { submission }) : json(response, 404, { error: "提交记录不存在" });
+    }
+    const platformSubmissionMatch = url.pathname.match(/^\/platform-submissions\/([A-Za-z0-9-]{8,80})$/);
+    if (request.method === "GET" && platformSubmissionMatch) {
+      const owners = requestOwners(request, url.searchParams.get("clientId"));
+      const submission = readPlatformSubmission(owners, platformSubmissionMatch[1], { includeSource: true });
+      return submission ? json(response, 200, { submission }) : json(response, 404, { error: "提交记录不存在" });
     }
     if (request.method === "GET" && url.pathname === "/vp/sessions/active") {
       const owners = requestOwners(request, url.searchParams.get("clientId"), { allowGuest: true });

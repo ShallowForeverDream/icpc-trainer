@@ -208,15 +208,19 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
 });
 
 test("ships historical ICPC upsolving with timestamp-replayed real standings", async () => {
-  const [catalog, page, route, scoreboard] = await Promise.all([
+  const [catalog, page, problemPage, route, scoreboard] = await Promise.all([
     readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
     readFile(new URL("app/vp/archive/page.tsx", root), "utf8"),
+    readFile(new URL("app/vp/archive/[contestId]/[slot]/page.tsx", root), "utf8"),
     readFile(new URL("app/api/archive/scoreboard/route.ts", root), "utf8"),
     readFile(new URL("app/lib/archive-scoreboard.ts", root), "utf8"),
   ]);
   assert.equal((catalog.match(/boardPath: "icpc\//g) ?? []).length, 24);
   assert.equal((catalog.match(/boardPath: "provincial-contest\//g) ?? []).length, 2);
   assert.match(catalog, /2026-shandong-provincial/);
+  assert.match(catalog, /qojContestId: 3588/);
+  assert.match(catalog, /17753, 17754, 17755/);
+  assert.match(catalog, /archiveProblemHref/);
   assert.match(catalog, /type: "省赛"/);
   assert.match(catalog, /2026-wuhan-invitational/);
   assert.match(catalog, /2025-chengdu/);
@@ -224,6 +228,13 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /URLSearchParams\(window\.location\.search\)/);
+  assert.match(page, /选择题目开始作答/);
+  assert.match(page, /开始做题/);
+  assert.match(page, /archiveProblemHref/);
+  assert.match(problemPage, /官方题面直接在本站阅读/);
+  assert.match(problemPage, /复制代码并打开提交页/);
+  assert.match(problemPage, /返回实时榜单/);
+  assert.match(problemPage, /savePersistentJson\("archive-vp"/);
   assert.match(route, /archiveScoreboard/);
   assert.match(scoreboard, /run\.json/);
   assert.match(scoreboard, /freezeAtSeconds/);
@@ -236,6 +247,12 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(html, /历届补题/);
   assert.match(html, /ICPC 武汉全国邀请赛/);
   assert.match(html, /省赛/);
+
+  const problemResponse = await render("/vp/archive/2026-shenzhen-invitational/A");
+  assert.equal(problemResponse.status, 200);
+  const problemHtml = await problemResponse.text();
+  assert.match(problemHtml, /Greetings from Prof\. Chen/);
+  assert.match(problemHtml, /复制代码并打开提交页/);
 });
 
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {

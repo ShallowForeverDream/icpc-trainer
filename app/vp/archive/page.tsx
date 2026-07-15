@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { archiveContests, archiveProblemUrl, findArchiveContest } from "../../data/archive-contests";
+import { archiveContests, archivePracticeProblem, archiveProblemHref, findArchiveContest } from "../../data/archive-contests";
 import { clearPersistentJson, loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
 import { readTrainerPreferences } from "../../lib/preferences";
 import { readStoredJson } from "../../lib/storage";
@@ -214,10 +214,20 @@ export default function ArchiveVpPage() {
     </section>
     <section className={`archive-freeze-state ${scoreboard?.frozen ? "active" : ""}`}><b>{scoreboard?.frozen ? "榜单已进入原场封榜时段" : "榜单按原场时间推进"}</b><span>{scoreboard?.frozen ? "封榜后的提交显示为待定，不提前泄露结果；比赛结束后可手动揭榜。" : `当前重放至 ${clock(elapsed)}，下一次自动同步不超过 10 秒。`}</span></section>
 
+    <div className="archive-problems-head"><div><b>选择题目开始作答</b><span>点击任意题卡，直接进入本站题面与代码编辑器</span></div><small>题面 · 草稿 · 提交</small></div>
     <section className="archive-problems">{(scoreboard?.slots || Array.from({ length: contest?.problemCount || 13 }, (_, index) => String.fromCharCode(65 + index))).map((slot) => {
       const attempt = session.attempts[slot] || { wrong: 0 };
       const solved = attempt.solvedAt !== undefined;
-      return <article className={solved ? "solved" : attempt.wrong ? "attempted" : ""} key={slot}><a href={contest ? archiveProblemUrl(contest, slot) : "#"} target="_blank" rel="noreferrer"><b>{slot}</b><span>{solved ? `${Math.floor((attempt.solvedAt || 0) / 60)} min · +${attempt.wrong || ""}` : attempt.wrong ? `-${attempt.wrong}` : "打开真题 ↗"}</span></a><div><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "wrong")}>+ WA</button><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "solve")}>标记 AC</button>{attempt.wrong || solved ? <button onClick={() => updateAttempt(slot, "reset")}>重置</button> : null}</div></article>;
+      const href = contest ? archiveProblemHref(contest, slot) : "#";
+      const practice = contest ? archivePracticeProblem(contest, slot) : null;
+      return <article className={solved ? "solved" : attempt.wrong ? "attempted" : ""} key={slot}>
+        <Link className="archive-problem-open" href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined}>
+          <span className="archive-problem-letter">{slot}</span>
+          <span className="archive-problem-copy"><b>{practice?.title || `Problem ${slot}`}</b><small>{solved ? `${Math.floor((attempt.solvedAt || 0) / 60)} min · 已通过` : attempt.wrong ? `${attempt.wrong} 次错误尝试` : "题面与代码编辑器"}</small></span>
+          <strong>开始做题 →</strong>
+        </Link>
+        <div><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "wrong")}>+ WA</button><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "solve")}>标记 AC</button>{attempt.wrong || solved ? <button onClick={() => updateAttempt(slot, "reset")}>重置</button> : null}</div>
+      </article>;
     })}</section>
 
     <article className="panel archive-standings">

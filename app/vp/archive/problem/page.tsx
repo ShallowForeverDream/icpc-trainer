@@ -3,12 +3,17 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useState } from "react";
 import { AppShell, Icon } from "../../../components/AppShell";
-import { archivePracticeProblem, findArchiveContest } from "../../../data/archive-contests";
-import { ArchiveExtractedStatement, ArchiveStatementBlock, loadArchiveStatement } from "../../../lib/archive-statement-client";
-import { loadPersistentJson, savePersistentJson } from "../../../lib/persistent-state";
-import { readStoredJson, readStoredString, writeStoredJson, writeStoredString } from "../../../lib/storage";
+import { ArchiveContest, archivePracticeProblem, findArchiveContest } from "../../../data/archive-contests";
+import {
+  ArchiveExtractedStatement,
+  ArchiveStatementBlock,
+  ArchiveStatementPendingError,
+  loadArchiveStatement,
+} from "../../../lib/archive-statement-client";
+import { savePersistentJson } from "../../../lib/persistent-state";
+import { readStoredJson, writeStoredJson } from "../../../lib/storage";
 
 type Attempt = { wrong: number; solvedAt?: number };
 type ArchiveSession = {
@@ -20,25 +25,21 @@ type ArchiveSession = {
   attempts: Record<string, Attempt>;
 };
 
+type SubmitLanguage = { value: string; label: string; extensions: string[] };
+
 const SESSION_KEY = "icpc-trainer-archive-vp";
-const starterCode = `#include <bits/stdc++.h>
-using namespace std;
-
-using i64 = long long;
-
-void solve() {
-    
-}
-
-int main() {
-    ios::sync_with_stdio(false);
-    cin.tie(nullptr);
-
-    int tests = 1;
-    // cin >> tests;
-    while (tests--) solve();
-    return 0;
-}`;
+const SUBMIT_LANGUAGES: SubmitLanguage[] = [
+  { value: "C++20", label: "GNU C++20", extensions: ["cpp", "cc", "cxx"] },
+  { value: "C++23", label: "GNU C++23", extensions: ["cpp", "cc", "cxx"] },
+  { value: "C++17", label: "GNU C++17", extensions: ["cpp", "cc", "cxx"] },
+  { value: "C11", label: "GNU C11", extensions: ["c"] },
+  { value: "PyPy3", label: "PyPy 3", extensions: ["py"] },
+  { value: "Python3", label: "Python 3", extensions: ["py"] },
+  { value: "Java21", label: "Java 21", extensions: ["java"] },
+  { value: "Java17", label: "Java 17", extensions: ["java"] },
+  { value: "Kotlin", label: "Kotlin", extensions: ["kt", "kts"] },
+  { value: "Rust", label: "Rust", extensions: ["rs"] },
+];
 
 function isArchiveSession(value: unknown): value is ArchiveSession {
   if (!value || typeof value !== "object") return false;
@@ -50,6 +51,31 @@ function isArchiveSession(value: unknown): value is ArchiveSession {
     && Boolean(session.attempts && typeof session.attempts === "object");
 }
 
+async function copyText(value: string) {
+  try {
+    await navigator.clipboard.writeText(value);
+  } catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.style.position = "fixed";
+    textarea.style.opacity = "0";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+}
+
+function CopySampleButton({ value, label }: { value: string; label: string }) {
+  const [copied, setCopied] = useState(false);
+  return <button type="button" className="sample-copy" onClick={() => {
+    void copyText(value).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  }}>{copied ? "已复制 ✓" : label}</button>;
+}
+
 function StatementBlock({ block }: { block: ArchiveStatementBlock }) {
   if (block.kind === "bullets") return <ul>{block.items.map((item, index) => <li key={index}>{item}</li>)}</ul>;
   return <p>{block.text}</p>;
@@ -57,22 +83,25 @@ function StatementBlock({ block }: { block: ArchiveStatementBlock }) {
 
 function ArchiveStatementView({ statement, language }: { statement: ArchiveExtractedStatement; language: "english" | "chinese" }) {
   const sections = statement[language].sections;
-  const pages = statement.source.chinesePages[0] === statement.source.chinesePages[1]
-    ? `${statement.source.chinesePages[0]}`
-    : `${statement.source.chinesePages[0]}–${statement.source.chinesePages[1]}`;
+  const pages = statement.source.chinesePages
+    ? statement.source.chinesePages[0] === statement.source.chinesePages[1]
+      ? `${statement.source.chinesePages[0]}`
+      : `${statement.source.chinesePages[0]}–${statement.source.chinesePages[1]}`
+    : "";
+  const isOfficialChinese = language === "chinese" && Boolean(statement.source.chinesePdfUrl);
   return <article className="archive-statement-panel">
     <header className="archive-statement-toolbar">
-      <div><b>结构化题面</b><span>正文与图片已从官方 PDF 提取</span></div>
+      <div><b>结构化题面</b><span>正文、样例与图片已从官方 PDF 提取</span></div>
       <nav>
-        <a href={statement.source.englishPdfUrl} target="_blank" rel="noreferrer">下载英文原始 PDF ↓</a>
-        <a href={statement.source.chinesePdfUrl} target="_blank" rel="noreferrer">下载中文原始 PDF ↓</a>
+        <a href={statement.source.englishPdfUrl} target="_blank" rel="noreferrer">下载原始 PDF ↓</a>
+        {statement.source.chinesePdfUrl ? <a href={statement.source.chinesePdfUrl} target="_blank" rel="noreferrer">下载中文原始 PDF ↓</a> : null}
       </nav>
     </header>
     <div className="statement-body full-statement archive-extracted-statement">
       <div className="statement-facts">
-        <span><b>{statement.timeLimitText}</b>{language === "chinese" ? "时间限制" : "Time limit"}</span>
-        <span><b>{statement.memoryLimitText}</b>{language === "chinese" ? "内存限制" : "Memory limit"}</span>
-        <span><b>{language === "chinese" ? `官方中文题册 ${pages} 页` : "Official PDF"}</b>{language === "chinese" ? "题面来源" : "Statement source"}</span>
+        <span><b>{statement.timeLimitText || "以原题为准"}</b>{language === "chinese" ? "时间限制" : "Time limit"}</span>
+        <span><b>{statement.memoryLimitText || "以原题为准"}</b>{language === "chinese" ? "内存限制" : "Memory limit"}</span>
+        <span><b>{isOfficialChinese ? `官方中文题册${pages ? ` ${pages} 页` : ""}` : language === "chinese" ? "本站中文翻译" : "Official PDF"}</b>{language === "chinese" ? "题面来源" : "Statement source"}</span>
       </div>
       {sections.map((section) => <section className={`archive-statement-section section-${section.key}`} key={section.key}>
         <h2>{section.title}</h2>
@@ -80,22 +109,123 @@ function ArchiveStatementView({ statement, language }: { statement: ArchiveExtra
       </section>)}
       {statement.images.length ? <section className="archive-statement-section archive-figures">
         <h2>{language === "chinese" ? "题目配图" : "Figures"}</h2>
-        {statement.images.map((figure) => <figure key={figure.src}>
+        {statement.images.map((figure) => <figure key={figure.src || figure.assetId}>
           <img src={figure.src} alt={language === "chinese" ? figure.captionZh : figure.captionEn} />
           <figcaption>{language === "chinese" ? figure.captionZh : figure.captionEn}</figcaption>
           {language === "chinese" && figure.imageTextZh ? <p className="image-translation"><b>图片文字翻译</b>{figure.imageTextZh}</p> : null}
         </figure>)}
       </section> : null}
-      {statement.sample ? <section className="archive-statement-section">
+      {statement.sample ? <section className="archive-statement-section archive-sample-section">
         <h2>{language === "chinese" ? "样例" : "Example"}</h2>
         <div className={`samples statement-sample${statement.sample.output ? "" : " transcript"}`}>
-          <div><b>{statement.sample.mode === "transcript" ? (language === "chinese" ? "交互记录" : "Transcript") : (language === "chinese" ? "样例输入" : "Input")}</b><pre>{statement.sample.input}</pre></div>
-          {statement.sample.output ? <div><b>{language === "chinese" ? "样例输出" : "Output"}</b><pre>{statement.sample.output}</pre></div> : null}
+          <div>
+            <header><b>{statement.sample.mode === "transcript" ? (language === "chinese" ? "交互记录" : "Transcript") : (language === "chinese" ? "样例输入" : "Input")}</b><CopySampleButton value={statement.sample.input} label="复制输入" /></header>
+            <pre>{statement.sample.input}</pre>
+          </div>
+          {statement.sample.output ? <div>
+            <header><b>{language === "chinese" ? "样例输出" : "Output"}</b><CopySampleButton value={statement.sample.output} label="复制输出" /></header>
+            <pre>{statement.sample.output}</pre>
+          </div> : null}
         </div>
       </section> : null}
-      <div className="source-callout"><b>{language === "chinese" ? "官方中文题面" : "Official statement"}</b><p>{language === "chinese" ? "正文、约束、样例与图片均提取自官方题册；可使用页面顶部链接下载原始 PDF 核对。" : "Text, constraints, samples, and figures were extracted from the official PDF. Use the download links above to verify the original file."}</p></div>
+      <div className="source-callout"><b>{isOfficialChinese ? "官方中文题面" : language === "chinese" ? "持久化中文题面" : "Official statement"}</b><p>{isOfficialChinese ? "正文、约束、样例与图片均提取自官方题册。" : language === "chinese" ? "译文首次生成后保存在服务器数据库中；公式、样例和图片保持原样。" : "Text, constraints, samples, and figures were extracted from the official PDF."}</p></div>
     </div>
   </article>;
+}
+
+function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest: ArchiveContest; currentSlot: string; slots: string[]; onClose: () => void }) {
+  const [selectedSlot, setSelectedSlot] = useState(currentSlot);
+  const [languageValue, setLanguageValue] = useState("C++20");
+  const [sourceCode, setSourceCode] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [extensionReady, setExtensionReady] = useState(false);
+
+  useEffect(() => {
+    const listener = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      if (event.data?.source !== "icpc-trainer-extension") return;
+      if (event.data.type === "ICPC_TRAINER_PONG") setExtensionReady(true);
+      if (event.data.type === "ICPC_TRAINER_SUBMIT_RESULT") setStatus(event.data.ok ? "提交页已打开，检查后在评测站确认提交。" : "扩展未能打开提交页，请重新加载扩展后再试。");
+    };
+    window.addEventListener("message", listener);
+    window.postMessage({ source: "icpc-trainer", type: "ICPC_TRAINER_PING" }, window.location.origin);
+    return () => window.removeEventListener("message", listener);
+  }, []);
+
+  async function selectFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    setError("");
+    setStatus("");
+    if (!file) {
+      setFileName("");
+      setSourceCode("");
+      return;
+    }
+    if (file.size > 500_000) {
+      setError("代码文件不能超过 500 KB");
+      event.target.value = "";
+      return;
+    }
+    const text = await file.text();
+    if (!text.trim()) {
+      setError("代码文件内容为空");
+      return;
+    }
+    setFileName(file.name);
+    setSourceCode(text);
+    const extension = file.name.split(".").pop()?.toLowerCase() || "";
+    const guessed = SUBMIT_LANGUAGES.find((item) => item.extensions.includes(extension));
+    if (guessed) setLanguageValue(guessed.value);
+  }
+
+  async function submit() {
+    setError("");
+    setStatus("");
+    if (!sourceCode.trim()) return setError("请先选择代码文件");
+    const problem = archivePracticeProblem(contest, selectedSlot);
+    if (!problem || !contest.qojContestId) return setError("这道题暂时没有可用的评测入口");
+    const selectedLanguage = SUBMIT_LANGUAGES.find((item) => item.value === languageValue) || SUBMIT_LANGUAGES[0];
+    await copyText(sourceCode);
+    if (extensionReady) {
+      window.postMessage({
+        source: "icpc-trainer",
+        type: "ICPC_TRAINER_ARCHIVE_SUBMIT",
+        payload: {
+          judge: "ucup",
+          qojContestId: contest.qojContestId,
+          problemId: problem.id,
+          slot: selectedSlot,
+          submitUrl: problem.submitUrl,
+          sourceCode,
+          languageValue: selectedLanguage.value,
+          languageLabel: selectedLanguage.label,
+        },
+      }, window.location.origin);
+      setStatus("正在通过浏览器扩展打开并填写提交页…");
+      return;
+    }
+    window.open(problem.submitUrl, "_blank", "noopener,noreferrer");
+    setStatus("代码已复制。安装扩展后可自动填写；当前请在新页面粘贴并提交。");
+  }
+
+  return <div className="archive-submit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="archive-submit-dialog" role="dialog" aria-modal="true" aria-labelledby="archive-submit-title">
+      <header><div><small>提交到 Universal Cup / QOJ</small><h2 id="archive-submit-title">提交代码</h2></div><button type="button" aria-label="关闭提交窗口" onClick={onClose}>×</button></header>
+      <div className="archive-submit-fields">
+        <label><span>题目</span><select value={selectedSlot} onChange={(event) => setSelectedSlot(event.target.value)}>{slots.map((slot) => <option value={slot} key={slot}>{slot} · {contest.problemTitles?.[slot.charCodeAt(0) - 65] || `Problem ${slot}`}</option>)}</select></label>
+        <label><span>语言</span><select value={languageValue} onChange={(event) => setLanguageValue(event.target.value)}>{SUBMIT_LANGUAGES.map((item) => <option value={item.value} key={item.value}>{item.label}</option>)}</select></label>
+      </div>
+      <label className={`archive-file-picker${fileName ? " selected" : ""}`}>
+        <input type="file" accept=".cpp,.cc,.cxx,.c,.py,.java,.kt,.kts,.rs,.txt" onChange={(event) => void selectFile(event)} />
+        <Icon name="upload" /><span><b>{fileName || "选择代码文件"}</b><small>{fileName ? `${Math.ceil(new Blob([sourceCode]).size / 1024)} KB · 可更换文件` : "支持 C++、C、Python、Java、Kotlin、Rust"}</small></span>
+      </label>
+      {error ? <p className="archive-submit-error">{error}</p> : null}
+      {status ? <p className="archive-submit-status">{status}</p> : null}
+      <footer><span>{extensionReady ? "浏览器扩展已连接" : "未检测到扩展：提交时仍会复制代码并打开评测页"}</span><button type="button" onClick={() => void submit()}>打开并填写提交页 →</button></footer>
+    </section>
+  </div>;
 }
 
 export default function ArchiveProblemPage() {
@@ -103,51 +233,59 @@ export default function ArchiveProblemPage() {
   const contestId = searchParams.get("contest") || "";
   const slot = (searchParams.get("slot") || "A").toUpperCase();
   const contest = findArchiveContest(contestId);
-  const problem = contest && /^[A-Z]$/.test(slot) ? archivePracticeProblem(contest, slot) : null;
-  const hasProblem = Boolean(problem);
+  const problem = contest && /^[A-Z][0-9]?$/.test(slot) ? archivePracticeProblem(contest, slot) : null;
   const problemIndex = slot.charCodeAt(0) - 65;
   const slots = contest ? Array.from({ length: contest.problemCount }, (_, index) => String.fromCharCode(65 + index)) : [];
   const previous = slots[Math.max(0, problemIndex - 1)];
   const next = slots[Math.min(slots.length - 1, problemIndex + 1)];
-  const draftKey = `icpc-trainer-archive-draft:${contestId}:${slot}`;
-  const [code, setCode] = useState(starterCode);
-  const [draftReady, setDraftReady] = useState(false);
+  const qojContestId = contest?.qojContestId || 0;
+  const problemId = problem?.id || 0;
+  const contestName = contest?.name || "";
+  const problemTitle = problem?.title || `Problem ${slot}`;
   const [language, setLanguage] = useState<"english" | "chinese">("english");
   const [attempt, setAttempt] = useState<Attempt>({ wrong: 0 });
   const [started, setStarted] = useState(false);
-  const [copied, setCopied] = useState(false);
   const [statement, setStatement] = useState<ArchiveExtractedStatement | null>(null);
-  const [statementError, setStatementError] = useState("");
+  const [statementMessage, setStatementMessage] = useState("");
+  const [submitOpen, setSubmitOpen] = useState(false);
 
   useEffect(() => {
-    setDraftReady(false);
-    const localDraft = readStoredString(draftKey, starterCode);
-    setCode(localDraft);
-    void loadPersistentJson(`archive-draft:${contestId}:${slot}`, `${draftKey}:sync`, localDraft, (value): value is string => typeof value === "string" && value.length <= 500_000).then((savedDraft) => {
-      setCode(savedDraft);
-      writeStoredString(draftKey, savedDraft);
-      setDraftReady(true);
-    });
     const session = readStoredJson<ArchiveSession | null>(SESSION_KEY, null, (value): value is ArchiveSession | null => value === null || isArchiveSession(value));
     setStarted(Boolean(session?.contestId === contestId && session.startedAt));
     setAttempt(session?.contestId === contestId ? session.attempts[slot] || { wrong: 0 } : { wrong: 0 });
-  }, [contestId, draftKey, slot]);
+  }, [contestId, slot]);
 
   useEffect(() => {
-    if (!draftReady) return;
-    const timer = window.setTimeout(() => {
-      writeStoredString(draftKey, code);
-      void savePersistentJson(`archive-draft:${contestId}:${slot}`, `${draftKey}:sync`, code);
-    }, 450);
-    return () => window.clearTimeout(timer);
-  }, [code, contestId, draftKey, draftReady, slot]);
-
-  useEffect(() => {
+    let cancelled = false;
+    let timer = 0;
     setStatement(null);
-    setStatementError("");
-    if (!hasProblem) return;
-    void loadArchiveStatement(contestId, slot).then(setStatement).catch((error) => setStatementError(error instanceof Error ? error.message : "题面加载失败"));
-  }, [contestId, hasProblem, slot]);
+    setStatementMessage("");
+    if (!qojContestId || !problemId || !contestName) return;
+    const refresh = async () => {
+      try {
+        const value = await loadArchiveStatement(contestId, slot, {
+          qojContestId,
+          problemId,
+          contestName,
+          title: problemTitle,
+        });
+        if (cancelled) return;
+        setStatement(value);
+        setStatementMessage(value.message || (value.chinese.sections.length ? "" : "中文题面正在后台生成"));
+        if (!value.chinese.sections.length) timer = window.setTimeout(refresh, 4_000);
+      } catch (error) {
+        if (cancelled) return;
+        const pending = error instanceof ArchiveStatementPendingError;
+        setStatementMessage(error instanceof Error ? error.message : "题面加载失败");
+        if (pending) timer = window.setTimeout(refresh, 2_000);
+      }
+    };
+    void refresh();
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [contestId, contestName, problemId, problemTitle, qojContestId, slot]);
 
   function updateAttempt(action: "wrong" | "solve" | "reset") {
     const session = readStoredJson<ArchiveSession | null>(SESSION_KEY, null, (value): value is ArchiveSession | null => value === null || isArchiveSession(value));
@@ -163,25 +301,17 @@ export default function ArchiveProblemPage() {
     setAttempt(attempts[slot] || { wrong: 0 });
   }
 
-  function copyAndSubmit() {
-    if (!problem || !code.trim()) return;
-    void navigator.clipboard.writeText(code).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1800);
-    });
-    window.open(problem.submitUrl, "_blank", "noopener,noreferrer");
-  }
-
   if (!contest || !problem) return <AppShell active="模拟赛"><section className="template-not-found"><h1>暂未找到这道题</h1><Link className="button button-primary" href="/vp/archive">返回历届补题</Link></section></AppShell>;
 
   const solved = attempt.solvedAt !== undefined;
+  const chineseReady = Boolean(statement?.chinese.sections.length);
   return <AppShell active="模拟赛">
     <header className="archive-problem-head">
       <div>
         <Link href="/vp/archive">← 返回实时榜单</Link>
         <span>{contest.year} · {contest.type}</span>
-        <h1><b>{slot}</b>{language === "chinese" && statement ? statement.titleZh : problem.title}</h1>
-        <p>{contest.name} · 官方题面直接在本站阅读</p>
+        <h1><b>{slot}</b>{language === "chinese" && chineseReady ? statement?.titleZh : statement?.titleEn || problem.title}</h1>
+        <p>{contest.name}</p>
       </div>
       <nav>
         {problemIndex > 0 ? <Link href={`/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${previous}`}>← {previous}</Link> : <span />}
@@ -192,20 +322,19 @@ export default function ArchiveProblemPage() {
     <section className="archive-solve-bar">
       <div className="language-switch">
         <button className={language === "english" ? "active" : ""} onClick={() => setLanguage("english")}>原题面 <small>EN</small></button>
-        {problem.chineseStatementUrl ? <button className={language === "chinese" ? "active" : ""} onClick={() => setLanguage("chinese")}>官方中文 <small>ZH</small></button> : null}
+        <button className={language === "chinese" ? "active" : ""} disabled={!chineseReady} onClick={() => setLanguage("chinese")}>{statement?.source.chinesePdfUrl ? "官方中文" : "中文题面"} <small>{chineseReady ? "ZH" : "生成中"}</small></button>
       </div>
+      {statementMessage ? <span className="archive-statement-status"><i />{statementMessage}</span> : null}
       <div className={`archive-attempt-state${solved ? " solved" : attempt.wrong ? " attempted" : ""}`}><span>{solved ? "已 AC" : attempt.wrong ? `${attempt.wrong} 次 WA` : "未尝试"}</span><button disabled={!started || solved} onClick={() => updateAttempt("wrong")}>+ WA</button><button disabled={!started || solved} onClick={() => updateAttempt("solve")}>标记 AC</button>{solved || attempt.wrong ? <button onClick={() => updateAttempt("reset")}>重置</button> : null}</div>
     </section>
 
-    {!started ? <div className="archive-start-notice"><Icon name="clock" /><span>题面和编辑器可以直接使用；如需计入实时排名，请先返回榜单点击「开始 VP」。</span><Link href="/vp/archive">返回开始 VP →</Link></div> : null}
+    {!started ? <div className="archive-start-notice"><Icon name="clock" /><span>开始 VP 后，本题结果会计入实时排名。</span><Link href="/vp/archive">返回开始 VP →</Link></div> : null}
 
     <section className="archive-solving-workspace">
-      {statement ? <ArchiveStatementView statement={statement} language={language} /> : <article className="archive-statement-panel archive-statement-loading"><div className="statement-loader" /><h2>{statementError || "正在读取结构化题面"}</h2><p>{statementError ? "当前仍可下载官方原始 PDF 核对题面。" : "正文和图片已经持久化，首次进入只需读取本站文件。"}</p><div className="hero-actions"><a className="button button-ghost" href={problem.statementUrl} target="_blank" rel="noreferrer">下载英文原始 PDF ↓</a>{problem.chineseStatementUrl ? <a className="button button-ghost" href={problem.chineseStatementUrl} target="_blank" rel="noreferrer">下载中文原始 PDF ↓</a> : null}</div></article>}
-      <aside className="archive-code-panel">
-        <div className="editor-head"><div><span className="active-dot" /> main.cpp</div><span>GNU C++20</span></div>
-        <textarea className="code-editor" value={code} onChange={(event) => setCode(event.target.value)} spellCheck={false} aria-label="C++ 代码编辑器" />
-        <div className="archive-submit-panel"><span>草稿已自动保存</span><button type="button" onClick={copyAndSubmit}>{copied ? "代码已复制 ✓" : "复制代码并打开提交页"}</button><small>提交页由 Universal Cup / QOJ 提供；代码已复制，粘贴后确认提交。</small></div>
-      </aside>
+      {statement ? <ArchiveStatementView statement={statement} language={language} /> : <article className="archive-statement-panel archive-statement-loading"><div className="statement-loader" /><h2>正在整理题面</h2><p>{statementMessage || "首次打开会从官方 PDF 提取正文、样例和图片，完成后自动写入数据库。"}</p><div className="hero-actions"><a className="button button-ghost" href={problem.statementUrl} target="_blank" rel="noreferrer">下载原始 PDF ↓</a></div></article>}
     </section>
+
+    <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择文件、题目和语言，自动打开评测页。</span></div><button type="button" onClick={() => setSubmitOpen(true)}>提交代码 →</button></section>
+    {submitOpen ? <ArchiveSubmitDialog contest={contest} currentSlot={slot} slots={slots} onClose={() => setSubmitOpen(false)} /> : null}
   </AppShell>;
 }

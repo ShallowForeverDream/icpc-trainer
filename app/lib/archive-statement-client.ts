@@ -1,3 +1,5 @@
+import { browserApiUrl } from "./browser-api";
+
 export type ArchiveStatementBlock =
   | { kind: "paragraph"; text: string }
   | { kind: "bullets"; items: string[] };
@@ -10,8 +12,10 @@ export type ArchiveStatementSection = {
 
 export type ArchiveStatementImage = {
   src: string;
+  assetId?: string;
   captionEn: string;
   captionZh: string;
+  ocrEn?: string | null;
   imageTextZh?: string | null;
 };
 
@@ -28,14 +32,32 @@ export type ArchiveExtractedStatement = {
   source: {
     kind: "official-pdf-extract";
     englishPdfUrl: string;
-    chinesePdfUrl: string;
-    chinesePages: [number, number];
+    chinesePdfUrl: string | null;
+    chinesePages: [number, number] | null;
   };
   english: { sections: ArchiveStatementSection[] };
   chinese: { sections: ArchiveStatementSection[] };
   sample: { input: string; output: string; mode: "columns" | "transcript" } | null;
   images: ArchiveStatementImage[];
+  status?: "queued" | "importing" | "translating" | "ready_original" | "ready" | "source_required";
+  message?: string | null;
+  translationCurrent?: boolean;
+  updatedAt?: string;
 };
+
+export type ArchiveStatementRequest = {
+  qojContestId: number;
+  problemId: number;
+  contestName: string;
+  title: string;
+};
+
+export class ArchiveStatementPendingError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "ArchiveStatementPendingError";
+  }
+}
 
 function isArchiveStatement(value: unknown): value is ArchiveExtractedStatement {
   if (!value || typeof value !== "object") return false;
@@ -45,14 +67,37 @@ function isArchiveStatement(value: unknown): value is ArchiveExtractedStatement 
     && typeof statement.slot === "string"
     && typeof statement.titleEn === "string"
     && Boolean(statement.english?.sections && statement.chinese?.sections)
-    && Boolean(statement.source?.englishPdfUrl && statement.source?.chinesePdfUrl);
+    && Boolean(statement.source?.englishPdfUrl);
 }
 
-export async function loadArchiveStatement(contestId: string, slot: string) {
+export async function loadArchiveStatement(contestId: string, slot: string, request: ArchiveStatementRequest) {
   const path = `/archive-statements/${encodeURIComponent(contestId)}/${encodeURIComponent(slot)}.json`;
   const response = await fetch(path, { cache: "force-cache" });
-  if (!response.ok) throw new Error("这道题的结构化题面尚未导入");
-  const value: unknown = await response.json();
+  if (response.ok) {
+    const value: unknown = await response.json();
+    if (!isArchiveStatement(value)) throw new Error("结构化题面数据格式错误");
+    return value;
+  }
+
+  const query = new URLSearchParams({
+    contest: contestId,
+    slot,
+    qojContestId: String(request.qojContestId),
+    problemId: String(request.problemId),
+    contestName: request.contestName,
+    title: request.title,
+  });
+  const imported = await fetch(browserApiUrl(`/archive/statements?${query}`), { cache: "no-store" });
+  const payload = await imported.json().catch(() => ({})) as { statement?: unknown; error?: string };
+  if (!imported.ok && imported.status !== 202) throw new Error(payload.error || `题面导入失败（${imported.status}）`);
+  const value = payload.statement;
   if (!isArchiveStatement(value)) throw new Error("结构化题面数据格式错误");
-  return value;
+  if (!value.english.sections.length) throw new ArchiveStatementPendingError(value.message || "正在从官方 PDF 提取题面");
+  return {
+    ...value,
+    images: value.images.map((image) => ({
+      ...image,
+      src: image.assetId ? browserApiUrl(`/archive/statements/assets/${image.assetId}`) : image.src,
+    })),
+  };
 }

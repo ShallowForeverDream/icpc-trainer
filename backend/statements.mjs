@@ -1,11 +1,13 @@
 import { createHash } from "node:crypto";
 import { execFile } from "node:child_process";
 import { mkdirSync, unlinkSync, writeFileSync } from "node:fs";
+import { mkdtemp, readFile, readdir, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { DatabaseSync } from "node:sqlite";
 import { load } from "cheerio";
+import { chineseSectionTitle, parseArchivePdfText } from "./archive-pdf-parser.mjs";
 import { authenticateRequest } from "./auth.mjs";
 import { HttpError, createWindowLimiter, pruneMap, publicError, readJsonBody } from "./http-utils.mjs";
 import { datasetRowToStatement, normalizeStatementCode, parseCodeforcesStatement, sanitizeStatementHtml } from "./statement-parser.mjs";
@@ -15,12 +17,16 @@ const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
 const TRANSLATION_VERSION = 22;
+const ARCHIVE_TRANSLATION_VERSION = 1;
 const FAST_TRANSLATOR_AUTH_URL = "https://edge.microsoft.com/translate/auth";
 const FAST_TRANSLATOR_URL = "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=zh-Hans";
 const USER_AGENT = "icpc-trainer-statement-importer/0.4 (+https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site)";
 const importJobs = new Map();
+const archiveImportJobs = new Map();
 const recentTranslationAttempts = new Map();
+const recentArchiveTranslationAttempts = new Map();
 const queuedTranslations = new Set();
+const queuedArchiveTranslations = new Set();
 const importLimiter = createWindowLimiter({ windowMs: 60 * 60_000, limit: 120, maxEntries: 2048 });
 let translationQueue = Promise.resolve();
 let fastTranslatorToken = "";
@@ -57,6 +63,36 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS statement_assets_code_idx ON statement_assets(code);
+  CREATE TABLE IF NOT EXISTS archive_statements (
+    id TEXT PRIMARY KEY,
+    contest_slug TEXT NOT NULL,
+    slot TEXT NOT NULL,
+    qoj_contest_id INTEGER NOT NULL,
+    problem_id INTEGER NOT NULL,
+    contest_name TEXT NOT NULL,
+    title_en TEXT NOT NULL,
+    title_zh TEXT,
+    time_limit_text TEXT,
+    memory_limit_text TEXT,
+    source_url TEXT NOT NULL,
+    original_json TEXT,
+    chinese_json TEXT,
+    translation_version INTEGER NOT NULL DEFAULT 0,
+    images_json TEXT NOT NULL DEFAULT '[]',
+    status TEXT NOT NULL DEFAULT 'importing',
+    error TEXT,
+    created_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL,
+    UNIQUE(qoj_contest_id, problem_id)
+  );
+  CREATE TABLE IF NOT EXISTS archive_statement_assets (
+    id TEXT PRIMARY KEY,
+    statement_id TEXT NOT NULL REFERENCES archive_statements(id) ON DELETE CASCADE,
+    content_type TEXT NOT NULL,
+    body BLOB NOT NULL,
+    created_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS archive_statement_assets_statement_idx ON archive_statement_assets(statement_id);
 `);
 if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "translation_version")) db.exec("ALTER TABLE problem_statements ADD COLUMN translation_version INTEGER NOT NULL DEFAULT 0");
 
@@ -138,6 +174,139 @@ function publicStatement(row) {
     cacheScope: "shared",
     updatedAt: new Date(row.updated_at).toISOString(),
   };
+}
+
+function archiveStatementRow(id) {
+  return db.prepare("SELECT * FROM archive_statements WHERE id = ?").get(id);
+}
+
+function safeObject(value, fallback) {
+  try {
+    const parsed = JSON.parse(value || "null");
+    return parsed && typeof parsed === "object" ? parsed : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function normalizeArchiveMetadata(url) {
+  const contestId = String(url.searchParams.get("contest") || "").trim().toLowerCase();
+  const slot = String(url.searchParams.get("slot") || "").trim().toUpperCase();
+  const qojContestId = Number(url.searchParams.get("qojContestId"));
+  const problemId = Number(url.searchParams.get("problemId"));
+  const contestName = String(url.searchParams.get("contestName") || "ICPC Contest").trim().slice(0, 160);
+  const title = String(url.searchParams.get("title") || `Problem ${slot}`).trim().slice(0, 180);
+  if (!/^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])?$/.test(contestId)
+    || !/^[A-Z][0-9]?$/.test(slot)
+    || !Number.isInteger(qojContestId) || qojContestId < 1 || qojContestId > 10_000_000
+    || !Number.isInteger(problemId) || problemId < 1 || problemId > 100_000_000
+    || !contestName || !title) throw new HttpError(400, "历届题目参数无效");
+  return {
+    id: `${contestId}:${slot}`,
+    contestId,
+    slot,
+    qojContestId,
+    problemId,
+    contestName,
+    title,
+    sourceUrl: `https://contest.ucup.ac/download.php?type=statement&id=${problemId}&contest_id=${qojContestId}`,
+  };
+}
+
+function publicArchiveStatement(row) {
+  if (!row) return null;
+  const original = safeObject(row.original_json, { sections: [], sample: null });
+  const chinese = safeObject(row.chinese_json, { sections: [] });
+  const images = safeImages(row.images_json).map((image) => ({
+    ...image,
+    src: image.assetId ? `/archive/statements/assets/${image.assetId}` : "",
+  }));
+  return {
+    schemaVersion: 1,
+    contestId: row.contest_slug,
+    contestName: row.contest_name,
+    slot: row.slot,
+    problemId: Number(row.problem_id),
+    titleEn: row.title_en,
+    titleZh: row.title_zh || row.title_en,
+    timeLimitText: row.time_limit_text || "",
+    memoryLimitText: row.memory_limit_text || "",
+    source: {
+      kind: "official-pdf-extract",
+      englishPdfUrl: row.source_url,
+      chinesePdfUrl: null,
+      chinesePages: null,
+    },
+    english: { sections: Array.isArray(original.sections) ? original.sections : [] },
+    chinese: { sections: Array.isArray(chinese.sections) ? chinese.sections : [] },
+    sample: original.sample || null,
+    images,
+    status: row.status,
+    message: row.error || null,
+    translationCurrent: Boolean(row.chinese_json) && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION,
+    updatedAt: new Date(row.updated_at).toISOString(),
+  };
+}
+
+function upsertArchivePending(metadata) {
+  const timestamp = now();
+  db.prepare(`
+    INSERT INTO archive_statements (id, contest_slug, slot, qoj_contest_id, problem_id, contest_name, title_en, source_url, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'importing', ?, ?)
+    ON CONFLICT(id) DO UPDATE SET
+      qoj_contest_id=excluded.qoj_contest_id,
+      problem_id=excluded.problem_id,
+      contest_name=excluded.contest_name,
+      source_url=excluded.source_url,
+      updated_at=excluded.updated_at
+  `).run(metadata.id, metadata.contestId, metadata.slot, metadata.qojContestId, metadata.problemId, metadata.contestName, metadata.title, metadata.sourceUrl, timestamp, timestamp);
+}
+
+function setArchiveStatus(id, status, error = null) {
+  db.prepare("UPDATE archive_statements SET status = ?, error = ?, updated_at = ? WHERE id = ?").run(status, error ? String(error).slice(0, 500) : null, now(), id);
+}
+
+function isArchiveResourceUrl(value) {
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:"
+      && ["contest.ucup.ac", "qoj.ac"].includes(url.hostname.toLowerCase())
+      && url.pathname === "/download.php"
+      && url.searchParams.get("type") === "statement"
+      && /^\d+$/.test(url.searchParams.get("id") || "")
+      && /^\d+$/.test(url.searchParams.get("contest_id") || "");
+  } catch {
+    return false;
+  }
+}
+
+async function fetchArchivePdf(value, maxRedirects = 3) {
+  let url = String(value);
+  for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
+    if (!isArchiveResourceUrl(url)) throw new HttpError(400, "官方 PDF 地址无效");
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 35_000);
+    try {
+      const response = await fetch(url, {
+        redirect: "manual",
+        headers: { "User-Agent": USER_AGENT, Accept: "application/pdf", "Accept-Language": "en-US,en;q=0.9" },
+        signal: controller.signal,
+      });
+      if (![301, 302, 303, 307, 308].includes(response.status)) {
+        if (!response.ok) throw new Error(`PDF HTTP ${response.status}`);
+        const contentType = String(response.headers.get("content-type") || "").toLowerCase();
+        const buffer = await readLimitedBuffer(response, 16 * 1024 * 1024);
+        if (!contentType.includes("pdf") && !buffer.subarray(0, 5).equals(Buffer.from("%PDF-"))) throw new Error("官方地址没有返回 PDF");
+        return buffer;
+      }
+      const location = response.headers.get("location");
+      if (!location || redirect === maxRedirects) throw new Error("PDF 重定向异常");
+      url = new URL(location, url).href;
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  throw new Error("PDF 重定向过多");
 }
 
 function formulaCounts(html) {
@@ -781,6 +950,131 @@ async function translateStatement(code) {
   }
 }
 
+async function extractArchivePdf(metadata, pdfBuffer) {
+  const directory = await mkdtemp(join(tmpdir(), "icpc-archive-"));
+  const pdfPath = join(directory, "statement.pdf");
+  const imagePrefix = join(directory, "figure");
+  try {
+    writeFileSync(pdfPath, pdfBuffer);
+    const { stdout } = await execFileAsync("pdftotext", ["-layout", pdfPath, "-"], { timeout: 60_000, maxBuffer: 10 * 1024 * 1024 });
+    const parsed = parseArchivePdfText(String(stdout || ""), metadata.title);
+    try {
+      await execFileAsync("pdfimages", ["-png", pdfPath, imagePrefix], { timeout: 90_000, maxBuffer: 2 * 1024 * 1024 });
+    } catch (error) {
+      console.error("archive PDF image extraction", metadata.id, error instanceof Error ? error.message : error);
+    }
+    const files = (await readdir(directory)).filter((name) => /^figure-\d+\.png$/i.test(name)).sort().slice(0, 16);
+    const images = [];
+    for (const [index, name] of files.entries()) {
+      const buffer = await readFile(join(directory, name));
+      if (buffer.length < 4_096 || buffer.length > 6 * 1024 * 1024) continue;
+      const assetId = sha256(Buffer.concat([Buffer.from(metadata.id), Buffer.from(name), buffer]));
+      db.prepare("INSERT OR REPLACE INTO archive_statement_assets (id, statement_id, content_type, body, created_at) VALUES (?, ?, 'image/png', ?, ?)").run(assetId, metadata.id, buffer, now());
+      const ocrEn = await recognizeImageText(buffer, assetId, "");
+      images.push({
+        assetId,
+        contentType: "image/png",
+        captionEn: `Problem ${metadata.slot} figure ${index + 1}`,
+        captionZh: `题目 ${metadata.slot} 配图 ${index + 1}`,
+        ocrEn: ocrEn || null,
+        imageTextZh: null,
+      });
+    }
+    return { parsed, images };
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function importArchiveOriginal(metadata) {
+  if (archiveImportJobs.has(metadata.id)) return archiveImportJobs.get(metadata.id);
+  if (archiveImportJobs.size >= 12) {
+    setArchiveStatus(metadata.id, "queued", "PDF 导入队列繁忙，稍后会自动重试");
+    return null;
+  }
+  const job = (async () => {
+    try {
+      setArchiveStatus(metadata.id, "importing", "正在从官方 PDF 提取正文、样例和图片");
+      const pdf = await fetchArchivePdf(metadata.sourceUrl);
+      const { parsed, images } = await extractArchivePdf(metadata, pdf);
+      db.prepare(`
+        UPDATE archive_statements SET
+          title_en=?, time_limit_text=?, memory_limit_text=?, original_json=?, images_json=?,
+          translation_version=0, status='translating', error='原题面已就绪，正在生成中文题面', updated_at=?
+        WHERE id=?
+      `).run(parsed.title || metadata.title, parsed.timeLimitText, parsed.memoryLimitText, JSON.stringify({ sections: parsed.sections, sample: parsed.sample }), JSON.stringify(images), now(), metadata.id);
+      queueArchiveTranslation(metadata.id);
+    } catch (error) {
+      const message = error instanceof Error ? error.message : "PDF 导入失败";
+      console.error("archive PDF import failed", metadata.id, message);
+      setArchiveStatus(metadata.id, "source_required", `官方 PDF 暂时无法导入：${message}`);
+    }
+  })().finally(() => archiveImportJobs.delete(metadata.id));
+  archiveImportJobs.set(metadata.id, job);
+  return job;
+}
+
+function archiveTranslationRecords(original) {
+  const records = [];
+  for (const section of original.sections || []) {
+    for (const block of section.blocks || []) {
+      if (block.kind === "bullets") {
+        for (let index = 0; index < block.items.length; index += 1) records.push({ target: block.items, key: index, text: block.items[index] });
+      } else records.push({ target: block, key: "text", text: block.text });
+    }
+  }
+  return records.filter((record) => typeof record.text === "string" && record.text.trim());
+}
+
+async function translateArchiveStatement(id) {
+  const row = archiveStatementRow(id);
+  if (!row?.original_json || (row.chinese_json && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION)) return;
+  recentArchiveTranslationAttempts.set(id, now());
+  try {
+    setArchiveStatus(id, "translating", "原题面可直接阅读，中文题面正在后台生成");
+    const original = safeObject(row.original_json, { sections: [] });
+    const chinese = structuredClone(original);
+    const records = archiveTranslationRecords(chinese);
+    const translated = await translateTexts([row.title_en, ...records.map((record) => record.text)]);
+    const titleZh = translated[0] || row.title_en;
+    for (let index = 0; index < records.length; index += 1) records[index].target[records[index].key] = translated[index + 1] || records[index].text;
+    for (const section of chinese.sections || []) section.title = chineseSectionTitle(section.key);
+
+    const images = safeImages(row.images_json);
+    const ocrImages = images.filter((image) => typeof image.ocrEn === "string" && /[A-Za-z]{2}/.test(image.ocrEn));
+    if (ocrImages.length) {
+      const imageTranslations = await translateTexts(ocrImages.map((image) => image.ocrEn));
+      for (let index = 0; index < ocrImages.length; index += 1) ocrImages[index].imageTextZh = imageTranslations[index] || null;
+    }
+    db.prepare(`
+      UPDATE archive_statements SET title_zh=?, chinese_json=?, images_json=?, translation_version=?, status='ready', error=NULL, updated_at=? WHERE id=?
+    `).run(titleZh, JSON.stringify({ sections: chinese.sections || [] }), JSON.stringify(images), ARCHIVE_TRANSLATION_VERSION, now(), id);
+  } catch (error) {
+    const message = error instanceof Error ? error.message : "中文翻译失败";
+    console.error("archive translation failed", id, message);
+    setArchiveStatus(id, "ready_original", "原题面已就绪；中文翻译暂时不可用，将在稍后自动重试");
+  }
+}
+
+function queueArchiveTranslation(id) {
+  if (queuedArchiveTranslations.has(id)) return true;
+  const last = recentArchiveTranslationAttempts.get(id) || 0;
+  if (now() - last < 45_000) return false;
+  if (queuedArchiveTranslations.size >= 24) {
+    setArchiveStatus(id, "ready_original", "原题面已就绪；中文翻译队列繁忙，将在稍后重试");
+    return false;
+  }
+  recentArchiveTranslationAttempts.set(id, now());
+  queuedArchiveTranslations.add(id);
+  if (recentArchiveTranslationAttempts.size > 512) pruneMap(recentArchiveTranslationAttempts, (timestamp) => now() - timestamp > 24 * 60 * 60_000, 512);
+  translationQueue = translationQueue
+    .catch(() => undefined)
+    .then(() => translateArchiveStatement(id))
+    .catch((error) => console.error("archive translation queue", error))
+    .finally(() => queuedArchiveTranslations.delete(id));
+  return true;
+}
+
 function queueTranslation(code) {
   if (queuedTranslations.has(code)) return true;
   const last = recentTranslationAttempts.get(code) || 0;
@@ -815,8 +1109,38 @@ function codeFromSourceUrl(sourceUrl) {
 
 export function createStatementHandler({ json, clientIp }) {
   return async function handleStatement(request, response, url) {
-    if (!url.pathname.startsWith("/codeforces/statements")) return false;
+    if (!url.pathname.startsWith("/codeforces/statements") && !url.pathname.startsWith("/archive/statements")) return false;
     try {
+      const archiveAssetMatch = url.pathname.match(/^\/archive\/statements\/assets\/([a-f0-9]{64})$/);
+      if (request.method === "GET" && archiveAssetMatch) {
+        const asset = db.prepare("SELECT content_type, body FROM archive_statement_assets WHERE id = ?").get(archiveAssetMatch[1]);
+        if (!asset) return json(response, 404, { error: "图片不存在" }), true;
+        response.writeHead(200, { "Content-Type": asset.content_type, "Content-Length": asset.body.length, "Cache-Control": "public, max-age=31536000, immutable", "Content-Security-Policy": "default-src 'none'; sandbox", "X-Content-Type-Options": "nosniff" });
+        response.end(asset.body);
+        return true;
+      }
+
+      if (request.method === "GET" && url.pathname === "/archive/statements") {
+        const metadata = normalizeArchiveMetadata(url);
+        let row = archiveStatementRow(metadata.id);
+        if (!row) {
+          upsertArchivePending(metadata);
+          void importArchiveOriginal(metadata);
+          row = archiveStatementRow(metadata.id);
+        } else if (!row.original_json && !archiveImportJobs.has(metadata.id)
+          && (["queued", "source_required"].includes(row.status) || now() - row.updated_at > 2 * 60_000)) {
+          void importArchiveOriginal(metadata);
+          row = archiveStatementRow(metadata.id);
+        } else if (row.original_json && (!row.chinese_json || Number(row.translation_version || 0) < ARCHIVE_TRANSLATION_VERSION)) {
+          const queued = queueArchiveTranslation(metadata.id);
+          if (queued && row.status !== "translating") {
+            setArchiveStatus(metadata.id, "translating", "原题面可直接阅读，中文题面正在后台生成");
+            row = archiveStatementRow(metadata.id);
+          }
+        }
+        return json(response, row?.original_json ? 200 : 202, { statement: publicArchiveStatement(row) }, { "Cache-Control": "no-store" }), true;
+      }
+
       const assetMatch = url.pathname.match(/^\/codeforces\/statements\/assets\/([a-f0-9]{64})$/);
       if (request.method === "GET" && assetMatch) {
         const asset = db.prepare("SELECT content_type, body FROM statement_assets WHERE id = ?").get(assetMatch[1]);

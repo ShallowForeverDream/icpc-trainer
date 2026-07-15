@@ -1,7 +1,7 @@
 FROM node:22-alpine
 WORKDIR /app
 RUN sed -i 's#dl-cdn.alpinelinux.org#mirrors.aliyun.com#g' /etc/apk/repositories \
-  && apk add --no-cache tesseract-ocr tesseract-ocr-data-eng \
+  && apk add --no-cache poppler-utils tesseract-ocr tesseract-ocr-data-eng \
   && mkdir -p /data \
   && chown node:node /data
 COPY package.json package-lock.json ./

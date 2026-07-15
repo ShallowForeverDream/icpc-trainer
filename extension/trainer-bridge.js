@@ -12,6 +12,43 @@ window.addEventListener("message", async (event) => {
   const message = event.data;
   if (!message || message.source !== "icpc-trainer") return;
 
+  if (message.type === "ICPC_TRAINER_PING") {
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG" }, window.location.origin);
+    return;
+  }
+
+  if (message.type === "ICPC_TRAINER_ARCHIVE_SUBMIT") {
+    const payload = message.payload;
+    const expectedUrl = payload && Number.isInteger(payload.qojContestId) && Number.isInteger(payload.problemId)
+      ? `https://contest.ucup.ac/contest/${payload.qojContestId}/problem/${payload.problemId}`
+      : "";
+    if (!payload || payload.judge !== "ucup"
+      || payload.qojContestId < 1 || payload.qojContestId > 10_000_000
+      || payload.problemId < 1 || payload.problemId > 100_000_000
+      || !/^[A-Z][0-9]?$/.test(payload.slot)
+      || typeof payload.submitUrl !== "string" || !payload.submitUrl.startsWith(expectedUrl)
+      || typeof payload.sourceCode !== "string" || !payload.sourceCode.trim() || payload.sourceCode.length > 500_000
+      || typeof payload.languageValue !== "string" || !/^[A-Za-z0-9+.]{1,24}$/.test(payload.languageValue)) return;
+    const pendingArchiveSubmission = {
+      judge: "ucup",
+      qojContestId: payload.qojContestId,
+      problemId: payload.problemId,
+      slot: payload.slot,
+      sourceCode: payload.sourceCode,
+      languageValue: payload.languageValue,
+      languageLabel: typeof payload.languageLabel === "string" ? payload.languageLabel.slice(0, 80) : "GNU C++20",
+      createdAt: Date.now(),
+    };
+    try {
+      await chrome.storage.local.set({ pendingArchiveSubmission });
+      await chrome.runtime.sendMessage({ type: "OPEN_UCUP_SUBMIT", url: `${expectedUrl}?v=1#tab-submit-answer` });
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_SUBMIT_RESULT", ok: true }, window.location.origin);
+    } catch {
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_SUBMIT_RESULT", ok: false }, window.location.origin);
+    }
+    return;
+  }
+
   if (message.type === "ICPC_TRAINER_SUBMIT") {
     const payload = message.payload;
     if (!payload || !Number.isInteger(payload.contestId) || payload.contestId < 1 || payload.contestId > 10_000_000 || !/^[A-Z][0-9]?$/.test(payload.index) || typeof payload.sourceCode !== "string" || !payload.sourceCode.trim() || payload.sourceCode.length > 500_000) return;

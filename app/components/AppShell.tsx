@@ -6,7 +6,7 @@ import { authFetch, readAuth, type AuthUser } from "../lib/auth-client";
 import { getTrainingClientId } from "../lib/training-client";
 
 export function Icon({ name }: { name: string }) {
-  const icons: Record<string, string> = { grid: "▦", search: "⌕", trophy: "♜", code: "⌘", history: "↻", star: "☆", play: "▶", fire: "♨", clock: "◷", shuffle: "⤨", spark: "✦", bell: "◉", chevron: "›", check: "✓", lock: "▣", team: "♟", book: "▤", filter: "≡" };
+  const icons: Record<string, string> = { grid: "▦", search: "⌕", trophy: "♜", code: "⌘", history: "↻", star: "☆", play: "▶", fire: "♨", clock: "◷", shuffle: "⤨", spark: "✦", bell: "◉", chevron: "›", check: "✓", lock: "▣", team: "♟", book: "▤", filter: "≡", upload: "↑" };
   return <span className={`icon icon-${name}`} aria-hidden="true">{icons[name] ?? "·"}</span>;
 }
 

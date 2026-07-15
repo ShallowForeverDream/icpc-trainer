@@ -122,24 +122,31 @@ test("ships readable Chinese fallbacks and a QOJ-like cached statement reader", 
 });
 
 test("ships a constrained Manifest V3 statement and submit bridge", async () => {
-  const [manifestText, background, bridge, fill] = await Promise.all([
+  const [manifestText, background, bridge, fill, qojFill] = await Promise.all([
     readFile(new URL("extension/manifest.json", root), "utf8"),
     readFile(new URL("extension/background.js", root), "utf8"),
     readFile(new URL("extension/trainer-bridge.js", root), "utf8"),
     readFile(new URL("extension/codeforces-fill.js", root), "utf8"),
+    readFile(new URL("extension/qoj-fill.js", root), "utf8"),
   ]);
   const manifest = JSON.parse(manifestText);
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.host_permissions.includes("https://codeforces.com/*"));
+  assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
+  assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "0.4.0");
+  assert.equal(manifest.version, "0.5.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
   assert.match(background, /problem-statement/);
   assert.match(bridge, /ICPC_TRAINER_SUBMIT_RESULT/);
-  assert.doesNotMatch(`${background}\n${bridge}\n${fill}`, /autoSubmit/);
+  assert.match(bridge, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
+  assert.match(qojFill, /input-answer_answer_editor/);
+  assert.match(qojFill, /answer_answer_language/);
+  assert.doesNotMatch(`${background}\n${bridge}\n${fill}\n${qojFill}`, /autoSubmit/);
   assert.doesNotMatch(fill, /submitButton|\.click\s*\(/);
+  assert.doesNotMatch(qojFill, /button-submit-answer.*click/);
 });
 
 test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {
@@ -236,14 +243,18 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(page, /选择题目开始作答/);
   assert.match(page, /开始做题/);
   assert.match(page, /archiveProblemHref/);
-  assert.match(problemPage, /官方题面直接在本站阅读/);
-  assert.match(problemPage, /复制代码并打开提交页/);
+  assert.match(problemPage, /正文、样例与图片已从官方 PDF 提取/);
+  assert.match(problemPage, /复制输入/);
+  assert.match(problemPage, /提交代码/);
+  assert.match(problemPage, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
+  assert.doesNotMatch(problemPage, /className="code-editor"/);
   assert.match(problemPage, /返回实时榜单/);
   assert.match(problemPage, /savePersistentJson\("archive-vp"/);
   assert.match(problemPage, /ArchiveStatementView/);
-  assert.match(problemPage, /下载英文原始 PDF/);
+  assert.match(problemPage, /下载原始 PDF/);
   assert.doesNotMatch(problemPage, /<iframe/);
   assert.match(statementClient, /force-cache/);
+  assert.match(statementClient, /\/archive\/statements/);
   assert.equal((statementManifest.match(/"slot":/g) ?? []).length, 13);
   assert.match(statementA, /来自陈教授的问候/);
   assert.match(statementA, /A-1\.jpg/);
@@ -269,7 +280,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.equal(problemResponse.status, 200);
   const problemHtml = await problemResponse.text();
   assert.match(problemHtml, /Greetings from Prof\. Chen/);
-  assert.match(problemHtml, /复制代码并打开提交页/);
+  assert.match(problemHtml, /提交代码/);
 });
 
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {
@@ -314,6 +325,10 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(backend, /createStatementHandler/);
   assert.match(statements, /problem_statements/);
   assert.match(statements, /statement_assets/);
+  assert.match(statements, /archive_statements/);
+  assert.match(statements, /archive_statement_assets/);
+  assert.match(statements, /pdftotext/);
+  assert.match(statements, /pdfimages/);
   assert.match(statements, /tesseract/);
   assert.match(statements, /TRANSLATOR_MODEL/);
   assert.match(statements, /stale-while-revalidate/);
@@ -326,6 +341,7 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(compose, /ggml-org\/llama\.cpp:server/);
   assert.match(compose, /condition: service_healthy/);
   assert.match(dockerfile, /tesseract-ocr/);
+  assert.match(dockerfile, /poppler-utils/);
   assert.match(nginx, /\/icpc-api\//);
   assert.match(nginx, /114\.55\.130\.137/);
   assert.match(browserApi, /https:\/\/114\.55\.130\.137\/icpc-api/);

@@ -3,12 +3,12 @@ import { AppShell, Icon, Pill } from "../components/AppShell";
 export default function ExtensionPage() {
   return <AppShell active="提交扩展">
     <section className="extension-hero">
-      <div><span className="eyebrow"><span className="live-dot" /> CHROME / EDGE · MANIFEST V3</span><h1>原题导入与安全预填，<br /><em>都在一个扩展里。</em></h1><p>首次打开题目时，扩展读取 Codeforces 官方原题并交给训练台缓存，保留公式与图片；写完代码后可打开官方提交页并预填，最终提交始终由你确认。</p><div className="hero-actions"><a className="button button-primary" href="/icpc-trainer-extension.zip" download><Icon name="spark" /> 下载扩展包 v0.4</a><a className="button button-ghost" href="https://codeforces.com/problemset/submit" target="_blank" rel="noreferrer">打开 Codeforces ↗</a></div></div>
-      <div className="extension-flow"><div><b>01</b><span>首次打开读取公开原题</span><Pill>安全缓存</Pill></div><i>→</i><div><b>02</b><span>原文 / 中文随时切换</span><Pill>图片可见</Pill></div><i>→</i><div><b>03</b><span>写完后预填官方提交</span><Pill>Codeforces</Pill></div></div>
+      <div><span className="eyebrow"><span className="live-dot" /> CHROME / EDGE · MANIFEST V3</span><h1>选择代码文件，<br /><em>直接预填官方提交页。</em></h1><p>支持 Codeforces 与 Universal Cup / QOJ。题目、语言和代码会自动填入，最终提交始终由你确认。</p><div className="hero-actions"><a className="button button-primary" href="/icpc-trainer-extension.zip" download><Icon name="spark" /> 下载扩展包 v0.5</a><a className="button button-ghost" href="https://contest.ucup.ac/" target="_blank" rel="noreferrer">打开 Universal Cup ↗</a></div></div>
+      <div className="extension-flow"><div><b>01</b><span>选择本地代码文件</span><Pill>不设站内编辑器</Pill></div><i>→</i><div><b>02</b><span>选择题目与语言</span><Pill>自动识别</Pill></div><i>→</i><div><b>03</b><span>预填官方提交页</span><Pill>手动确认</Pill></div></div>
     </section>
     <section className="install-grid">
       <article className="panel"><span className="micro-label">INSTALL</span><h2>安装方法</h2><ol><li>下载并解压扩展包。</li><li>打开 Chrome 的 <code>chrome://extensions</code> 或 Edge 的 <code>edge://extensions</code>。</li><li>开启「开发者模式」，选择「加载已解压的扩展程序」。</li><li>选择解压后的 <code>icpc-trainer-extension</code> 文件夹。</li></ol></article>
-      <article className="panel"><span className="micro-label">SECURITY BOUNDARY</span><h2>扩展会做什么</h2><ul><li>按题号读取公开的 Codeforces 原题 HTML，用于首次导入和图片地址解析。</li><li>训练台权限仅授予当前正式站点与本地开发地址，同时访问 <code>codeforces.com</code>。</li><li>不读取或上传 Codeforces 密码、Cookie、API Key；题面缓存不包含登录信息。</li><li>只负责打开并预填官方提交页，不会替你点击最终提交按钮。</li></ul></article>
+      <article className="panel"><span className="micro-label">SECURITY BOUNDARY</span><h2>扩展会做什么</h2><ul><li>按题号读取公开的 Codeforces 原题，用于首次导入。</li><li>在 Codeforces、Universal Cup / QOJ 页面填入你主动选择的代码文件。</li><li>不读取或上传密码、Cookie、API Key。</li><li>只预填表单，不会点击最终提交按钮。</li></ul></article>
     </section>
   </AppShell>;
 }

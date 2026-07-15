@@ -14,6 +14,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
+  if (message?.type === "OPEN_UCUP_SUBMIT" && /^https:\/\/contest\.ucup\.ac\/contest\/\d+\/problem\/\d+\?v=1#tab-submit-answer$/.test(message.url)) {
+    chrome.tabs.create({ url: message.url });
+    return;
+  }
+
   if (message?.type !== "FETCH_CODEFORCES_STATEMENT" || !/^https:\/\/codeforces\.com\/problemset\/problem\/\d+\/[A-Z][0-9]?(?:[/?#]|$)/.test(message.url)) return;
   (async () => {
     try {

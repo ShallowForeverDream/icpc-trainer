@@ -277,6 +277,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(page, /archive-room-tabs/);
   assert.match(page, /队伍提交记录/);
   assert.match(page, /ArchiveSubmission/);
+  assert.match(page, /正在准备整场题面/);
+  assert.match(page, /prewarmBySlot/);
   assert.match(page, /题面与提交已接入/);
   assert.doesNotMatch(page, />\+ WA</);
   assert.doesNotMatch(page, />标记 AC</);
@@ -299,6 +301,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.doesNotMatch(problemPage, /<iframe/);
   assert.match(statementClient, /force-cache/);
   assert.match(statementClient, /\/archive\/statements/);
+  assert.match(statementClient, /startArchivePrewarm/);
+  assert.match(statementClient, /loadArchivePrewarm/);
   assert.equal((statementManifest.match(/"slot":/g) ?? []).length, 13);
   assert.match(statementA, /来自陈教授的问候/);
   assert.match(statementA, /A-1\.jpg/);
@@ -373,6 +377,9 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /problem_statements/);
   assert.match(statements, /statement_assets/);
   assert.match(statements, /archive_statements/);
+  assert.match(statements, /archive_statement_prewarm/);
+  assert.match(statements, /\/archive\/statements\/prewarm/);
+  assert.match(statements, /ARCHIVE_PREWARM_CONCURRENCY = 3/);
   assert.match(statements, /archive_statement_assets/);
   assert.match(statements, /chinese_source_url/);
   assert.match(statements, /ver=zh_cn/);

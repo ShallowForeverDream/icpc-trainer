@@ -5,6 +5,7 @@ import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import { archiveContestIntegrated, archiveContests, archivePracticeProblem, archiveProblemHref, findArchiveContest } from "../../data/archive-contests";
+import { type ArchivePrewarmProgress, loadArchivePrewarm, startArchivePrewarm } from "../../lib/archive-statement-client";
 import { ARCHIVE_SESSION_EVENT } from "../../lib/archive-vp-session";
 import { clearPersistentJson, loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
 import { readTrainerPreferences } from "../../lib/preferences";
@@ -56,8 +57,11 @@ export default function ArchiveVpPage() {
   const [now, setNow] = useState(0);
   const [teamQuery, setTeamQuery] = useState("");
   const [roomTab, setRoomTab] = useState<ArchiveRoomTab>("problems");
+  const [prewarm, setPrewarm] = useState<ArchivePrewarmProgress | null>(null);
+  const [prewarmError, setPrewarmError] = useState("");
   const scoreboardRequest = useRef<AbortController | null>(null);
 
+  const prewarmContestId = session?.contestId || "";
   useEffect(() => {
     setNow(Date.now());
     const saved = readStoredJson<Session | null>(STORAGE_KEY, null, (value): value is Session | null => value === null || isSession(value));
@@ -136,6 +140,47 @@ export default function ArchiveVpPage() {
     return () => window.clearInterval(timer);
   }, [finished, refresh, session?.startedAt]);
 
+  useEffect(() => {
+    let cancelled = false;
+    let timer = 0;
+    const contest = prewarmContestId ? findArchiveContest(prewarmContestId) : undefined;
+    const problemIds = contest?.qojProblemIds?.slice(0, contest.problemCount) || [];
+    if (!contest?.qojContestId || problemIds.length !== contest.problemCount) {
+      setPrewarm(null);
+      setPrewarmError("");
+      return;
+    }
+    const request = {
+      contestId: contest.id,
+      contestName: contest.name,
+      problems: problemIds.map((problemId, index) => ({
+        slot: String.fromCharCode(65 + index),
+        qojContestId: contest.qojContestId!,
+        problemId,
+        title: contest.problemTitles?.[index] || `Problem ${String.fromCharCode(65 + index)}`,
+      })),
+    };
+    const refreshPrewarm = async (start = false) => {
+      try {
+        let value = await loadArchivePrewarm(contest.id);
+        if (start && value.total !== request.problems.length) value = await startArchivePrewarm(request);
+        if (cancelled) return;
+        setPrewarm(value);
+        setPrewarmError("");
+        if (value.status !== "ready") timer = window.setTimeout(() => void refreshPrewarm(), 4_000);
+      } catch (error) {
+        if (cancelled) return;
+        setPrewarmError(error instanceof Error ? error.message : "整场题面准备暂时不可用");
+        timer = window.setTimeout(() => void refreshPrewarm(true), 12_000);
+      }
+    };
+    void refreshPrewarm(true);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timer);
+    };
+  }, [prewarmContestId]);
+
   const filteredContests = useMemo(() => archiveContests.filter((contest) => contest.year === year && (type === "全部" || contest.type === type) && (!query.trim() || `${contest.name}${contest.city}`.toLowerCase().includes(query.trim().toLowerCase()))), [query, type, year]);
 
   const combinedRows = useMemo(() => {
@@ -184,6 +229,7 @@ export default function ArchiveVpPage() {
       return { ...submission, wrongBefore };
     }).reverse();
   }, [session?.submissions]);
+  const prewarmBySlot = useMemo(() => new Map((prewarm?.items || []).map((item) => [item.slot, item])), [prewarm]);
 
   function chooseContest(contestId: string) {
     const selected = findArchiveContest(contestId);
@@ -233,6 +279,7 @@ export default function ArchiveVpPage() {
       <span className={status === "error" ? "form-error" : ""}>{message}</span>
     </section>
     <section className={`archive-freeze-state ${scoreboard?.frozen ? "active" : ""}`}><b>{scoreboard?.frozen ? "榜单已进入原场封榜时段" : "榜单按原场时间推进"}</b><span>{scoreboard?.frozen ? "封榜后的提交显示为待定，不提前泄露结果；比赛结束后可手动揭榜。" : `当前重放至 ${clock(elapsed)}，下一次自动同步不超过 10 秒。`}</span></section>
+    {prewarm ? <section className={`archive-prewarm${prewarm.status === "ready" ? " ready" : ""}`}><div><b>{prewarm.status === "ready" ? "整场题面已就绪" : "正在准备整场题面"}</b><span>{prewarm.readyOriginal}/{prewarm.total} 原题 · {prewarm.readyChinese}/{prewarm.total} 中文 · {prewarm.officialChinese} 题官方中文</span></div><strong>{prewarm.progress}%</strong><i><span style={{ width: `${prewarm.progress}%` }} /></i></section> : prewarmError ? <section className="archive-prewarm error"><div><b>题面预热稍后重试</b><span>{prewarmError}</span></div></section> : null}
 
     <nav className="vp-room-tabs archive-room-tabs" aria-label="历届补题模拟赛内容" role="tablist">
       <button type="button" role="tab" aria-selected={roomTab === "problems"} className={roomTab === "problems" ? "active" : ""} onClick={() => setRoomTab("problems")}><span>题目</span><b>{mine?.solved ?? 0}/{slots.length}</b></button>
@@ -247,9 +294,10 @@ export default function ArchiveVpPage() {
         const solved = attempt.solvedAt !== undefined;
         const href = contest ? archiveProblemHref(contest, slot) : "#";
         const practice = contest ? archivePracticeProblem(contest, slot) : null;
+        const prepared = prewarmBySlot.get(slot);
         const title = practice?.title || contest?.problemTitles?.[slot.charCodeAt(0) - 65] || `Problem ${slot}`;
         return <article className={`archive-vp-problem-row${solved ? " solved" : attempt.wrong ? " attempted" : ""}`} key={slot}>
-          <Link href={href}><span className="archive-problem-letter">{slot}</span><span><b>{title}</b><small>题面、中文翻译与提交</small></span></Link>
+          <Link href={href}><span className="archive-problem-letter">{slot}</span><span><b>{title}</b><small>{prepared ? prepared.chineseReady ? prepared.officialChinese ? "官方中文已就绪 · 可直接提交" : "中文题面已就绪 · 可直接提交" : prepared.originalReady ? "原题已就绪 · 中文准备中" : "题面预热中" : "题面、中文翻译与提交"}</small></span></Link>
           <span className={`archive-vp-problem-state${solved ? " solved" : attempt.wrong ? " attempted" : ""}`}>{solved ? `AC · ${clock(attempt.solvedAt || 0)}` : attempt.wrong ? `${attempt.wrong} 次 WA` : "未尝试"}</span>
           <div><Link href={href}>{session.startedAt ? "开始做题 →" : "查看题面 →"}</Link></div>
         </article>;

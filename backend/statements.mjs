@@ -29,8 +29,11 @@ const recentTranslationAttempts = new Map();
 const recentArchiveTranslationAttempts = new Map();
 const queuedTranslations = new Set();
 const queuedArchiveTranslations = new Set();
+const ARCHIVE_PREWARM_CONCURRENCY = 3;
+const ARCHIVE_PREWARM_PAUSED = process.env.ARCHIVE_PREWARM_PAUSED === "1";
 const importLimiter = createWindowLimiter({ windowMs: 60 * 60_000, limit: 120, maxEntries: 2048 });
 let translationQueue = Promise.resolve();
+let archivePrewarmTimer = null;
 let fastTranslatorToken = "";
 let fastTranslatorTokenExpiresAt = 0;
 
@@ -96,6 +99,15 @@ db.exec(`
     created_at INTEGER NOT NULL
   );
   CREATE INDEX IF NOT EXISTS archive_statement_assets_statement_idx ON archive_statement_assets(statement_id);
+  CREATE TABLE IF NOT EXISTS archive_statement_prewarm (
+    statement_id TEXT PRIMARY KEY REFERENCES archive_statements(id) ON DELETE CASCADE,
+    contest_slug TEXT NOT NULL,
+    attempts INTEGER NOT NULL DEFAULT 0,
+    next_attempt_at INTEGER NOT NULL DEFAULT 0,
+    requested_at INTEGER NOT NULL,
+    updated_at INTEGER NOT NULL
+  );
+  CREATE INDEX IF NOT EXISTS archive_statement_prewarm_contest_idx ON archive_statement_prewarm(contest_slug, requested_at);
 `);
 if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "translation_version")) db.exec("ALTER TABLE problem_statements ADD COLUMN translation_version INTEGER NOT NULL DEFAULT 0");
 if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "chinese_source_url")) db.exec("ALTER TABLE archive_statements ADD COLUMN chinese_source_url TEXT");
@@ -263,13 +275,176 @@ function upsertArchivePending(metadata) {
       qoj_contest_id=excluded.qoj_contest_id,
       problem_id=excluded.problem_id,
       contest_name=excluded.contest_name,
+      title_en=excluded.title_en,
       source_url=excluded.source_url,
+      chinese_source_url=COALESCE(archive_statements.chinese_source_url, excluded.chinese_source_url),
       updated_at=excluded.updated_at
   `).run(metadata.id, metadata.contestId, metadata.slot, metadata.qojContestId, metadata.problemId, metadata.contestName, metadata.title, metadata.sourceUrl, timestamp, timestamp);
 }
 
 function setArchiveStatus(id, status, error = null) {
   db.prepare("UPDATE archive_statements SET status = ?, error = ?, updated_at = ? WHERE id = ?").run(status, error ? String(error).slice(0, 500) : null, now(), id);
+}
+
+function archiveMetadataFromRow(row) {
+  const sourceUrl = String(row.source_url || `https://contest.ucup.ac/download.php?type=statement&id=${row.problem_id}&contest_id=${row.qoj_contest_id}`);
+  return {
+    id: row.id,
+    contestId: row.contest_slug,
+    slot: row.slot,
+    qojContestId: Number(row.qoj_contest_id),
+    problemId: Number(row.problem_id),
+    contestName: row.contest_name,
+    title: row.title_en,
+    sourceUrl,
+    chineseSourceUrl: `${sourceUrl}${sourceUrl.includes("?") ? "&" : "?"}ver=zh_cn`,
+  };
+}
+
+function prewarmMetadata(input, contestId, contestName) {
+  const url = new URL("http://localhost/archive/statements");
+  url.searchParams.set("contest", contestId);
+  url.searchParams.set("contestName", contestName);
+  url.searchParams.set("slot", String(input?.slot || ""));
+  url.searchParams.set("qojContestId", String(input?.qojContestId || ""));
+  url.searchParams.set("problemId", String(input?.problemId || ""));
+  url.searchParams.set("title", String(input?.title || `Problem ${input?.slot || ""}`));
+  return normalizeArchiveMetadata(url);
+}
+
+function archivePrewarmProgress(contestId) {
+  const rows = db.prepare(`SELECT s.slot, s.status, s.error, s.original_json, s.chinese_json, s.chinese_source_url, s.translation_version,
+      p.attempts, p.next_attempt_at, p.updated_at
+    FROM archive_statement_prewarm p JOIN archive_statements s ON s.id = p.statement_id
+    WHERE p.contest_slug = ? ORDER BY s.slot`).all(contestId);
+  const readyOriginal = rows.filter((row) => row.original_json).length;
+  const readyChinese = rows.filter((row) => row.chinese_json && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION).length;
+  const officialChinese = rows.filter((row) => row.chinese_source_url).length;
+  const failed = rows.filter((row) => row.status === "source_required" && Number(row.attempts || 0) >= 3).length;
+  return {
+    contestId,
+    total: rows.length,
+    readyOriginal,
+    readyChinese,
+    officialChinese,
+    failed,
+    status: rows.length && readyChinese === rows.length ? "ready" : failed ? "partial" : rows.length ? "prewarming" : "idle",
+    progress: rows.length ? Math.round(readyChinese / rows.length * 100) : 0,
+    items: rows.map((row) => ({
+      slot: row.slot,
+      originalReady: Boolean(row.original_json),
+      chineseReady: Boolean(row.chinese_json) && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION,
+      officialChinese: Boolean(row.chinese_source_url),
+      status: row.status,
+      message: row.error || null,
+    })),
+    updatedAt: rows.length ? new Date(Math.max(...rows.map((row) => Number(row.updated_at) || 0))).toISOString() : null,
+  };
+}
+
+function deferArchivePrewarm(id, { failed = false, delayMs = 60_000 } = {}) {
+  const timestamp = now();
+  const row = db.prepare("SELECT attempts FROM archive_statement_prewarm WHERE statement_id = ?").get(id);
+  const attempts = Math.max(0, Number(row?.attempts || 0)) + (failed ? 1 : 0);
+  const backoff = failed ? Math.min(6 * 60 * 60_000, Math.max(delayMs, 30_000 * 2 ** Math.min(8, attempts))) : delayMs;
+  db.prepare("UPDATE archive_statement_prewarm SET attempts = ?, next_attempt_at = ?, updated_at = ? WHERE statement_id = ?")
+    .run(attempts, timestamp + backoff, timestamp, id);
+  return attempts;
+}
+
+function scheduleArchivePrewarm(delayMs = 0) {
+  if (archivePrewarmTimer) return;
+  archivePrewarmTimer = setTimeout(() => {
+    archivePrewarmTimer = null;
+    pumpArchivePrewarmQueue();
+  }, Math.max(0, delayMs));
+  archivePrewarmTimer.unref?.();
+}
+
+async function processArchivePrewarm(row) {
+  const metadata = archiveMetadataFromRow(row);
+  if (!row.original_json) {
+    await importArchiveOriginal(metadata, { includeChinese: false });
+    const imported = archiveStatementRow(row.id);
+    if (!imported?.original_json) {
+      deferArchivePrewarm(row.id, { failed: true });
+      return;
+    }
+    row = { ...row, ...imported };
+  }
+
+  const chineseCurrent = Boolean(row.chinese_json) && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION;
+  if (row.chinese_source_url || (chineseCurrent && Number(row.attempts || 0) >= 2)) {
+    db.prepare("UPDATE archive_statement_prewarm SET next_attempt_at = 0, updated_at = ? WHERE statement_id = ?").run(now(), row.id);
+    return;
+  }
+
+  const official = await importArchiveOfficialChinese(metadata, { force: true });
+  if (official) {
+    db.prepare("UPDATE archive_statement_prewarm SET next_attempt_at = 0, updated_at = ? WHERE statement_id = ?").run(now(), row.id);
+    return;
+  }
+
+  const attempts = deferArchivePrewarm(row.id, { failed: true });
+  if (attempts < 2) return;
+  const queued = queueArchiveTranslation(row.id);
+  if (queued) deferArchivePrewarm(row.id, { delayMs: 90_000 });
+}
+
+function pumpArchivePrewarmQueue() {
+  if (ARCHIVE_PREWARM_PAUSED) return;
+  const active = archiveImportJobs.size + archiveOfficialChineseJobs.size;
+  const available = Math.max(0, ARCHIVE_PREWARM_CONCURRENCY - active);
+  if (!available) {
+    scheduleArchivePrewarm(1_000);
+    return;
+  }
+  const timestamp = now();
+  const candidates = db.prepare(`SELECT s.*, p.attempts, p.next_attempt_at
+    FROM archive_statement_prewarm p JOIN archive_statements s ON s.id = p.statement_id
+    WHERE p.next_attempt_at <= ? AND (
+      s.original_json IS NULL OR s.chinese_json IS NULL OR s.translation_version < ?
+      OR (s.chinese_source_url IS NULL AND p.attempts < 2)
+    ) ORDER BY p.requested_at, s.slot LIMIT ?`).all(timestamp, ARCHIVE_TRANSLATION_VERSION, available * 3);
+  const selected = candidates.filter((row) => !archiveImportJobs.has(row.id) && !archiveOfficialChineseJobs.has(row.id)).slice(0, available);
+  for (const row of selected) void processArchivePrewarm(row).catch((error) => {
+    console.error("archive prewarm", row.id, error instanceof Error ? error.message : error);
+    deferArchivePrewarm(row.id, { failed: true });
+  }).finally(() => scheduleArchivePrewarm(250));
+  if (selected.length) return;
+  const next = db.prepare(`SELECT MIN(p.next_attempt_at) AS next_at
+    FROM archive_statement_prewarm p JOIN archive_statements s ON s.id = p.statement_id
+    WHERE s.original_json IS NULL OR s.chinese_json IS NULL OR s.translation_version < ?
+      OR (s.chinese_source_url IS NULL AND p.attempts < 2)`).get(ARCHIVE_TRANSLATION_VERSION);
+  if (Number(next?.next_at) > timestamp) scheduleArchivePrewarm(Math.min(60_000, Number(next.next_at) - timestamp));
+}
+
+function registerArchivePrewarm(body) {
+  const contestId = String(body?.contestId || "").trim();
+  const contestName = String(body?.contestName || "").trim();
+  const problems = Array.isArray(body?.problems) ? body.problems.slice(0, 15) : [];
+  if (!problems.length) throw new HttpError(400, "整场预热题目为空");
+  const metadata = problems.map((problem) => prewarmMetadata(problem, contestId, contestName));
+  if (new Set(metadata.map((item) => item.slot)).size !== metadata.length) throw new HttpError(400, "整场预热题号重复");
+  const timestamp = now();
+  const insert = db.prepare(`INSERT INTO archive_statement_prewarm (statement_id, contest_slug, attempts, next_attempt_at, requested_at, updated_at)
+    VALUES (?, ?, 0, 0, ?, ?) ON CONFLICT(statement_id) DO UPDATE SET contest_slug = excluded.contest_slug,
+      next_attempt_at = 0, requested_at = excluded.requested_at, updated_at = excluded.updated_at`);
+  db.exec("BEGIN IMMEDIATE");
+  try {
+    for (const item of metadata) {
+      upsertArchivePending(item);
+      const row = archiveStatementRow(item.id);
+      if (!row?.original_json) setArchiveStatus(item.id, "queued", "已加入整场题面预热队列");
+      insert.run(item.id, item.contestId, timestamp, timestamp);
+    }
+    db.exec("COMMIT");
+  } catch (error) {
+    db.exec("ROLLBACK");
+    throw error;
+  }
+  scheduleArchivePrewarm();
+  return archivePrewarmProgress(contestId);
 }
 
 function isArchiveResourceUrl(value) {
@@ -286,12 +461,12 @@ function isArchiveResourceUrl(value) {
   }
 }
 
-async function fetchArchivePdf(value, maxRedirects = 3) {
+async function fetchArchivePdf(value, maxRedirects = 3, timeoutMs = 35_000) {
   let url = String(value);
   for (let redirect = 0; redirect <= maxRedirects; redirect += 1) {
     if (!isArchiveResourceUrl(url)) throw new HttpError(400, "官方 PDF 地址无效");
     const controller = new AbortController();
-    const timeout = setTimeout(() => controller.abort(), 35_000);
+    const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const response = await fetch(url, {
         redirect: "manual",
@@ -1022,14 +1197,14 @@ function archiveHasChineseText(parsed) {
   return (text.match(/[\u3400-\u9fff]/g) || []).length >= 24;
 }
 
-async function importArchiveOfficialChinese(metadata) {
+async function importArchiveOfficialChinese(metadata, { force = false } = {}) {
   if (archiveOfficialChineseJobs.has(metadata.id)) return archiveOfficialChineseJobs.get(metadata.id);
   const lastAttempt = recentArchiveOfficialChineseAttempts.get(metadata.id) || 0;
-  if (now() - lastAttempt < 10 * 60_000) return false;
+  if (!force && now() - lastAttempt < 10 * 60_000) return false;
   recentArchiveOfficialChineseAttempts.set(metadata.id, now());
   const job = (async () => {
     try {
-      const pdf = await fetchArchivePdf(metadata.chineseSourceUrl);
+      const pdf = await fetchArchivePdf(metadata.chineseSourceUrl, 3, 75_000);
       const { parsed } = await extractArchivePdf(metadata, pdf, { extractImages: false });
       if (!archiveHasChineseText(parsed)) return false;
       const officialTitle = await fetchArchiveOfficialChineseTitle(metadata).catch(() => "");
@@ -1042,15 +1217,19 @@ async function importArchiveOfficialChinese(metadata) {
       console.error("official archive Chinese statement unavailable", metadata.id, error instanceof Error ? error.message : error);
       return false;
     }
-  })().finally(() => archiveOfficialChineseJobs.delete(metadata.id));
+  })().finally(() => {
+    archiveOfficialChineseJobs.delete(metadata.id);
+    scheduleArchivePrewarm(250);
+  });
   archiveOfficialChineseJobs.set(metadata.id, job);
   return job;
 }
 
-async function importArchiveOriginal(metadata) {
+async function importArchiveOriginal(metadata, { includeChinese = true } = {}) {
   if (archiveImportJobs.has(metadata.id)) return archiveImportJobs.get(metadata.id);
-  if (archiveImportJobs.size >= 12) {
+  if (archiveImportJobs.size + archiveOfficialChineseJobs.size >= ARCHIVE_PREWARM_CONCURRENCY) {
     setArchiveStatus(metadata.id, "queued", "PDF 导入队列繁忙，稍后会自动重试");
+    scheduleArchivePrewarm(1_000);
     return null;
   }
   const job = (async () => {
@@ -1064,14 +1243,19 @@ async function importArchiveOriginal(metadata) {
           translation_version=0, status='translating', error='原题面已就绪，正在生成中文题面', updated_at=?
         WHERE id=?
       `).run(parsed.title || metadata.title, parsed.timeLimitText, parsed.memoryLimitText, JSON.stringify({ sections: parsed.sections, sample: parsed.sample }), JSON.stringify(images), now(), metadata.id);
-      const officialChinese = await importArchiveOfficialChinese(metadata);
-      if (!officialChinese) queueArchiveTranslation(metadata.id);
+      if (includeChinese) {
+        const officialChinese = await importArchiveOfficialChinese(metadata);
+        if (!officialChinese) queueArchiveTranslation(metadata.id);
+      }
     } catch (error) {
       const message = error instanceof Error ? error.message : "PDF 导入失败";
       console.error("archive PDF import failed", metadata.id, message);
       setArchiveStatus(metadata.id, "source_required", `官方 PDF 暂时无法导入：${message}`);
     }
-  })().finally(() => archiveImportJobs.delete(metadata.id));
+  })().finally(() => {
+    archiveImportJobs.delete(metadata.id);
+    scheduleArchivePrewarm(250);
+  });
   archiveImportJobs.set(metadata.id, job);
   return job;
 }
@@ -1133,7 +1317,10 @@ function queueArchiveTranslation(id) {
     .catch(() => undefined)
     .then(() => translateArchiveStatement(id))
     .catch((error) => console.error("archive translation queue", error))
-    .finally(() => queuedArchiveTranslations.delete(id));
+    .finally(() => {
+      queuedArchiveTranslations.delete(id);
+      scheduleArchivePrewarm(250);
+    });
   return true;
 }
 
@@ -1169,10 +1356,28 @@ function codeFromSourceUrl(sourceUrl) {
   } catch { return null; }
 }
 
+scheduleArchivePrewarm(1_500);
+
 export function createStatementHandler({ json, clientIp }) {
   return async function handleStatement(request, response, url) {
     if (!url.pathname.startsWith("/codeforces/statements") && !url.pathname.startsWith("/archive/statements")) return false;
     try {
+      if (url.pathname === "/archive/statements/prewarm") {
+        if (request.method === "POST") {
+          const rate = allowImport(clientIp(request), "archive-prewarm", 12);
+          if (!rate.allowed) return json(response, 429, { error: "整场题面预热过于频繁，请稍后重试" }, { "Retry-After": String(rate.retryAfterSeconds) }), true;
+          const body = await readJsonBody(request, { maxBytes: 64 * 1024 });
+          return json(response, 202, { prewarm: registerArchivePrewarm(body) }, { "Cache-Control": "no-store" }), true;
+        }
+        if (request.method === "GET") {
+          const contestId = String(url.searchParams.get("contest") || "").trim();
+          if (!/^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])$/.test(contestId)) return json(response, 400, { error: "历届赛事标识无效" }), true;
+          scheduleArchivePrewarm();
+          return json(response, 200, { prewarm: archivePrewarmProgress(contestId) }, { "Cache-Control": "no-store" }), true;
+        }
+        return json(response, 405, { error: "Method not allowed" }, { Allow: "GET, POST" }), true;
+      }
+
       const archiveAssetMatch = url.pathname.match(/^\/archive\/statements\/assets\/([a-f0-9]{64})$/);
       if (request.method === "GET" && archiveAssetMatch) {
         const asset = db.prepare("SELECT content_type, body FROM archive_statement_assets WHERE id = ?").get(archiveAssetMatch[1]);

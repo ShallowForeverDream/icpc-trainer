@@ -10,6 +10,11 @@ import {
   archiveProblemHref,
   type ArchiveContest,
 } from "../data/archive-contests";
+import {
+  balancedShenyangSlots,
+  shenyangBandLabels,
+  shenyangProblemProfile,
+} from "../data/shenyang-training";
 import { loadArchivePrewarm, startArchivePrewarm, type ArchivePrewarmProgress } from "../lib/archive-statement-client";
 import {
   ARCHIVE_SESSION_EVENT,
@@ -26,6 +31,7 @@ import {
 import { readStoredJson } from "../lib/storage";
 
 type SprintPlan = {
+  version: 2;
   date: string;
   contestId: string;
   slots: string[];
@@ -68,16 +74,20 @@ function planForDate(date: string): SprintPlan {
   const contest = sprintContests.find((item) => item.id === requestedId) || sprintContests[0];
   const size = Math.min(6, contest.problemCount);
   const round = Math.floor(index / contestCycle.length);
+  const balanced = balancedShenyangSlots(contest.id, round, size);
   const offset = (round * size) % contest.problemCount;
-  const slots = Array.from({ length: size }, (_, item) => String.fromCharCode(65 + (offset + item) % contest.problemCount));
-  return { date, contestId: contest.id, slots, reflection: "" };
+  const slots = balanced.length === size
+    ? balanced
+    : Array.from({ length: size }, (_, item) => String.fromCharCode(65 + (offset + item) % contest.problemCount));
+  return { version: 2, date, contestId: contest.id, slots, reflection: "" };
 }
 
 function isSprintPlan(value: unknown): value is SprintPlan {
   if (!value || typeof value !== "object") return false;
   const plan = value as Partial<SprintPlan>;
   const contest = typeof plan.contestId === "string" ? sprintContests.find((item) => item.id === plan.contestId) : undefined;
-  return /^\d{4}-\d{2}-\d{2}$/.test(plan.date || "")
+  return plan.version === 2
+    && /^\d{4}-\d{2}-\d{2}$/.test(plan.date || "")
     && Boolean(contest)
     && Array.isArray(plan.slots)
     && plan.slots.length > 0
@@ -179,6 +189,7 @@ export default function ShenyangSprintPage() {
       latest,
       title: contest.problemTitles?.[index] || `${contest.year} ${contest.city} · Problem ${slot}`,
       href: archiveProblemHref(contest, slot),
+      profile: shenyangProblemProfile(contest.id, slot),
     };
   }), [contest, plan.slots, session, submissions]);
   const accepted = problemRows.filter((item) => item.progress === "accepted").length;
@@ -218,12 +229,12 @@ export default function ShenyangSprintPage() {
     <section className="sprint-grid sprint-work-grid">
       <article className="panel sprint-today-card sprint-plan-card">
         <div className="panel-head">
-          <div><h2>今日计划 · {contest.city}</h2><p>{contest.name}</p></div>
+          <div><h2>今日计划 · {contest.city}</h2><p>{contest.city === "沈阳" ? "按原场通过率均衡安排热身、重点与挑战题" : contest.name}</p></div>
           <div className="sprint-plan-meta"><Pill>{accepted}/{plan.slots.length} AC</Pill>{prewarm ? <small>{prewarm.readyChinese}/{prewarm.total} 中文就绪</small> : <small>首次打开自动导入</small>}</div>
         </div>
         <div className="sprint-problem-list">
           {problemRows.map((item) => <article className={`sprint-problem-row ${item.progress}`} key={item.slot}>
-            <Link href={item.href} className="sprint-problem-main"><span>{item.slot}</span><div><b>{item.title}</b><small>站内题面 · 中文切换 · 直接提交</small></div></Link>
+            <Link href={item.href} className="sprint-problem-main"><span>{item.slot}</span><div><b>{item.title}</b><small>{item.profile ? `${shenyangBandLabels[item.profile.band]} · 原场通过率 ${item.profile.solveRate.toFixed(1)}%` : "站内题面 · 中文切换 · 直接提交"}</small></div></Link>
             <strong>{progressText(item.progress)}</strong>
             <div>{item.latest ? <Link href={`/submissions/${item.latest.requestId}`}>提交记录</Link> : null}<Link href={item.href}>{item.progress === "accepted" ? "查看题面" : "开始做题"} →</Link></div>
           </article>)}

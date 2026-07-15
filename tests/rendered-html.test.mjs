@@ -68,6 +68,22 @@ test("ships an automatic Shenyang sprint loop driven by persistent submissions",
   assert.match(html, /进入整场 VP/);
 });
 
+test("balances Shenyang daily drills with real contest solve rates", async () => {
+  const [sprint, profiles] = await Promise.all([
+    readFile(new URL("app/sprint/page.tsx", root), "utf8"),
+    readFile(new URL("app/data/shenyang-training.ts", root), "utf8"),
+  ]);
+  assert.match(sprint, /balancedShenyangSlots/);
+  assert.match(sprint, /原场通过率/);
+  assert.match(profiles, /"2025-shenyang"/);
+  assert.match(profiles, /"2024-shenyang"/);
+  assert.match(profiles, /"2023-shenyang"/);
+  assert.match(profiles, /"2022-shenyang"/);
+  assert.match(profiles, /take\("warmup", 2\)/);
+  assert.match(profiles, /take\("core", 2\)/);
+  assert.match(profiles, /take\("challenge", 2\)/);
+});
+
 test("uses a concise white, pink, and violet visual system across the product", async () => {
   const styles = await readFile(new URL("app/globals.css", root), "utf8");
   assert.match(styles, /White, pink and violet product theme/);

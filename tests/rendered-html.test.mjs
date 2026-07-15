@@ -19,12 +19,13 @@ test("renders the icpc-trainer product home", async () => {
   const html = await response.text();
   assert.match(html, /icpc-trainer/i);
   assert.match(html, /今日训练/);
-  assert.match(html, /每日目标/);
-  assert.match(html, /最近完成/);
-  assert.match(html, /推荐题目/);
-  assert.match(html, /赛后补题/);
-  assert.match(html, /ICPC 山东省大学生程序设计竞赛/);
-  assert.match(html, /国际赛事/);
+  assert.match(html, /今日目标/);
+  assert.match(html, /历届补题/);
+  assert.match(html, /思维题推荐/);
+  assert.match(html, /待 VP/);
+  assert.match(html, /RATING/);
+  assert.match(html, /constructive algorithms/);
+  assert.doesNotMatch(html, /最近完成/);
   assert.doesNotMatch(html, /中文精选题/);
   assert.doesNotMatch(html, /WORKSPACE|CODEFORCES API/);
   assert.doesNotMatch(html, /Your site is taking shape|codex-preview/);
@@ -256,6 +257,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(problemPage, /正文、样例与图片已从官方 PDF 提取/);
   assert.match(problemPage, /复制输入/);
   assert.match(problemPage, /提交代码/);
+  assert.match(problemPage, /或直接粘贴代码/);
+  assert.match(problemPage, /请选择代码文件或直接粘贴代码/);
   assert.match(problemPage, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
   assert.doesNotMatch(problemPage, /className="code-editor"/);
   assert.match(problemPage, /返回实时榜单/);
@@ -409,7 +412,11 @@ test("ships a deliberate-practice loop and collects user experience feedback", a
     readFile(new URL("app/admin/page.tsx", root), "utf8"),
   ]);
   assert.match(catalog, /弱项攻坚/);
-  assert.match(home, /赛后补题/);
+  assert.match(home, /历届补题/);
+  assert.match(home, /思维题推荐/);
+  assert.match(home, /thinkingTags/);
+  assert.doesNotMatch(home, /concealMeta/);
+  assert.match(detail, /或直接粘贴代码/);
   assert.match(catalog, /赛场思维模式/);
   assert.match(catalog, /Boss 题/);
   assert.match(detail, /THINKING MODE/);

@@ -226,7 +226,7 @@ function GymSubmitDialog({ contestId, currentIndex, problemCount, titles, onClos
   async function submit() {
     setError("");
     setStatus("");
-    if (!sourceCode.trim()) return setError("请先选择代码文件");
+    if (!sourceCode.trim()) return setError("请选择代码文件或直接粘贴代码");
     await copyCodeText(sourceCode);
     if (extensionReady) {
       window.postMessage({
@@ -251,6 +251,12 @@ function GymSubmitDialog({ contestId, currentIndex, problemCount, titles, onClos
       <label className={`archive-file-picker${fileName ? " selected" : ""}`}>
         <input type="file" accept=".cpp,.cc,.cxx,.c,.py,.java,.kt,.kts,.rs,.txt" onChange={(event) => void selectFile(event)} />
         <Icon name="upload" /><span><b>{fileName || "选择代码文件"}</b><small>{fileName ? `${Math.ceil(new Blob([sourceCode]).size / 1024)} KB · 可更换文件` : "支持 C++、C、Python、Java、Kotlin、Rust"}</small></span>
+      </label>
+      <div className="archive-code-divider"><span>或直接粘贴代码</span></div>
+      <label className="archive-code-paste">
+        <span>代码内容</span>
+        <textarea value={sourceCode} maxLength={500_000} spellCheck={false} placeholder="#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    return 0;\n}" onChange={(event) => { setSourceCode(event.target.value); setFileName(""); setError(""); setStatus(""); }} />
+        <small>{sourceCode ? `${sourceCode.length.toLocaleString("zh-CN")} 个字符` : "选择文件后也可在这里检查和修改"}</small>
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
@@ -572,7 +578,7 @@ export default function ProblemDetailPage() {
         <div className="editor-footer"><div><Link href="/templates">＋ 打开模板库</Link><span>草稿已自动保存</span></div><p className="submit-safety-note">扩展会打开 Codeforces 并预填代码；确认提交后，本场 VP 约 15 秒内更新判题和排名。</p>{submitState === "empty" ? <p className="statement-error" role="alert">请先填写代码。</p> : submitState === "missing" ? <p className="statement-error" role="alert">未检测到 v0.4 扩展，请安装或重新加载扩展后重试。</p> : null}<button className="submit-button" onClick={sendToExtension} disabled={submitState === "sending"}>{submitState === "sent" ? <><Icon name="check" /> 已打开提交页</> : submitState === "sending" ? <>正在连接扩展…</> : <>{vpContext ? "提交本题（打开 CF）" : "填充到 Codeforces"} <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
       </aside> : null}
     </section>
-    {isGym && archiveContest ? <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择本地代码文件、题目和语言，自动打开 Codeforces Gym。</span></div><button type="button" onClick={() => setGymSubmitOpen(true)}>提交代码 →</button></section> : null}
+    {isGym && archiveContest ? <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择代码文件或直接粘贴，自动打开 Codeforces Gym。</span></div><button type="button" onClick={() => setGymSubmitOpen(true)}>提交代码 →</button></section> : null}
     {isGym && archiveContest && gymSubmitOpen ? <GymSubmitDialog contestId={archiveContest.gymId || problem.contestId} currentIndex={problem.index} problemCount={archiveContest.problemCount} titles={archiveContest.problemTitles} onClose={() => setGymSubmitOpen(false)} /> : null}
   </AppShell>;
 }

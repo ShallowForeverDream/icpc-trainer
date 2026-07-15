@@ -183,7 +183,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
   async function submit() {
     setError("");
     setStatus("");
-    if (!sourceCode.trim()) return setError("请先选择代码文件");
+    if (!sourceCode.trim()) return setError("请选择代码文件或直接粘贴代码");
     const problem = archivePracticeProblem(contest, selectedSlot);
     if (!problem || !contest.qojContestId) return setError("这道题暂时没有可用的评测入口");
     const selectedLanguage = SUBMIT_LANGUAGES.find((item) => item.value === languageValue) || SUBMIT_LANGUAGES[0];
@@ -220,6 +220,12 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       <label className={`archive-file-picker${fileName ? " selected" : ""}`}>
         <input type="file" accept=".cpp,.cc,.cxx,.c,.py,.java,.kt,.kts,.rs,.txt" onChange={(event) => void selectFile(event)} />
         <Icon name="upload" /><span><b>{fileName || "选择代码文件"}</b><small>{fileName ? `${Math.ceil(new Blob([sourceCode]).size / 1024)} KB · 可更换文件` : "支持 C++、C、Python、Java、Kotlin、Rust"}</small></span>
+      </label>
+      <div className="archive-code-divider"><span>或直接粘贴代码</span></div>
+      <label className="archive-code-paste">
+        <span>代码内容</span>
+        <textarea value={sourceCode} maxLength={500_000} spellCheck={false} placeholder="#include <bits/stdc++.h>\nusing namespace std;\n\nint main() {\n    return 0;\n}" onChange={(event) => { setSourceCode(event.target.value); setFileName(""); setError(""); setStatus(""); }} />
+        <small>{sourceCode ? `${sourceCode.length.toLocaleString("zh-CN")} 个字符` : "选择文件后也可在这里检查和修改"}</small>
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
@@ -334,7 +340,7 @@ export default function ArchiveProblemPage() {
       {statement ? <ArchiveStatementView statement={statement} language={language} /> : <article className="archive-statement-panel archive-statement-loading"><div className="statement-loader" /><h2>正在整理题面</h2><p>{statementMessage || "首次打开会从官方 PDF 提取正文、样例和图片，完成后自动写入数据库。"}</p><div className="hero-actions"><a className="button button-ghost" href={problem.statementUrl} target="_blank" rel="noreferrer">下载原始 PDF ↓</a></div></article>}
     </section>
 
-    <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择文件、题目和语言，自动打开评测页。</span></div><button type="button" onClick={() => setSubmitOpen(true)}>提交代码 →</button></section>
+    <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择代码文件或直接粘贴，自动打开评测页。</span></div><button type="button" onClick={() => setSubmitOpen(true)}>提交代码 →</button></section>
     {submitOpen ? <ArchiveSubmitDialog contest={contest} currentSlot={slot} slots={slots} onClose={() => setSubmitOpen(false)} /> : null}
   </AppShell>;
 }

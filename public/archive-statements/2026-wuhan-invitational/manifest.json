@@ -1,0 +1,97 @@
+{
+  "contestId": "2026-wuhan-invitational",
+  "officialChinese": true,
+  "problems": [
+    {
+      "slot": "A",
+      "problemId": 18428,
+      "titleEn": "Sort",
+      "titleZh": "期望排序",
+      "path": "/archive-statements/2026-wuhan-invitational/A.json"
+    },
+    {
+      "slot": "B",
+      "problemId": 18429,
+      "titleEn": "Sequence Operations",
+      "titleZh": "序列操作",
+      "path": "/archive-statements/2026-wuhan-invitational/B.json"
+    },
+    {
+      "slot": "C",
+      "problemId": 18430,
+      "titleEn": "Believe in You",
+      "titleZh": "相信着你",
+      "path": "/archive-statements/2026-wuhan-invitational/C.json"
+    },
+    {
+      "slot": "D",
+      "problemId": 18431,
+      "titleEn": "Prime Game",
+      "titleZh": "质数博弈",
+      "path": "/archive-statements/2026-wuhan-invitational/D.json"
+    },
+    {
+      "slot": "E",
+      "problemId": 18432,
+      "titleEn": "Rook",
+      "titleZh": "棋盘",
+      "path": "/archive-statements/2026-wuhan-invitational/E.json"
+    },
+    {
+      "slot": "F",
+      "problemId": 18433,
+      "titleEn": "Lottery",
+      "titleZh": "抽奖",
+      "path": "/archive-statements/2026-wuhan-invitational/F.json"
+    },
+    {
+      "slot": "G",
+      "problemId": 18434,
+      "titleEn": "I Will Always Remember You",
+      "titleZh": "我会/一直/记得你",
+      "path": "/archive-statements/2026-wuhan-invitational/G.json"
+    },
+    {
+      "slot": "H",
+      "problemId": 18435,
+      "titleEn": "Rectangle Cutting",
+      "titleZh": "矩形切割",
+      "path": "/archive-statements/2026-wuhan-invitational/H.json"
+    },
+    {
+      "slot": "I",
+      "problemId": 18436,
+      "titleEn": "Nailoong vs. Bombloong 2",
+      "titleZh": "奶龙大战暴暴龙 2",
+      "path": "/archive-statements/2026-wuhan-invitational/I.json"
+    },
+    {
+      "slot": "J",
+      "problemId": 18437,
+      "titleEn": "The Best Card",
+      "titleZh": "最厉害的卡牌",
+      "path": "/archive-statements/2026-wuhan-invitational/J.json"
+    },
+    {
+      "slot": "K",
+      "problemId": 18438,
+      "titleEn": "Deletion Game",
+      "titleZh": "删除游戏",
+      "path": "/archive-statements/2026-wuhan-invitational/K.json"
+    },
+    {
+      "slot": "L",
+      "problemId": 18439,
+      "titleEn": "String Matching",
+      "titleZh": "字符串匹配",
+      "path": "/archive-statements/2026-wuhan-invitational/L.json"
+    },
+    {
+      "slot": "M",
+      "problemId": 18440,
+      "titleEn": "Iroha and the Kingdom of Construction",
+      "titleZh": "彩叶和构造王国",
+      "path": "/archive-statements/2026-wuhan-invitational/M.json"
+    }
+  ]
+}

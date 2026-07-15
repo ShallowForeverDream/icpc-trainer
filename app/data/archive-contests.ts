@@ -24,7 +24,14 @@ export const archiveContests: ArchiveContest[] = [
     problemTitles: ["Greetings from Prof. Chen", "All-Star Showdown", "One Item Away", "City Management", "Card Checking", "Astra", "Snake", "Telepathy", "Calendar Cubes", "Crossroads", "Sum and Product", "Critical Strike", "Night at the Museum"],
     chineseStatementUrl: "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
   },
-  { id: "2026-wuhan-invitational", year: 2026, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/51st/wuhan-invitational", problemCount: 13, qojContestId: 3799, qojProblemIds: [18428, 18429, 18430, 18431, 18432, 18433, 18434, 18435, 18436, 18437, 18438, 18439, 18440] },
+  {
+    id: "2026-wuhan-invitational", year: 2026, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/51st/wuhan-invitational", problemCount: 13,
+    qojContestId: 3799,
+    qojProblemIds: [18428, 18429, 18430, 18431, 18432, 18433, 18434, 18435, 18436, 18437, 18438, 18439, 18440],
+    problemTitles: ["Sort", "Sequence Operations", "Believe in You", "Prime Game", "Rook", "Lottery", "I Will Always Remember You", "Rectangle Cutting", "Nailoong vs. Bombloong 2", "The Best Card", "Deletion Game", "String Matching", "Iroha and the Kingdom of Construction"],
+    staticStatements: "official-chinese",
+    chineseStatementUrl: "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+  },
   { id: "2026-jiangxi-invitational", year: 2026, name: "CCPC 南昌全国邀请赛暨江西省赛", city: "南昌", type: "邀请赛", boardPath: "ccpc/12th/nanchang-invitational", problemCount: 13, gymId: 106554 },
   {
     id: "2026-shandong-provincial", year: 2026, name: "ICPC 山东省大学生程序设计竞赛", city: "山东", type: "省赛", boardPath: "provincial-contest/2026/shandong", problemCount: 13,

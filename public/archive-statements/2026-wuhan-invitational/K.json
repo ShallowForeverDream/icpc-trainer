@@ -1,0 +1,206 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "K",
+  "problemId": 18438,
+  "titleEn": "Deletion Game",
+  "titleZh": "删除游戏",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18438&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      18,
+      19
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18438?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Yachiyo has an integer sequence $S$ of length $n$ and a positive weight $a_i$ for each position. She chooses $m\\ge1$ and concatenates $m$ copies of both sequences, obtaining $S'$ and $a'$ of length $mn$. For every $0\\le c<m$ and $1\\le i\\le n$, $S'_{cn+i}=S_i$ and $a'_{cn+i}=a_i$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "She may perform the following operation any number of times:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Choose $1\\le i<j\\le |S'|$ with $S'_i=S'_j$.",
+              "Delete positions $i+1,i+2,\\ldots,j$ from both $S'$ and $a'$.",
+              "Compact the remaining elements while preserving their order."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Minimize the sum of the remaining weights. Among all ways attaining that minimum, also minimize $m$."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The input has three lines: $n$ ($1 \\le n \\le 3\\times10^5$); $S_1,S_2,\\ldots,S_n$ ($1 \\le S_i \\le 3\\times10^5$); and $a_1,a_2,\\ldots,a_n$ ($1 \\le a_i \\le 3\\times10^5$)."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output one line containing two integers separated by a space:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The first integer is the minimum possible sum of weights of the remaining sequence after the operations."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The second integer is the minimum total number of copies of the original sequence needed to achieve that minimum weight sum."
+            ]
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In this sample, the optimal strategy is to use only 1 copy of the original sequence (that is, m = 1, with no extra copying). The initial sequence S ′ is [1, 1, 4, 5, 1, 4], and the corresponding weight sequence a′ is [1, 9, 1, 9, 8, 10]. Yachiyo can perform the following two operations:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "1. Choose i = 1, j = 2 (at this time S1′ = S2′ = 1), and delete the (i + 1)-th through j-th elements (that is, delete the 2nd element). After the operation, S ′ becomes [1, 4, 5, 1, 4], and a′ becomes [1, 1, 9, 8, 10]."
+          },
+          {
+            "kind": "paragraph",
+            "text": "2. In the new sequence, choose i = 2, j = 5 (at this time S2′ = S5′ = 4), and delete the (i+1)-th through j-th elements (that is, delete the 3rd, 4th, and 5th elements). After the operation, the remaining S ′ is [1, 4], and the remaining a′ is [1, 1]."
+          },
+          {
+            "kind": "paragraph",
+            "text": "At this point, no further elimination is possible, and the sum of the remaining weights is 1 + 1 = 2. It can be proved that under any number of copies and any sequence of operations, the weight sum cannot be smaller than 2."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "八千代有一个长度为 $n$ 的整数序列 $S$，每个位置 $i$ 都有正权值 $a_i$。她选择 $m\\ge1$，将序列及其权值复制并首尾拼接 $m$ 份，得到长度为 $mn$ 的 $S'$ 与 $a'$。对任意 $0\\le c<m$、$1\\le i\\le n$，都有 $S'_{cn+i}=S_i$ 且 $a'_{cn+i}=a_i$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "她可以执行任意次以下消除操作："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "选择满足 $1\\le i<j\\le |S'|$ 且 $S'_i=S'_j$ 的两个下标 $i,j$。",
+              "从 $S'$ 与 $a'$ 中删除第 $i+1$ 到第 $j$ 个元素。",
+              "保留剩余元素的相对顺序并重新紧凑排列。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "求剩余序列权值和的最小值；在达到最小权值和的方案中，再求最小的拼接份数 $m$。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入共三行：第一行是 $n$（$1 \\le n \\le 3\\times10^5$）；第二行是 $S_1,S_2,\\ldots,S_n$（$1 \\le S_i \\le 3\\times10^5$）；第三行是 $a_1,a_2,\\ldots,a_n$（$1 \\le a_i \\le 3\\times10^5$）。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出一行包含两个整数，用空格隔开："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第一个整数表示经过操作后，剩余序列的最小权值和。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第二个整数表示为了达到该最小权值和，最少需要的原序列总份数。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在本样例中，最优策略是仅使用1份原序列（即m=1，不进行额外复制）。初始序列S′为[1,1,4,5,1,4]，对应的权值a′为[1,9,1,9,8,10]。八千代可以进行以下两次操作："
+          },
+          {
+            "kind": "paragraph",
+            "text": "1.选择i=1,j=2（此时S1′=S2′=1），删去第i+1∼j个元素（即删去第2个元素）。操作后序列S′变为[1,4,5,1,4]，权值a′变为[1,1,9,8,10]。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "2.在新序列中选择i=2,j=5（此时S2′=S5′=4），删去第i+1∼j个元素（即删去第3,4,5个元素）。操作后序列S′剩余[1,4]，权值a′剩余[1,1]。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "此时无法继续消除，剩余序列的权值和为1+1=2。可以证明在任何拼接份数和操作下，权值和不可能小于2。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "6\n1 1 4 5 1 4\n1 9 1 9 8 10",
+    "output": "2 1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "6\n1 1 4 5 1 4\n1 9 1 9 8 10",
+      "output": "2 1",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

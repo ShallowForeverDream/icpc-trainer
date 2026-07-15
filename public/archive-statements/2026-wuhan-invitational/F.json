@@ -1,0 +1,144 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "F",
+  "problemId": 18433,
+  "titleEn": "Lottery",
+  "titleZh": "抽奖",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18433&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      9,
+      9
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18433?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "A lottery event is being held in the Tsukuyomi. There are n items in the prize pool, and their values are A1, A2, · · ·, An. Kaguya can participate in the lottery for several rounds, but she must participate in at least one round. In each round, the process is as follows:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "1. Kaguya needs to pay the current lottery cost c, and then an integer x is chosen uniformly at random from [1, n]. She learns which item x was drawn."
+          },
+          {
+            "kind": "paragraph",
+            "text": "2. After seeing the result, Kaguya has two choices:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Keep the x-th item and end the entire lottery event. In this case, she will obtain the item with value Ax.",
+              "Give up the currently drawn item and enter the next round of the lottery. However, the lottery cost will increase accordingly, and the cost of the next round will become c + k, that is, update c ← c + k."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Kaguya defines the “profit” of this lottery event as the value of the finally obtained item Ax minus the sum of the lottery costs she paid in all rounds. Assuming Kaguya is smart enough and always takes the optimal strategy to maximize her expected profit, please find the expected profit she can obtain under the optimal strategy."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains three integers n, c, k (1 ≤ n ≤ 4 × $10^{5}$, 1 ≤ c ≤ 4 × $10^{5}$, 0 ≤ k ≤ 4 × $10^{5}$ ), representing the total number of items in the prize pool, the initial cost of the first lottery round, and the increase in cost for each reroll. The second line contains n integers A1, A2, · · ·, An (1 ≤ Ai ≤ 4 × $10^{5}$ ), representing the value of each item."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output one line containing a real number, representing the expected profit under Kaguya’s optimal strategy. Your answer is considered correct if and only if the absolute or relative error between your answer and the standard answer does not exceed $10^{-6}$."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "月读空间里正在举办一场抽奖活动。活动奖池中共有n个商品，它们的价值分别为A1,A2,···,An。辉夜可以进行若干轮抽奖，但至少要进行一轮。在每一轮抽奖中，过程如下："
+          },
+          {
+            "kind": "paragraph",
+            "text": "1.辉夜需要支付当前的抽奖代价c，随后在[1,n]中等概率随机抽取一个整数x，并得知所抽中的商品x。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "2.得知结果后，辉夜面临两个选择："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "留下第x个商品并结束整个抽奖活动，此时她将获得价值为Ax的商品。",
+              "放弃当前抽中的商品，进入下一轮抽奖。但是，抽奖的代价会随之提升，下一轮的抽奖代价将会增加k，即更新c←c+k。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "辉夜将这场抽奖活动的“利润”定义为：最终获得商品的价值Ax减去她在所有轮次中支付的抽奖代价之和。假设辉夜足够聪明，并且总是采取最优策略来最大化她的期望利润。请你求出，在最优策略下，辉夜能获得的期望利润是多少？"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含三个整数n,c,k（1≤n≤4×$10^{5}$，1≤c≤4×$10^{5}$，0≤k≤4×$10^{5}$），分别表示奖池中的商品总数、第一轮抽奖的初始代价，以及每重抽一轮代价的增加量。第二行包含n个整数A1,A2,···,An（1≤Ai≤4×$10^{5}$），依次表示每个商品的价值。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出一行包含一个实数，表示辉夜在最优策略下的期望利润。你的答案被认为是正确的，当且仅当你的答案和标准答案的绝对或相对误差不超过$10^{-6}$。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3 2 0\n4 1 6\n9 8 2\n53 71 5 6 80 37 50 33 90",
+    "output": "2.000000000\n\n51.557786840",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3 2 0\n4 1 6\n9 8 2\n53 71 5 6 80 37 50 33 90",
+      "output": "2.000000000\n\n51.557786840",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

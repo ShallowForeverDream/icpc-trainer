@@ -1,0 +1,138 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "E",
+  "problemId": 18432,
+  "titleEn": "Rook",
+  "titleZh": "棋盘",
+  "timeLimitText": "6 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18432&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      8,
+      8
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18432?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There is an N × M chessboard. You need to place K distinct rooks on this chessboard. The placement must satisfy all of the following conditions:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "1. Each cell contains at most one rook."
+          },
+          {
+            "kind": "paragraph",
+            "text": "2. Every row of the chessboard contains at least one rook."
+          },
+          {
+            "kind": "paragraph",
+            "text": "3. Every column of the chessboard contains at least one rook."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Please find the total number of valid placements. Since the answer may be very large, you only need to output the result modulo 998244353."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The input contains only one line. This line contains three integers N, M, K in order (1 ≤ N, M, K ≤ $10^{5}$ ), representing the number of rows and columns of the chessboard, and the number of rooks to place, respectively."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output one line containing an integer, the number of valid placements modulo 998244353."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有一个N×M的棋盘。你需要在这个棋盘上放置K个互不相同的“车”（即不同的棋子）。放置方案必须满足以下所有条件："
+          },
+          {
+            "kind": "paragraph",
+            "text": "1.每个格子至多放置一个“车”。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "2.棋盘的每一行都至少有一个“车”。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "3.棋盘的每一列都至少有一个“车”。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "请你求出满足条件的放置方案总数。由于答案可能很大，你只需要输出方案数对998244353取模后的结果。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入仅包含一行。这一行依次包含三个整数N,M,K（1≤N,M,K≤$10^{5}$），分别表示棋盘的行数、列数以及需要放置的“车”的数量。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出一行包含一个整数，表示合法的放置方案总数对998244353取模后的结果。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2 2 3\n5 3 4\n353 442 899",
+    "output": "24\n0\n623104742",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2 2 3\n5 3 4\n353 442 899",
+      "output": "24\n0\n623104742",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

@@ -1,0 +1,128 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "D",
+  "problemId": 18431,
+  "titleEn": "Prime Game",
+  "titleZh": "质数博弈",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18431&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      7,
+      7
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18431?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Iroha and Kaguya play a game starting from a positive integer $n$. A round consists of one operation by each player:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Iroha first chooses an integer $x$ with $0 \\le x<n$ and sets $n\\leftarrow n+x$.",
+              "Kaguya then chooses a prime $p$ dividing the current $n$ and sets $n\\leftarrow n/p$."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "The game ends immediately when $n=1$ at the end of a round. Iroha maximizes the number of rounds while Kaguya minimizes it. Determine the number of rounds under optimal play."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The only line contains $n$ ($1 \\le n \\le 10^{18}$), the initial integer."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output a single line containing an integer, representing the total number of rounds the game will last given that both players play optimally."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "彩叶和辉夜从一个正整数 $n$ 开始进行博弈。每个回合由双方各进行一次操作："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "彩叶先选择一个满足 $0 \\le x<n$ 的整数 $x$，令 $n\\leftarrow n+x$。",
+              "辉夜再选择一个能整除当前 $n$ 的质数 $p$，令 $n\\leftarrow n/p$。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "若某个回合结束后 $n=1$，游戏立即结束。彩叶希望最大化总回合数，辉夜希望最小化总回合数。求双方均采取最优策略时游戏进行的回合数。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "仅有的一行包含整数 $n$（$1 \\le n \\le 10^{18}$），表示初始数字。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出一行包含一个整数，表示在双方都采取最优策略的情况下，游戏最终进行的总回合数。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "1\n9\n16",
+    "output": "0\n4\n5",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "1\n9\n16",
+      "output": "0\n4\n5",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

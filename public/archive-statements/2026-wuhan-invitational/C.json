@@ -1,0 +1,326 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "C",
+  "problemId": 18430,
+  "titleEn": "Believe in You",
+  "titleZh": "相信着你",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18430&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      4,
+      6
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18430?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Slay the Spire 2 is a world-renowned game. In this game, you play as a character climbing a high tower, using cards to defeat monsters along the way until victory is achieved. Now you must face a powerful enemy. Unfortunately, your remaining health cannot withstand even a single unblocked attack. Fortunately, you know the cards you will draw and the monster’s actions for the next n turns."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You want to quickly determine whether you can defeat the monster within n turns without dying. The cards in the game are divided into two types:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Strike: Playing this card deals S points of damage."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Defend: Playing this card provides D points of block."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "The condition to defeat the enemy is that the total damage you deal is greater than or equal to the monster’s health HP. In the i-th turn, the player’s actions are defined as:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Discard the cards currently in hand and clear any remaining block from the previous turn (if any)."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Draw ai Strike cards and 5 − ai Defend cards."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Choose and play no more than 3 cards; each card can only be played once."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "End the action."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "In the i-th turn, the monster’s action is defined as:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Deal ki points of damage to the player. If ki is greater than the player’s current block value, you will die, and the game ends immediately."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "End the action."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "In each turn, the order of actions for both parties is:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "1. Player’s turn."
+          },
+          {
+            "kind": "paragraph",
+            "text": "2. If the monster dies, the player wins, and the game ends."
+          },
+          {
+            "kind": "paragraph",
+            "text": "3. Monster’s turn."
+          },
+          {
+            "kind": "paragraph",
+            "text": "4. If the player dies, the game ends."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You need to determine if you can defeat the monster within n turns. If you can, output “Yes” and the earliest turn in which the monster can be defeated; if you cannot defeat the monster within n turns or if the player dies during the process, output “No”."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains an integer n (1 ≤ n ≤ 100), representing the predicted number of game turns. The second line contains three positive integers S, D, HP (1 ≤ S, D ≤ 10, 1 ≤ HP ≤ 100), representing the damage dealt by a Strike, the block provided by a Defend, and the monster’s health, respectively. The next n lines each contain two non-negative integers ai, ki (0 ≤ ai ≤ 5, 0 ≤ ki ≤ 50), describing the card draw situation for the i-th turn (drawing ai Strikes) and the monster’s attack damage."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "If the monster can be defeated within n turns, output “Yes” on one line, and output an integer on the next line representing the earliest turn in which the monster is defeated. If the monster cannot be defeated within n turns or if the player dies, output “No”."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the 1st sample case, the optimal card-playing strategy is as follows:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Turn 1: The player draws 4 Strikes and 1 Defend. The monster’s attack power is 0. The player plays 3 Strikes, dealing 15 points of damage. At the end of the turn, the monster has 15 health remaining. The player receives 0 damage and survives."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Turn 2: The player draws 1 Strike and 4 Defends. The monster’s attack power is 10. To survive, the player must play 2 Defends to gain 10 block, leaving 1 remaining card-play action to play 1 Strike, dealing 5 points of damage. At the end of the turn, the monster has 10 health remaining. The player receives a 10-point attack, which is negated by the block, and survives."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Turn 3: The player draws 2 Strikes and 3 Defends. Since the monster will not perform its attack phase if it dies, the player can directly play 2 Strikes, dealing 10 points of damage. At this point, the cumulative damage reaches 30, the monster dies, and the game ends in the 3rd turn."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "《杀戮尖塔2》是一款风靡全球的游戏。游戏中，你需要扮演攀爬高塔的角色，并用卡牌击败沿途的怪物，直到获得胜利。现在你不得不面对一个强大的敌人，很不幸的是，你剩下的生命值无法抵挡任何一次未被格挡的攻击。幸运的是，你知道了未来n回合内你能抽到的牌和怪物的行动，你希望快速判断能否在n回合内击败怪物，且自己不会死亡。游戏的卡牌分为两种："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "打击（Strike）：打出会造成S点伤害。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "防御（Defend）：打出会为自己提供D点格挡。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "击败敌人的条件是你造成的总伤害大于等于敌人的生命值HP。在第i个回合，玩家的行动定义为："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "清空当前手上的牌以及上一回合剩余的格挡（如果有）。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "获得ai张打击，5−ai张防御。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "选择不超过3张卡牌打出，每张卡牌只能被打出一次。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "结束行动。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "在第i个回合，怪物的行动定义为："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "对玩家造成ki点伤害。一旦ki大于玩家当前的格挡值，你就会死亡，游戏立即结束。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "结束行动。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "在每个回合，双方的行动顺序是："
+          },
+          {
+            "kind": "paragraph",
+            "text": "1.玩家行动。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "2.若怪物死亡，则玩家胜利，游戏结束。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "3.怪物行动。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "4.若玩家死亡，则游戏结束。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "你需要判断在n个回合内你能否击败怪物。若可以，输出“Yes”，并输出最快在哪个回合能击败怪物；若不能在n回合内击败怪物或者中途玩家死亡，则输出“No”。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含一个整数n（1≤n≤100），表示预测的游戏回合数。第二行包含三个正整数S,D,HP（1≤S,D≤10，1≤HP≤100），分别表示打击造成的伤害、防御提供的格挡和怪物的血量。接下来n行，每行包含两个非负整数ai,ki（0≤ai≤5，0≤ki≤50），描述第i轮的抽牌情况（抽到ai张打击）和怪物的攻击伤害。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "若能在n回合内击败怪物，输出一行“Yes”，并在下一行输出一个整数，表示最快在哪个回合能击败怪物。若不能在n回合内击败怪物或者中途玩家死亡，则输出一行“No”。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于第一组样例，最优的打牌策略如下："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第一回合：玩家抽到4张打击，1张防御。怪物攻击力为0。玩家打出3张打击，造成15点伤害。回合结束时怪物剩余15点血量。玩家受到0点伤害，存活。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第二回合：玩家抽到1张打击，4张防御。怪物攻击力为10。为了存活，玩家必须打出2张防御获得10点格挡，剩余1次出牌机会打出1张打击，造成5点伤害。回合结束时怪物剩余10点血量。玩家受到10点攻击，被格挡抵消，存活。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第三回合：玩家抽到2张打击，3张防御。由于只要怪物死亡就不会进行攻击阶段，玩家可以直接打出2张打击，造成10点伤害。此时累计总伤害达到30，怪物死亡，游戏在第3回合结束。"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "4\n5 5 25\n4 0\n1 10\n2 12\n2 12\n5\n1 5 4\n1 4\n2 0\n5 3\n0 4\n0 1\n4\n1 5 5\n0 1\n3 3\n0 5\n2 1\n5\n1 4 4\n5 4\n1 5\n3 1\n4 4\n5 4\n4\n4 5 4\n1 2\n1 0\n4 5\n1 1",
+    "output": "Yes\n3\n\nYes\n3\n\nNo\n\nNo\n\nYes\n1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "4\n5 5 25\n4 0\n1 10\n2 12\n2 12\n5\n1 5 4\n1 4\n2 0\n5 3\n0 4\n0 1\n4\n1 5 5\n0 1\n3 3\n0 5\n2 1\n5\n1 4 4\n5 4\n1 5\n3 1\n4 4\n5 4\n4\n4 5 4\n1 2\n1 0\n4 5\n1 1",
+      "output": "Yes\n3\n\nYes\n3\n\nNo\n\nNo\n\nYes\n1",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

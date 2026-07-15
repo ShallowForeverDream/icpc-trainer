@@ -1,0 +1,197 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "H",
+  "problemId": 18435,
+  "titleEn": "Rectangle Cutting",
+  "titleZh": "矩形切割",
+  "timeLimitText": "3 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18435&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      12,
+      13
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18435?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Yachiyo has a rectangle in the first quadrant of the Cartesian coordinate plane. The lower-left corner of the rectangle is at the origin (0, 0), and the upper-right corner is at (n, m). In other words, the two sides of the rectangle are aligned with the x-axis and the y-axis, with lengths n and m along the x-and y-directions, respectively. Yachiyo decides to make q cuts on this rectangle. Specifically, there are two kinds of cuts:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Horizontal cut: given a positive integer k, cut along the line y = k."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Vertical cut: given a positive integer k, cut along the line x = k."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Each cut goes through the entire region, further dividing the existing rectangles into more smaller rectangles. Yachiyo wants to know, after each cut is completed, what the maximum area among all the currently divided small rectangles is."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains three integers n, m, q (1 ≤ n, m ≤ $10^{9}$, 1 ≤ q ≤ 5 × $10^{5}$ ), representing the horizontal length, vertical length, and the number of cuts of the initial rectangle, respectively. The next q lines each contain two integers op, k, describing one cut operation:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If op = 1, it means a vertical cut is performed, and the given integer k (1 ≤ k < n) indicates cutting along the line x = k."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If op = 2, it means a horizontal cut is performed, and the given integer k (1 ≤ k < m) indicates cutting along the line y = k."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "It is guaranteed that Yachiyo will never cut at the same position twice (that is, all cutting lines are distinct)."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output q lines. The i-th line should contain one integer, representing the maximum area among all small rectangles after the i-th cut."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Figure 1: sample explanation."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "八千代在平面直角坐标系的第一象限内有一个矩形。该矩形的左下角位于坐标原点(0,0)，右上角位于(n,m)。换言之，矩形的两边分别与x轴、y轴重合，其在x轴方向的长度为n，在y轴方向的长度为m。八千代决定把这个矩形切q刀。具体地，她有以下两种切割方式："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "横向切割：给定一个正整数k，沿着直线y=k进行切割。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "纵向切割：给定一个正整数k，沿着直线x=k进行切割。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "每次切割都会贯穿整个区域，将现有的矩形进一步切割成更多的小矩形。八千代想要知道，在每一次切割完成之后，当前所有被切分出来的小矩形中，面积的最大值是多少？"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含三个整数n,m,q（1≤n,m≤$10^{9}$，1≤q≤5×$10^{5}$），分别表示初始矩形的水平长度、垂直长度以及切割的次数。接下来q行，每行包含两个整数op,k，描述一次切割操作："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "若op=1，表示进行一次纵向切割，给定整数k（1≤k<n），沿着直线x=k切割。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "若op=2，表示进行一次横向切割，给定整数k（1≤k<m），沿着直线y=k切割。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "保证八千代绝对不会在同一个位置切割两次（即所有的切割直线均互不相同）。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出共q行，每行包含一个整数，第i行的整数表示在第i次切割之后，所有小矩形中面积的最大值。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "图 1：样例解释。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "5 3 3\n1 1\n1 4\n2 2",
+    "output": "12\n9\n6",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "5 3 3\n1 1\n1 4\n2 2",
+      "output": "12\n9\n6",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2026-wuhan-invitational/assets/H-1.png",
+      "captionEn": "The rectangle after the sample cuts",
+      "captionZh": "样例切割后的矩形",
+      "imageTextZh": null
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

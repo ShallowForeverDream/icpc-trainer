@@ -1,0 +1,168 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "J",
+  "problemId": 18437,
+  "titleEn": "The Best Card",
+  "titleZh": "最厉害的卡牌",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18437&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      16,
+      17
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18437?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Snakebite is a powerful card in *Slay the Spire 2*. The game lasts $10^{1000}$ turns, and the enemy initially has $0$ poison layers."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Yuki has $n$ Snakebite cards. Card $i$ is played at the start of turn $t_i$ and adds $v_i$ poison layers."
+          },
+          {
+            "kind": "paragraph",
+            "text": "At the end of each turn, let $x$ be the current poison layers:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If $x=0$, nothing happens.",
+              "If $x\\ne0$, the enemy takes $x$ damage and then $x\\leftarrow x-1$."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Before the game, Yuki performs exactly $k$ enchantments. Each enchantment chooses any $i$ with $1 \\le i \\le n$ and increases $v_i$ by $1$; the same card may be chosen repeatedly. Find the maximum total damage."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains the number of test cases $T$ ($1 \\le T \\le 10^4$). For each test case:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The first line contains $n,k$ ($1 \\le n \\le 3\\times10^5$, $0 \\le k \\le 10^9$).",
+              "The second line contains $v_1,v_2,\\ldots,v_n$ with $1 \\le v_i \\le 10^9$ and $1 \\le \\sum v_i \\le 10^9$.",
+              "The third line contains $t_1,t_2,\\ldots,t_n$ ($1 \\le t_i \\le 10^9$)."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "The sum of $n$ over all test cases does not exceed $3\\times10^5$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output the maximum total damage after exactly $k$ enchantments."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "“蛇咬”是《杀戮尖塔 2》中的强力卡牌。游戏持续 $10^{1000}$ 个回合，敌人初始有 $0$ 层毒。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Yuki 有 $n$ 张“蛇咬”。第 $i$ 张会在第 $t_i$ 个回合开始时打出，使敌人的毒层数增加 $v_i$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "每个回合结束时，设敌人的当前毒层数为 $x$："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "若 $x=0$，什么也不发生。",
+              "若 $x\\ne0$，敌人受到 $x$ 点伤害，随后令 $x\\leftarrow x-1$。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "游戏开始前，Yuki 恰好进行 $k$ 次强化。每次可选择任意满足 $1 \\le i \\le n$ 的 $i$，令 $v_i$ 增加 $1$；同一张牌可以被多次选择。求敌人受到的最大总伤害。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含测试数据组数 $T$（$1 \\le T \\le 10^4$）。对于每组测试数据："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第一行包含 $n,k$（$1 \\le n \\le 3\\times10^5$，$0 \\le k \\le 10^9$）。",
+              "第二行包含 $v_1,v_2,\\ldots,v_n$，满足 $1 \\le v_i \\le 10^9$ 且 $1 \\le \\sum v_i \\le 10^9$。",
+              "第三行包含 $t_1,t_2,\\ldots,t_n$（$1 \\le t_i \\le 10^9$）。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "保证所有测试数据中 $n$ 的总和不超过 $3\\times10^5$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据，输出恰好进行 $k$ 次强化后敌人能受到的最大总伤害。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "5\n2 1\n2 3\n1 4\n2 2\n3 4\n1 3\n4 1\n3 3 1 4\n4 4 1 5\n3 0\n16 27 62\n9 88 11\n3 5\n9 3 1\n8 3 3",
+    "output": "13\n37\n63\n3335\n126",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "5\n2 1\n2 3\n1 4\n2 2\n3 4\n1 3\n4 1\n3 3 1 4\n4 4 1 5\n3 0\n16 27 62\n9 88 11\n3 5\n9 3 1\n8 3 3",
+      "output": "13\n37\n63\n3335\n126",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

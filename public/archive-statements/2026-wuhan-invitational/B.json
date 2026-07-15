@@ -1,0 +1,262 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "B",
+  "problemId": 18429,
+  "titleEn": "Sequence Operations",
+  "titleZh": "序列操作",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18429&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      2,
+      3
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18429?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Given a sequence of n non-negative integers a1, a2, · · ·, an, and two sequences of length m, c1, c2, · · ·, cm and x1, x2, · · ·, xm. It is guaranteed that all xi are positive integers. You need to perform m operations in order from 1 to m. In the i-th operation, you modify the current sequence a based on the value of ci:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If ci = 1, you must perform aj ← mex(aj, xi ) for all aj."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If ci = 2, you must perform aj ← gcd(aj, xi ) for all aj."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If ci = 0, you can freely choose to perform either of the two operations mentioned above."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "After all m operations are completed, determine whether it is possible to make all elements in sequence a equal. Additional notes regarding the mex and gcd operations are as follows:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The binary operation mex(u, v) is defined as the smallest non-negative integer that is not equal to u and not equal to v. For example: mex(0, 1) = 2, mex(2, 2) = 0."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "For the greatest common divisor gcd, it is specifically defined that gcd(0, x) = x."
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains the number of test cases $T$ ($1 \\le T \\le 10^4$). For each test case:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The first line contains $n,m$ ($1 \\le n,m \\le 3\\times10^5$), the sequence length and number of operations.",
+              "The second line contains $n$ integers $a_1,a_2,\\ldots,a_n$ ($0 \\le a_j \\le 10^9$).",
+              "Each of the next $m$ lines contains $c_i,x_i$ ($0 \\le c_i \\le 2$, $1 \\le x_i \\le 10^9$), describing the $i$-th operation."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "The sum of $n$ over all test cases does not exceed $3\\times10^5$, and the sum of $m$ over all test cases does not exceed $3\\times10^5$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output one line. If it is possible to make all numbers equal after all operations are finished, output “Yes”; otherwise, output “No”."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the first test case: in the first operation, choose to apply the gcd operation, and the sequence becomes [1, 1, 1, 1, 1, 1, 1, 1]. In the following 5 operations, no matter which operation you choose, the elements of the sequence will always remain equal, so output “Yes”. For the second test case: the only operation is c1 = 1, x1 = 1, so you can only choose the mex operation."
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "a1 ← mex(0, 1) = 2"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "a2 ← mex(1, 1) = 0"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "a3 ← mex(2, 1) = 0"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "The final sequence becomes [2, 0, 0], and it is impossible to make all numbers equal, so output “No”."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "给定一个长度为n的非负整数序列a1,a2,···,an，以及两个长度为m的序列c1,c2,···,cm和x1,x2,···,xm。保证xi均为正整数。你需要从1到m依次顺序执行m次操作。在第i次操作中，你可以根据ci的值对当前的序列a进行修改："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "若ci=1，那么你只能对所有的aj执行aj←mex(aj,xi)。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "若ci=2，那么你只能对所有的aj执行aj←gcd(aj,xi)。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "若ci=0，你可以自由选择执行上述两种操作中的任意一种。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "在所有m次操作执行完毕后，判断最后能不能让序列a中的所有数都相等。关于运算mex和gcd的额外说明如下："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "定义二元操作mex(u,v)表示不等于u且不等于v的最小非负整数。例如：mex(0,1)=2，mex(2,2)=0。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "对于最大公约数gcd，特别定义gcd(0,x)=x。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含测试数据组数 $T$（$1 \\le T \\le 10^4$）。对于每组测试数据："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第一行包含两个整数 $n,m$（$1 \\le n,m \\le 3\\times10^5$），分别表示序列长度和操作次数。",
+              "第二行包含 $n$ 个非负整数 $a_1,a_2,\\ldots,a_n$（$0 \\le a_j \\le 10^9$），表示初始序列。",
+              "接下来 $m$ 行，第 $i$ 行包含 $c_i,x_i$（$0 \\le c_i \\le 2$，$1 \\le x_i \\le 10^9$），描述第 $i$ 次操作。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "保证所有测试数据中 $n$ 的总和不超过 $3\\times10^5$，且 $m$ 的总和不超过 $3\\times10^5$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据输出一行。如果在所有操作结束后能让所有数都相等，则输出“Yes”；否则输出“No”。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于第一组数据：在第一次操作时，选择执行gcd操作，序列将变为[1,1,1,1,1,1,1,1]。在后续的5次操作中，你无论选择什么操作，序列元素始终会保持一致，因此输出“Yes”。对于第二组数据：唯一的一次操作是c1=1，x1=1，你只能选择mex操作。"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "a1←mex(0,1)=2"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "a2←mex(1,1)=0"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "a3←mex(2,1)=0"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "最终序列变为[2,0,0]，无法让所有数字相等，输出“No”。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n8 6\n3 1 4 1 5 9 2 6\n0 1\n0 1\n0 4\n0 5\n0 1\n0 4\n3 1\n0 1 2\n1 1\n3 1\n0 1 2\n2 1",
+    "output": "Yes\nNo\nYes",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n8 6\n3 1 4 1 5 9 2 6\n0 1\n0 1\n0 4\n0 5\n0 1\n0 4\n3 1\n0 1 2\n1 1\n3 1\n0 1 2\n2 1",
+      "output": "Yes\nNo\nYes",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

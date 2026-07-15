@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "A",
+  "problemId": 18428,
+  "titleEn": "Sort",
+  "titleZh": "期望排序",
+  "timeLimitText": "4 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18428&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      1,
+      1
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18428?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "You are given a permutation $p$ of length $n$. In one operation, choose an integer $i$ uniformly at random from $1$ to $n$, then sort the prefix $[1,i]$ and the suffix $[i+1,n]$ independently in ascending order. When $i=n$, the suffix is empty, so the whole permutation is sorted."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Find the expected number of operations until the permutation is sorted, that is, $p_j=j$ for every $j$. Output the answer modulo $998244353$."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains the number of test cases $T$ ($1 \\le T \\le 100$)."
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "For each test case, the first line contains $n$ ($1 \\le n \\le 500$), the length of the permutation.",
+              "The second line contains $n$ integers $p_1,p_2,\\ldots,p_n$ ($1 \\le p_j \\le n$). The sequence is guaranteed to be a permutation of $1,2,\\ldots,n$."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "The sum of $n$ over all test cases does not exceed $2000$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output the expected number of operations modulo $998244353$."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "给定一个长度为 $n$ 的排列 $p$。每次操作会从 $1$ 到 $n$ 中等概率随机选择一个整数 $i$，然后分别将排列的前缀 $[1,i]$ 与后缀 $[i+1,n]$ 按升序排序。当 $i=n$ 时后缀为空，此时相当于对整个排列排序。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "求排列变为完全升序（即对每个 $j$ 都有 $p_j=j$）所需操作次数的期望。答案对 $998244353$ 取模。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含测试数据组数 $T$（$1 \\le T \\le 100$）。"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "每组测试数据的第一行包含整数 $n$（$1 \\le n \\le 500$），表示排列长度。",
+              "第二行包含 $n$ 个整数 $p_1,p_2,\\ldots,p_n$（$1 \\le p_j \\le n$），表示排列 $p$。保证该序列是 $1,2,\\ldots,n$ 的一个排列。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "保证所有测试数据中 $n$ 的总和不超过 $2000$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据，输出期望操作次数对 $998244353$ 取模后的结果。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n3\n3 1 2\n2\n2 1\n5\n3 2 5 1 4",
+    "output": "748683267\n2\n670695427",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n3\n3 1 2\n2\n2 1\n5\n3 2 5 1 4",
+      "output": "748683267\n2\n670695427",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

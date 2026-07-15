@@ -1,0 +1,214 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "I",
+  "problemId": 18436,
+  "titleEn": "Nailoong vs. Bombloong 2",
+  "titleZh": "奶龙大战暴暴龙 2",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18436&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      14,
+      15
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18436?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "This is a communication problem. Your program is run twice for each test. Memory is not preserved between runs, but information obtained in the first run is needed in the second run."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Nailoong knows the complete structure of a tree with $n$ nodes, while Bombloong knows only $n$. Nailoong must help Bombloong reconstruct a tree isomorphic to the original using one-way communication."
+          }
+        ]
+      },
+      {
+        "key": "communication_protocol",
+        "title": "Communication Protocol",
+        "blocks": [
+          {
+            "kind": "bullets",
+            "items": [
+              "Initially all nodes are white.",
+              "Nailoong chooses an integer $m$ with $0 \\le m \\le n-3$.",
+              "In operation $i$, Nailoong chooses node $x_i$ and flips its color.",
+              "After the flip, $a_i$ is the number of edges whose endpoints have different colors.",
+              "Nailoong sends only $m$ and $a_1,a_2,\\ldots,a_m$; node indices cannot be sent."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "A testing tool is included in the handout for local debugging."
+          }
+        ]
+      },
+      {
+        "key": "first_run_input",
+        "title": "First Run · Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line is $1$. The second line contains $n$ ($4 \\le n \\le 3\\times10^5$). Each of the next $n-1$ lines contains an edge $u,v$ ($1 \\le u,v \\le n$)."
+          }
+        ]
+      },
+      {
+        "key": "first_run_output",
+        "title": "First Run · Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output $m$ ($0 \\le m \\le n-3$) on the first line. Output $x_1,x_2,\\ldots,x_m$ ($1 \\le x_i \\le n$) on the second line."
+          }
+        ]
+      },
+      {
+        "key": "second_run_input",
+        "title": "Second Run · Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line is $2$. The second line contains $n,m$ ($4 \\le n \\le 3\\times10^5$, $0 \\le m \\le n-3$). If $m>0$, the third line contains $a_1,a_2,\\ldots,a_m$ ($0 \\le a_i \\le n$); when $m=0$, the third line is absent."
+          }
+        ]
+      },
+      {
+        "key": "second_run_output",
+        "title": "Second Run · Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output $n-1$ edges $u,v$ of a tree isomorphic to the tree from the first run."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The two samples are the two runs of one test. Nailoong flips node $2$, producing $a_1=2$. Bombloong may output a differently numbered tree as long as it is isomorphic to the original."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "这是一道通信题。每个测试点中，你的程序会运行两次；两次运行之间不会保留内存中的变量，但第一次运行得到的信息将用于第二次运行。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "奶龙知道一棵含 $n$ 个节点的树的完整结构，而暴暴龙只知道 $n$。奶龙需要通过单向通信，帮助暴暴龙还原出一棵与原树同构的树。"
+          }
+        ]
+      },
+      {
+        "key": "communication_protocol",
+        "title": "通信规则",
+        "blocks": [
+          {
+            "kind": "bullets",
+            "items": [
+              "初始时，所有节点均为白色。",
+              "奶龙自行确定操作次数 $m$，其中 $0 \\le m \\le n-3$。",
+              "第 $i$ 次操作中，奶龙选择节点 $x_i$ 并翻转其颜色。",
+              "翻转后，令 $a_i$ 表示两端点颜色不同的边数。",
+              "奶龙只能发送 $m$ 与序列 $a_1,a_2,\\ldots,a_m$，不能直接发送节点编号。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "下发文件中提供了本地调试用测试工具。"
+          }
+        ]
+      },
+      {
+        "key": "first_run_input",
+        "title": "第一次运行 · 输入",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行是整数 $1$，用于标识第一次运行。第二行包含 $n$（$4 \\le n \\le 3\\times10^5$）。接下来 $n-1$ 行每行包含一条边 $u,v$（$1 \\le u,v \\le n$）。"
+          }
+        ]
+      },
+      {
+        "key": "first_run_output",
+        "title": "第一次运行 · 输出",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行输出 $m$（$0 \\le m \\le n-3$）；第二行输出 $x_1,x_2,\\ldots,x_m$（$1 \\le x_i \\le n$），表示依次翻转的节点。"
+          }
+        ]
+      },
+      {
+        "key": "second_run_input",
+        "title": "第二次运行 · 输入",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行是整数 $2$，用于标识第二次运行。第二行包含 $n,m$（$4 \\le n \\le 3\\times10^5$，$0 \\le m \\le n-3$）。若 $m>0$，第三行包含 $a_1,a_2,\\ldots,a_m$（$0 \\le a_i \\le n$）；若 $m=0$，则没有第三行。"
+          }
+        ]
+      },
+      {
+        "key": "second_run_output",
+        "title": "第二次运行 · 输出",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出 $n-1$ 行，每行包含一条边 $u,v$。输出的树必须与第一次运行输入的树同构。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "两个样例对应同一测试点的两次运行。奶龙翻转节点 $2$ 后得到 $a_1=2$。暴暴龙输出的树可以使用不同的节点编号，只要与原树同构即可。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "1\n4\n1 2\n2 3\n3 4\n2\n4 1\n2",
+    "output": "1\n2\n\n1 3\n3 2\n2 4",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "1\n4\n1 2\n2 3\n3 4\n2\n4 1\n2",
+      "output": "1\n2\n\n1 3\n3 2\n2 4",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

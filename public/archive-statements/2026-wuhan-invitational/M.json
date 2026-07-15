@@ -1,0 +1,186 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "M",
+  "problemId": 18440,
+  "titleEn": "Iroha and the Kingdom of Construction",
+  "titleZh": "彩叶和构造王国",
+  "timeLimitText": "3 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18440&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      21,
+      22
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18440?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are $n$ ranks numbered $1$ through $n$, with exactly two cards of each rank. The $2n$ cards are uniformly shuffled into the input deck. Iroha may create at most $260$ stacks."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Cards are taken from the deck top to bottom. Each card must be placed on top of one stack. After all cards are placed, it must be possible to remove every card using the following operation:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Choose two different stacks whose top cards have the same rank, and pop both cards."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Output the stack chosen for every card. You do not need to output the elimination sequence."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains $n$ ($1 \\le n \\le 5\\times10^5$). The second line contains $2n$ integers $a_1,a_2,\\ldots,a_{2n}$ ($1 \\le a_i \\le n$). Every value from $1$ to $n$ appears exactly twice."
+          },
+          {
+            "kind": "paragraph",
+            "text": "There are exactly $50$ tests including the sample. In every test, $a$ is chosen uniformly at random from all valid sequences."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output $2n$ integers $c_1,c_2,\\ldots,c_{2n}$ ($1 \\le c_i \\le 260$), where $c_i$ is the stack receiving the $i$-th card. Any valid solution is accepted."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In the sample, stacks $4$ through $260$ are empty. The first three stacks, listed from bottom to top, are:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "$[1,2,3]$",
+              "$[1,2]$",
+              "$[3]$"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "All cards can then be eliminated."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "牌堆中有编号为 $1$ 到 $n$ 的 $n$ 种点数，每种点数恰好有两张牌；这 $2n$ 张牌会被均匀随机打乱。彩叶最多可以创建 $260$ 个栈。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "彩叶按从上到下的顺序依次取出牌，并将每张牌放到任意一个栈的栈顶。放置完成后，必须能通过以下操作消除所有牌："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "选择两个不同的栈；若它们的栈顶牌点数相同，则同时弹出这两张牌。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "你只需输出每张牌放入的栈编号，不需要给出具体的消除过程。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含 $n$（$1 \\le n \\le 5\\times10^5$）。第二行包含 $2n$ 个整数 $a_1,a_2,\\ldots,a_{2n}$（$1 \\le a_i \\le n$）。保证 $1$ 到 $n$ 中每个数恰好出现两次。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "数据恰好有 $50$ 组（包括样例）。每组数组 $a$ 都从所有满足上述条件的序列中等概率随机选取。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出 $2n$ 个整数 $c_1,c_2,\\ldots,c_{2n}$（$1 \\le c_i \\le 260$），其中 $c_i$ 表示第 $i$ 张牌放入的栈。若有多种合法方案，输出任意一种。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "样例中，第 $4$ 到第 $260$ 个栈均为空。前 $3$ 个栈从栈底到栈顶分别为："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "$[1,2,3]$",
+              "$[1,2]$",
+              "$[3]$"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "可以按规则将所有牌全部消除。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n1 2 3 1 3 2",
+    "output": "1 1 1 2 2 3",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n1 2 3 1 3 2",
+      "output": "1 1 1 2 2 3",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

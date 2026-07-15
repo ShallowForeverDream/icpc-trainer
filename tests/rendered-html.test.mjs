@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
 import test from "node:test";
+import katex from "katex";
 
 const root = new URL("../", import.meta.url);
 
@@ -467,6 +468,59 @@ test("ships the 2025 Shenyang regional as instant official bilingual statements"
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /Square Kingdom/);
+  assert.match(html, /提交代码/);
+});
+
+test("ships the 2026 Wuhan Invitational as proofread official bilingual statements", async () => {
+  const slots = "ABCDEFGHIJKLM".split("");
+  const [catalog, manifestText, ...statementTexts] = await Promise.all([
+    readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
+    readFile(new URL("public/archive-statements/2026-wuhan-invitational/manifest.json", root), "utf8"),
+    ...slots.map((slot) => readFile(new URL(`public/archive-statements/2026-wuhan-invitational/${slot}.json`, root), "utf8")),
+  ]);
+  const manifest = JSON.parse(manifestText);
+  const statements = statementTexts.map((text) => JSON.parse(text));
+  const statementText = (problem, language) => problem[language].sections.flatMap((section) => section.blocks.flatMap((block) => block.kind === "bullets" ? block.items : [block.text])).join("\n");
+
+  assert.equal(manifest.problems.length, 13);
+  assert.equal(manifest.officialChinese, true);
+  assert.match(catalog, /id: "2026-wuhan-invitational"[\s\S]*staticStatements: "official-chinese"/);
+  assert.match(catalog, /"Sort", "Sequence Operations", "Believe in You"/);
+  assert.equal(statements.every((problem) => problem.timeLimitText && problem.memoryLimitText), true);
+  assert.equal(statements.every((problem) => problem.source.englishPdfUrl.includes("type=statement")), true);
+  assert.equal(statements.every((problem) => problem.source.chinesePdfUrl.endsWith("type=attachments&id=3799&r=1")), true);
+  assert.equal(statements.every((problem) => problem.english.sections.length > 0 && problem.chinese.sections.length > 0), true);
+  assert.equal(statements.every((problem) => new Set(problem.english.sections.map((section) => section.key)).size === problem.english.sections.length), true);
+  assert.equal(statements.every((problem) => new Set(problem.chinese.sections.map((section) => section.key)).size === problem.chinese.sections.length), true);
+
+  assert.doesNotMatch(statementText(statements[0], "chinese"), /，表示给定的排列|一个1∼n\s*第二行/);
+  assert.match(statementText(statements[0], "chinese"), /\$p_1,p_2,\\ldots,p_n\$/);
+  assert.match(statementText(statements[3], "english"), /\$n\\leftarrow n\/p\$/);
+  assert.match(statementText(statements[3], "chinese"), /10\^\{18\}/);
+  assert.match(statementText(statements[7], "chinese"), /图 1：样例解释/);
+  assert.equal(statements[7].images[0].src, "/archive-statements/2026-wuhan-invitational/assets/H-1.png");
+  assert.equal(statements[7].images[0].captionZh, "样例切割后的矩形");
+  assert.match(statementText(statements[9], "english"), /\$10\^\{1000\}\$/);
+  assert.match(statementText(statements[9], "english"), /\\sum v_i/);
+  assert.match(statementText(statements[11], "chinese"), /\\sum_\{1\\le i<j\\le n\} f\(t_\{i,j\}\)/);
+  assert.match(statementText(statements[11], "chinese"), /\\sum_\{i=1\}\^\{n\}\|s_i\|/);
+  assert.doesNotMatch(statementText(statements[12], "chinese"), /\n。\n|保证数据.*每种数字各出现两次/);
+  assert.match(statementText(statements[12], "chinese"), /数据恰好有 \$50\$ 组/);
+
+  for (const problem of statements) {
+    for (const language of ["english", "chinese"]) {
+      const text = statementText(problem, language);
+      assert.equal((text.match(/\$/g) || []).length % 2, 0, `${problem.slot} ${language} has unbalanced math delimiters`);
+      for (const match of text.matchAll(/\$([^$]+)\$/g)) {
+        assert.doesNotThrow(() => katex.renderToString(match[1], { throwOnError: true }), `${problem.slot} ${language}: ${match[1]}`);
+      }
+    }
+  }
+
+  const response = await render("/vp/archive/problem?contest=2026-wuhan-invitational&slot=A");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Sort/);
   assert.match(html, /提交代码/);
 });
 

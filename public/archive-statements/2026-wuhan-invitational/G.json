@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "G",
+  "problemId": 18434,
+  "titleEn": "I Will Always Remember You",
+  "titleZh": "我会/一直/记得你",
+  "timeLimitText": "8 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18434&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      10,
+      11
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18434?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Given a directed acyclic graph G with n vertices and m edges, and a color sequence a1, a2, · · ·, an of length n, where ai denotes the initial color of vertex i. Let Si denote the set of all vertices reachable from vertex i in graph G (including vertex i itself). Now, you need to process q operations in order. The operations are of the following two types:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Given x and y, change the color ax of vertex x to y."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Given x, query the number of distinct colors among all vertices reachable from vertex x. That is, find the size of the set {aj | j ∈ Sx }."
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains two integers n, m (1 ≤ n ≤ 1.5 × $10^{5}$, 0 ≤ m ≤ 3 × $10^{5}$ ), representing the number of vertices and the number of edges in the graph, respectively. The second line contains n integers a1, a2, · · ·, an (1 ≤ ai ≤ n), representing the initial color of each vertex."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The next m lines each contain two integers u, v (1 ≤ u, v ≤ n), indicating that there is a directed edge from u to v in graph G. It is guaranteed that graph G is a directed acyclic graph (DAG) and contains no multiple edges. The next line contains an integer q (1 ≤ q ≤ 1.5 × $10^{5}$ ), representing the total number of operations. The next q lines each describe an operation in one of the following two formats:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "1 x y: Represents an update operation, changing the color ax to y (1 ≤ x, y ≤ n)."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "2 x: Represents a query operation, querying the number of distinct colors reachable from vertex x (1 ≤ x ≤ n)."
+            ]
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each operation of the second type, output a single line containing an integer representing the answer to the query."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "给定一个n个点m条边的有向无环图G，以及一个长度为n的颜色序列a1,a2,···,an，其中ai表示点i的初始颜色。记Si表示在图G上从点i出发能够到达的所有点构成的集合（包括点i自身）。现在需要依次处理q次操作，操作分为以下两种："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "给定x和y，将点x的颜色ax修改为y。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "给定x，查询从点x出发能够到达的所有点中，一共有多少种不同的颜色。即求集合{aj|j∈Sx}的大小。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含两个整数n,m（1≤n≤1.5×$10^{5}$，0≤m≤3×$10^{5}$），分别表示图的节点数和边数。第二行包含n个整数a1,a2,···,an（1≤ai≤n），表示每个节点的初始颜色。接下来m行，每行包含两个整数u,v（1≤u,v≤n），表示图G中存在一条从u指向v的有向边。保证图G是一个有向无环图，且不存在重边。接下来一行包含一个整数q（1≤q≤1.5×$10^{5}$），表示操作的总次数。接下来q行，每行描述一次操作，格式为以下两种之一："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "1 x y：表示一次修改操作，将ax的颜色修改为y（1≤x,y≤n）。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "2 x：表示一次查询操作，查询从点x（1≤x≤n）出发能到达的颜色种类数。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每个第二种操作，输出一行包含一个整数，表示对应查询的答案。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "9 14\n8 4 2 3 5 2 2 4 7\n3 5\n8 9\n4 5\n5 8\n6 8\n3 8\n1 4\n2 9\n2 4\n2 8\n1 3\n7 9\n1 8\n5 7\n10\n1 6 4\n1 3 3\n2 1\n2 3\n1 4 3\n1 8 5\n1 8 7\n2 7\n2 2\n2 9",
+    "output": "6\n5\n2\n5\n1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "9 14\n8 4 2 3 5 2 2 4 7\n3 5\n8 9\n4 5\n5 8\n6 8\n3 8\n1 4\n2 9\n2 4\n2 8\n1 3\n7 9\n1 8\n5 7\n10\n1 6 4\n1 3 3\n2 1\n2 3\n1 4 3\n1 8 5\n1 8 7\n2 7\n2 2\n2 9",
+      "output": "6\n5\n2\n5\n1",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

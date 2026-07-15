@@ -1,0 +1,176 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2026-wuhan-invitational",
+  "contestName": "ICPC 武汉全国邀请赛暨湖北省赛",
+  "slot": "L",
+  "problemId": 18439,
+  "titleEn": "String Matching",
+  "titleZh": "字符串匹配",
+  "timeLimitText": "4 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=18439&contest_id=3799",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=attachments&id=3799&r=1",
+    "chinesePages": [
+      20,
+      20
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/3799/problem/18439?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "You are given $n$ lowercase strings $s_1,s_2,\\ldots,s_n$, sorted by non-decreasing length. For every $1\\le i<j\\le n$, define $t_{i,j}=s_i+s_j$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For a string $t$ of length $m$, let $f(t)$ be the number of integers $x$ with $0<x\\le m$ such that the first $x$ characters equal the last $x$ characters, namely $t[1:x]=t[m-x+1:m]$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Compute $\\sum_{1\\le i<j\\le n} f(t_{i,j})$."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains $n$ ($1 \\le n \\le 10^6$). Each of the next $n$ lines contains a lowercase string $s_i$ ($1 \\le |s_i| \\le 10^6$). The strings are sorted by non-decreasing length, and $\\sum_{i=1}^{n}|s_i| \\le 10^6$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output one line containing an integer, representing the total sum of all f (ti,j )."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In the second sample, there are n = 3 strings, and we can form 3 different ti,j:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "When i = 1, j = 2: t1,2 = aaabaa. The lengths x such that the prefix equals the suffix are: 1, 2, 6.",
+              "When i = 1, j = 3: t1,3 = aaababaa. The lengths x such that the prefix equals the suffix are: 1, 2, 8.",
+              "When i = 2, j = 3: t2,3 = abaaababaa. The lengths x such that the prefix equals the suffix are: 1, 4, 10."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "The final answer is 3 + 3 + 3 = 9."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "给定 $n$ 个小写字符串 $s_1,s_2,\\ldots,s_n$，它们按长度非递减排列。对任意 $1\\le i<j\\le n$，定义 $t_{i,j}=s_i+s_j$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "对长度为 $m$ 的字符串 $t$，定义 $f(t)$ 为满足 $0<x\\le m$ 且前 $x$ 个字符等于后 $x$ 个字符的整数 $x$ 的数量，即 $t[1:x]=t[m-x+1:m]$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "计算 $\\sum_{1\\le i<j\\le n} f(t_{i,j})$。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含 $n$（$1 \\le n \\le 10^6$）。接下来 $n$ 行中，第 $i$ 行包含一个小写字符串 $s_i$（$1 \\le |s_i| \\le 10^6$）。字符串按长度非递减排列，且 $\\sum_{i=1}^{n}|s_i| \\le 10^6$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出一行包含一个整数，表示所有f (ti,j)的总和。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在第二组样例中，共有n=3个字符串，我们可以组合出3种不同的ti,j："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "当i=1,j=2时：t1,2=aaabaa。满足前缀等于后缀的长度x有：1,2,6。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "当i=1,j=3时：t1,3=aaababaa。满足前缀等于后缀的长度x有：1,2,8。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "当i=2,j=3时：t2,3=abaaababaa。满足前缀等于后缀的长度x有：1,4,10。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "最终答案为3+3+3=9。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\nak\nhbcpc\n3\naa\nabaa\nababaa",
+    "output": "1\n\n9",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2\nak\nhbcpc\n3\naa\nabaa\nababaa",
+      "output": "1\n\n9",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

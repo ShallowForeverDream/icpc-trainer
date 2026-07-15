@@ -500,16 +500,20 @@ test("ships the 2024 Shenyang regional as instant official bilingual statements"
 });
 
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {
-  const [backend, persistence, persistentClient, statements, compose, dockerfile, nginx, browserApi, worker] = await Promise.all([
+  const [backend, persistence, persistentClient, statements, archiveClient, archiveCatalog, archiveHtmlParser, compose, dockerfile, nginx, browserApi, worker, updater] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
     readFile(new URL("backend/persistence.mjs", root), "utf8"),
     readFile(new URL("app/lib/persistent-state.ts", root), "utf8"),
     readFile(new URL("backend/statements.mjs", root), "utf8"),
+    readFile(new URL("app/lib/archive-statement-client.ts", root), "utf8"),
+    readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
+    readFile(new URL("backend/archive-html-parser.mjs", root), "utf8"),
     readFile(new URL("backend/compose.yaml", root), "utf8"),
     readFile(new URL("backend/Dockerfile", root), "utf8"),
     readFile(new URL("deploy/nginx-icpc-trainer.conf", root), "utf8"),
     readFile(new URL("app/lib/browser-api.ts", root), "utf8"),
     readFile(new URL("worker/index.ts", root), "utf8"),
+    readFile(new URL("deploy/update-backend.sh", root), "utf8"),
   ]);
   assert.match(backend, /\/vp\/generate/);
   assert.match(backend, /\/submissions\/raw/);
@@ -557,10 +561,16 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /TRANSLATOR_MODEL/);
   assert.match(statements, /stale-while-revalidate/);
   assert.match(statements, /translateBatch/);
+  assert.match(statements, /translateReviewedTexts/);
+  assert.match(statements, /extractArchiveGymStatement/);
+  assert.match(statements, /ARCHIVE_TRANSLATION_VERSION = 2/);
   assert.match(statements, /TRANSLATION_VERSION = 22/);
   assert.match(statements, /edge\.microsoft\.com\/translate\/auth/);
   assert.match(statements, /json_schema/);
   assert.match(statements, /processedBlocks/);
+  assert.match(archiveClient, /gymId/);
+  assert.match(archiveCatalog, /id: "2025-chengdu"[\s\S]*gymId: 106161[\s\S]*A Lot of Paintings/);
+  assert.match(archiveHtmlParser, /parseArchiveStatementHtml/);
   assert.match(compose, /127\.0\.0\.1:8787:8787/);
   assert.match(compose, /ggml-org\/llama\.cpp:server/);
   assert.match(compose, /condition: service_healthy/);
@@ -571,6 +581,8 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(browserApi, /https:\/\/114\.55\.130\.137\/icpc-api/);
   assert.match(worker, /X-Frame-Options/);
   assert.match(worker, /Permissions-Policy/);
+  assert.match(updater, /backend-before-/);
+  assert.match(updater, /platform-submissions/);
 });
 
 test("ships invite-only authentication and administration", async () => {

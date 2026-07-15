@@ -259,6 +259,7 @@ export default function ArchiveVpPage() {
         slot: String.fromCharCode(65 + index),
         qojContestId: contest.qojContestId!,
         problemId,
+        gymId: contest.gymId,
         title: contest.problemTitles?.[index] || `Problem ${String.fromCharCode(65 + index)}`,
       })),
     };

@@ -344,6 +344,7 @@ export default function ArchiveProblemPage() {
       try {
         const value = await loadArchiveStatement(contestId, slot, {
           qojContestId: qojContestId || undefined,
+          gymId: contest?.gymId,
           problemId,
           contestName,
           title: problemTitle,
@@ -364,7 +365,7 @@ export default function ArchiveProblemPage() {
       cancelled = true;
       window.clearTimeout(timer);
     };
-  }, [contestId, contestName, problemId, problemTitle, qojContestId, slot]);
+  }, [contest?.gymId, contestId, contestName, problemId, problemTitle, qojContestId, slot]);
 
   if (!contest || !problem) return <AppShell active="模拟赛"><section className="template-not-found"><h1>暂未找到这道题</h1><Link className="button button-primary" href="/vp/archive">返回历届补题</Link></section></AppShell>;
 

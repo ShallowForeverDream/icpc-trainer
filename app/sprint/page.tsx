@@ -152,6 +152,7 @@ export default function ShenyangSprintPage() {
         slot: String.fromCharCode(65 + index),
         qojContestId: contest.qojContestId as number,
         problemId,
+        gymId: contest.gymId,
         title: contest.problemTitles?.[index] || `Problem ${String.fromCharCode(65 + index)}`,
       })),
     };

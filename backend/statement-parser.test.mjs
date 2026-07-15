@@ -38,6 +38,16 @@ test("parses a Codeforces Gym statement from its gym URL", () => {
   assert.match(result.originalHtml, /public Gym statement/);
 });
 
+test("normalizes Codeforces display-math fences without exposing raw dollars", () => {
+  const html = `<div class="problem-statement">
+    <div class="header"><div class="title">A. Math</div></div>
+    <div class="legend"><p>For every $$$i$$$:</p><p>$$$$$$a_i=\\sum_{j=1}^n b_j$$$$$$</p></div>
+  </div>`;
+  const result = parseCodeforcesStatement(html, "https://codeforces.com/gym/106161/problem/A", "106161A");
+  assert.match(result.originalHtml, /\$\$\$a_i=\\sum_\{j=1\}\^n b_j\$\$\$/);
+  assert.doesNotMatch(result.originalHtml, /\${6}/);
+});
+
 test("rejects a Gym URL whose contest does not match the requested code", () => {
   assert.throws(() => parseCodeforcesStatement('<div class="problem-statement"><p>Enough statement text to parse safely.</p></div>', "https://codeforces.com/gym/105144/problem/A", "105143A"), /题面地址与题号不匹配/);
 });

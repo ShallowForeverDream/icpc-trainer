@@ -7,6 +7,7 @@ import { dirname, join } from "node:path";
 import { promisify } from "node:util";
 import { DatabaseSync } from "node:sqlite";
 import { load } from "cheerio";
+import { parseArchiveStatementHtml } from "./archive-html-parser.mjs";
 import { chineseSectionTitle, parseArchivePdfText } from "./archive-pdf-parser.mjs";
 import { authenticateRequest } from "./auth.mjs";
 import { HttpError, createWindowLimiter, pruneMap, publicError, readJsonBody } from "./http-utils.mjs";
@@ -17,7 +18,7 @@ const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
 const TRANSLATION_VERSION = 22;
-const ARCHIVE_TRANSLATION_VERSION = 1;
+const ARCHIVE_TRANSLATION_VERSION = 2;
 const FAST_TRANSLATOR_AUTH_URL = "https://edge.microsoft.com/translate/auth";
 const FAST_TRANSLATOR_URL = "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=zh-Hans";
 const USER_AGENT = "icpc-trainer-statement-importer/0.4 (+https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site)";
@@ -210,14 +211,18 @@ function normalizeArchiveMetadata(url) {
   const slot = String(url.searchParams.get("slot") || "").trim().toUpperCase();
   const qojContestId = Number(url.searchParams.get("qojContestId"));
   const problemId = Number(url.searchParams.get("problemId"));
+  const gymIdValue = String(url.searchParams.get("gymId") || "").trim();
+  const gymId = gymIdValue ? Number(gymIdValue) : null;
   const contestName = String(url.searchParams.get("contestName") || "ICPC Contest").trim().slice(0, 160);
   const title = String(url.searchParams.get("title") || `Problem ${slot}`).trim().slice(0, 180);
   if (!/^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])?$/.test(contestId)
     || !/^[A-Z][0-9]?$/.test(slot)
     || !Number.isInteger(qojContestId) || qojContestId < 1 || qojContestId > 10_000_000
     || !Number.isInteger(problemId) || problemId < 1 || problemId > 100_000_000
+    || (gymId !== null && (!Number.isInteger(gymId) || gymId < 1 || gymId > 10_000_000))
     || !contestName || !title) throw new HttpError(400, "历届题目参数无效");
-  const sourceUrl = `https://contest.ucup.ac/download.php?type=statement&id=${problemId}&contest_id=${qojContestId}`;
+  const pdfUrl = `https://contest.ucup.ac/download.php?type=statement&id=${problemId}&contest_id=${qojContestId}`;
+  const sourceUrl = gymId ? `https://codeforces.com/gym/${gymId}/problem/${slot}?locale=en` : pdfUrl;
   return {
     id: `${contestId}:${slot}`,
     contestId,
@@ -227,7 +232,9 @@ function normalizeArchiveMetadata(url) {
     contestName,
     title,
     sourceUrl,
-    chineseSourceUrl: `${sourceUrl}&ver=zh_cn`,
+    pdfUrl,
+    gymId,
+    chineseSourceUrl: `${pdfUrl}&ver=zh_cn`,
   };
 }
 
@@ -239,6 +246,8 @@ function publicArchiveStatement(row) {
     ...image,
     src: image.assetId ? `/archive/statements/assets/${image.assetId}` : "",
   }));
+  const pdfUrl = `https://contest.ucup.ac/download.php?type=statement&id=${row.problem_id}&contest_id=${row.qoj_contest_id}`;
+  const structuredSource = isCodeforcesUrl(row.source_url);
   return {
     schemaVersion: 1,
     contestId: row.contest_slug,
@@ -250,14 +259,17 @@ function publicArchiveStatement(row) {
     timeLimitText: row.time_limit_text || "",
     memoryLimitText: row.memory_limit_text || "",
     source: {
-      kind: "official-pdf-extract",
-      englishPdfUrl: row.source_url,
+      kind: structuredSource ? "mirror-structured" : "official-pdf-extract",
+      englishPdfUrl: pdfUrl,
       chinesePdfUrl: row.chinese_source_url || null,
       chinesePages: null,
+      sourceUrl: row.source_url,
+      sourceLabel: structuredSource ? "Codeforces Gym" : "Universal Cup / QOJ",
     },
     english: { sections: Array.isArray(original.sections) ? original.sections : [] },
     chinese: { sections: Array.isArray(chinese.sections) ? chinese.sections : [] },
     sample: original.sample || null,
+    samples: Array.isArray(original.samples) ? original.samples : original.sample ? [original.sample] : [],
     images,
     status: row.status,
     message: row.error || null,
@@ -277,6 +289,10 @@ function upsertArchivePending(metadata) {
       contest_name=excluded.contest_name,
       title_en=excluded.title_en,
       source_url=excluded.source_url,
+      original_json=CASE WHEN archive_statements.source_url <> excluded.source_url THEN NULL ELSE archive_statements.original_json END,
+      chinese_json=CASE WHEN archive_statements.source_url <> excluded.source_url AND archive_statements.chinese_source_url IS NULL THEN NULL ELSE archive_statements.chinese_json END,
+      translation_version=CASE WHEN archive_statements.source_url <> excluded.source_url AND archive_statements.chinese_source_url IS NULL THEN 0 ELSE archive_statements.translation_version END,
+      status=CASE WHEN archive_statements.source_url <> excluded.source_url THEN 'importing' ELSE archive_statements.status END,
       chinese_source_url=COALESCE(archive_statements.chinese_source_url, excluded.chinese_source_url),
       updated_at=excluded.updated_at
   `).run(metadata.id, metadata.contestId, metadata.slot, metadata.qojContestId, metadata.problemId, metadata.contestName, metadata.title, metadata.sourceUrl, timestamp, timestamp);
@@ -287,7 +303,9 @@ function setArchiveStatus(id, status, error = null) {
 }
 
 function archiveMetadataFromRow(row) {
-  const sourceUrl = String(row.source_url || `https://contest.ucup.ac/download.php?type=statement&id=${row.problem_id}&contest_id=${row.qoj_contest_id}`);
+  const pdfUrl = `https://contest.ucup.ac/download.php?type=statement&id=${row.problem_id}&contest_id=${row.qoj_contest_id}`;
+  const sourceUrl = String(row.source_url || pdfUrl);
+  const gymMatch = sourceUrl.match(/\/gym\/(\d+)\/problem\/[A-Z][0-9]?/i);
   return {
     id: row.id,
     contestId: row.contest_slug,
@@ -297,7 +315,9 @@ function archiveMetadataFromRow(row) {
     contestName: row.contest_name,
     title: row.title_en,
     sourceUrl,
-    chineseSourceUrl: `${sourceUrl}${sourceUrl.includes("?") ? "&" : "?"}ver=zh_cn`,
+    pdfUrl,
+    gymId: gymMatch ? Number(gymMatch[1]) : null,
+    chineseSourceUrl: `${pdfUrl}&ver=zh_cn`,
   };
 }
 
@@ -308,6 +328,7 @@ function prewarmMetadata(input, contestId, contestName) {
   url.searchParams.set("slot", String(input?.slot || ""));
   url.searchParams.set("qojContestId", String(input?.qojContestId || ""));
   url.searchParams.set("problemId", String(input?.problemId || ""));
+  if (input?.gymId) url.searchParams.set("gymId", String(input.gymId));
   url.searchParams.set("title", String(input?.title || `Problem ${input?.slot || ""}`));
   return normalizeArchiveMetadata(url);
 }
@@ -996,6 +1017,73 @@ async function translateBatch(texts) {
   });
 }
 
+async function reviewTranslationBatch(texts, drafts) {
+  if (!TRANSLATOR_BASE_URL) return drafts;
+  const input = texts.map((source, id) => ({ id, source, draft: drafts[id] }));
+  const prompt = [
+    "你是 ICPC 中文题面终审编辑。逐条对照英文原文，修正初译中的主客体颠倒、变量对应错误、条件遗漏、量词错误和生硬机翻。",
+    "不得解题或改写题意。变量、数字、代码字面量以及 ICPCMATH数字END 公式占位符必须原样保留；尤其检查 a_i/b_i、输入/输出、至多/至少、任意/恰好等关系。",
+    "中文应简洁自然，使用算法竞赛常用表述。只返回 JSON，译文数量与顺序必须不变。",
+    JSON.stringify(input),
+  ].join("\n");
+  const payload = await translatorFetch("/v1/chat/completions", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({
+      model: TRANSLATOR_MODEL,
+      temperature: 0,
+      max_tokens: Math.min(3600, Math.max(700, Math.ceil(texts.join("").length * 1.8))),
+      response_format: {
+        type: "json_schema",
+        json_schema: {
+          name: "reviewed_statement_translations",
+          strict: true,
+          schema: {
+            type: "object",
+            properties: { translations: { type: "array", items: { type: "string" }, minItems: texts.length, maxItems: texts.length } },
+            required: ["translations"],
+            additionalProperties: false,
+          },
+        },
+      },
+      messages: [
+        { role: "system", content: "你是严谨的 ICPC 中文题面终审编辑，只输出符合要求的 JSON。" },
+        { role: "user", content: prompt },
+      ],
+    }),
+  }, 5 * 60_000);
+  const raw = String(payload.choices?.[0]?.message?.content || "").trim().replace(/^```(?:json)?\s*/i, "").replace(/\s*```$/, "");
+  const parsed = JSON.parse(raw);
+  if (!Array.isArray(parsed?.translations) || parsed.translations.length !== texts.length) throw new Error("终审译文数量不一致");
+  return texts.map((source, index) => {
+    const reviewed = String(parsed.translations[index] || "").trim().replaceAll("$$$", "");
+    if (!reviewed || !/[\u3400-\u9fff]/.test(reviewed)) return drafts[index];
+    const placeholders = [...new Set(source.match(/ICPCMATH\d+END/g) || [])];
+    for (const placeholder of placeholders) {
+      const flexible = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "gi");
+      if ([...reviewed.matchAll(flexible)].length !== 1) return drafts[index];
+    }
+    return polishChinese(reviewed);
+  });
+}
+
+async function translateReviewedTexts(texts) {
+  const drafts = await translateTexts(texts);
+  if (!TRANSLATOR_BASE_URL) return drafts;
+  const reviewed = [];
+  for (let start = 0; start < texts.length; start += 4) {
+    const sourceBatch = texts.slice(start, start + 4);
+    const draftBatch = drafts.slice(start, start + 4);
+    try {
+      reviewed.push(...await reviewTranslationBatch(sourceBatch, draftBatch));
+    } catch (error) {
+      console.error("statement translation review fallback", error instanceof Error ? error.message : error);
+      reviewed.push(...draftBatch);
+    }
+  }
+  return reviewed;
+}
+
 async function translateHtml(originalHtml, sourceUrl) {
   const $ = load(`<div id="translation-root">${originalHtml}</div>`, { xmlMode: false }, false);
   const fixedHeadings = new Map([["input", "输入"], ["output", "输出"], ["example", "样例"], ["examples", "样例"], ["note", "说明"], ["interaction", "交互说明"]]);
@@ -1192,6 +1280,60 @@ async function extractArchivePdf(metadata, pdfBuffer, { extractImages = true } =
   }
 }
 
+async function downloadArchiveHtmlImages(metadata, document) {
+  const images = [];
+  for (const [index, image] of (document.images || []).slice(0, 16).entries()) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 30_000);
+    try {
+      const response = await fetchCodeforcesResource(image.sourceUrl, {
+        headers: { "User-Agent": USER_AGENT, Referer: document.sourceUrl },
+        signal: controller.signal,
+      });
+      if (!response.ok) continue;
+      const contentType = String(response.headers.get("content-type") || "").split(";")[0].toLowerCase();
+      if (!contentType.startsWith("image/")) continue;
+      const buffer = await readLimitedBuffer(response, 6 * 1024 * 1024);
+      if (buffer.length < 512) continue;
+      const assetId = sha256(Buffer.concat([Buffer.from(metadata.id), Buffer.from(image.sourceUrl), buffer]));
+      db.prepare("INSERT OR REPLACE INTO archive_statement_assets (id, statement_id, content_type, body, created_at) VALUES (?, ?, ?, ?, ?)")
+        .run(assetId, metadata.id, contentType, buffer, now());
+      const ocrEn = await recognizeImageText(buffer, assetId, image.alt || image.title || "");
+      images.push({
+        assetId,
+        contentType,
+        captionEn: image.title || image.alt || `Problem ${metadata.slot} figure ${index + 1}`,
+        captionZh: `题目 ${metadata.slot} 配图 ${index + 1}`,
+        ocrEn: ocrEn || null,
+        imageTextZh: null,
+      });
+    } catch (error) {
+      console.error("archive Gym image import", metadata.id, image.sourceUrl, error instanceof Error ? error.message : error);
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+  return images;
+}
+
+async function extractArchiveGymStatement(metadata) {
+  if (!metadata.gymId || !isCodeforcesUrl(metadata.sourceUrl)) throw new Error("Codeforces Gym 题面参数无效");
+  const page = await fetchText(metadata.sourceUrl, 35_000);
+  const document = parseCodeforcesStatement(page.text, page.finalUrl, `${metadata.gymId}${metadata.slot}`);
+  const parsed = parseArchiveStatementHtml(document.originalHtml);
+  if (!parsed.sections.length) throw new Error("Codeforces Gym 页面中没有提取到完整题面");
+  const images = await downloadArchiveHtmlImages(metadata, document);
+  return {
+    parsed: {
+      title: document.title.replace(/^\s*[A-Z][0-9]?\.\s*/i, ""),
+      timeLimitText: document.timeLimitText,
+      memoryLimitText: document.memoryLimitText,
+      ...parsed,
+    },
+    images,
+  };
+}
+
 function archiveHasChineseText(parsed) {
   const text = JSON.stringify(parsed?.sections || []);
   return (text.match(/[\u3400-\u9fff]/g) || []).length >= 24;
@@ -1234,15 +1376,16 @@ async function importArchiveOriginal(metadata, { includeChinese = true } = {}) {
   }
   const job = (async () => {
     try {
-      setArchiveStatus(metadata.id, "importing", "正在从官方 PDF 提取正文、样例和图片");
-      const pdf = await fetchArchivePdf(metadata.sourceUrl);
-      const { parsed, images } = await extractArchivePdf(metadata, pdf);
+      setArchiveStatus(metadata.id, "importing", metadata.gymId ? "正在整理官方 Gym 题面、公式、样例和图片" : "正在从官方 PDF 提取正文、样例和图片");
+      const { parsed, images } = metadata.gymId
+        ? await extractArchiveGymStatement(metadata)
+        : await fetchArchivePdf(metadata.pdfUrl || metadata.sourceUrl).then((pdf) => extractArchivePdf(metadata, pdf));
       db.prepare(`
         UPDATE archive_statements SET
           title_en=?, time_limit_text=?, memory_limit_text=?, original_json=?, images_json=?,
           translation_version=0, status='translating', error='原题面已就绪，正在生成中文题面', updated_at=?
         WHERE id=?
-      `).run(parsed.title || metadata.title, parsed.timeLimitText, parsed.memoryLimitText, JSON.stringify({ sections: parsed.sections, sample: parsed.sample }), JSON.stringify(images), now(), metadata.id);
+      `).run(parsed.title || metadata.title, parsed.timeLimitText, parsed.memoryLimitText, JSON.stringify({ sections: parsed.sections, sample: parsed.sample, samples: parsed.samples || (parsed.sample ? [parsed.sample] : []) }), JSON.stringify(images), now(), metadata.id);
       if (includeChinese) {
         const officialChinese = await importArchiveOfficialChinese(metadata);
         if (!officialChinese) queueArchiveTranslation(metadata.id);
@@ -1272,6 +1415,27 @@ function archiveTranslationRecords(original) {
   return records.filter((record) => typeof record.text === "string" && record.text.trim());
 }
 
+function maskArchiveRecord(text) {
+  const formulas = [];
+  const masked = String(text || "").replace(/\${3}[\s\S]*?\${3}/g, (formula) => {
+    const placeholder = `ICPCMATH${formulas.length}END`;
+    formulas.push({ placeholder, formula });
+    return placeholder;
+  });
+  return { masked, formulas };
+}
+
+function restoreArchiveRecord(translated, source, formulas) {
+  let restored = String(translated || "");
+  for (const { placeholder, formula } of formulas) {
+    const flexible = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
+    if (!flexible.test(restored)) throw new Error(`终审译文遗漏公式 ${placeholder}`);
+    restored = restored.replace(flexible, () => formula);
+  }
+  if (!formulasMatch(source, restored)) throw new Error("历届题面翻译改变了数学公式");
+  return polishChinese(restored);
+}
+
 async function translateArchiveStatement(id) {
   const row = archiveStatementRow(id);
   if (!row?.original_json || (row.chinese_json && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION)) return;
@@ -1281,15 +1445,18 @@ async function translateArchiveStatement(id) {
     const original = safeObject(row.original_json, { sections: [] });
     const chinese = structuredClone(original);
     const records = archiveTranslationRecords(chinese);
-    const translated = await translateTexts([row.title_en, ...records.map((record) => record.text)]);
+    const masked = records.map((record) => maskArchiveRecord(record.text));
+    const translated = await translateReviewedTexts([row.title_en, ...masked.map((record) => record.masked)]);
     const titleZh = translated[0] || row.title_en;
-    for (let index = 0; index < records.length; index += 1) records[index].target[records[index].key] = translated[index + 1] || records[index].text;
+    for (let index = 0; index < records.length; index += 1) {
+      records[index].target[records[index].key] = restoreArchiveRecord(translated[index + 1] || masked[index].masked, records[index].text, masked[index].formulas);
+    }
     for (const section of chinese.sections || []) section.title = chineseSectionTitle(section.key);
 
     const images = safeImages(row.images_json);
     const ocrImages = images.filter((image) => typeof image.ocrEn === "string" && /[A-Za-z]{2}/.test(image.ocrEn));
     if (ocrImages.length) {
-      const imageTranslations = await translateTexts(ocrImages.map((image) => image.ocrEn));
+      const imageTranslations = await translateReviewedTexts(ocrImages.map((image) => image.ocrEn));
       for (let index = 0; index < ocrImages.length; index += 1) ocrImages[index].imageTextZh = imageTranslations[index] || null;
     }
     db.prepare(`

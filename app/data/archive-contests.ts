@@ -42,7 +42,11 @@ export const archiveContests: ArchiveContest[] = [
     problemTitles: ["Project Management", "Pinball", "Bracket Integer", "Distributed System", "Greatest Common Divisor", "ACE String", "Assembly Line", "Minimum Spanning Tree", "Square Puzzle", "Useful Algorithm", "Path Planning 2", "Stella", "Triangulation"],
   },
   { id: "2025-xian", year: 2025, name: "ICPC 区域赛西安站", city: "西安", type: "区域赛", boardPath: "icpc/50th/xian", problemCount: 13, qojContestId: 2562, qojProblemIds: [14681, 14682, 14683, 14684, 14685, 14686, 14687, 14688, 14689, 14690, 14691, 14692, 14693] },
-  { id: "2025-chengdu", year: 2025, name: "ICPC 区域赛成都站", city: "成都", type: "区域赛", boardPath: "icpc/50th/chengdu", problemCount: 13, gymId: 106161, qojContestId: 2567, qojProblemIds: [14706, 14707, 14708, 14709, 14710, 14711, 14712, 14713, 14714, 14715, 14716, 14717, 14718] },
+  {
+    id: "2025-chengdu", year: 2025, name: "ICPC 区域赛成都站", city: "成都", type: "区域赛", boardPath: "icpc/50th/chengdu", problemCount: 13, gymId: 106161, qojContestId: 2567,
+    qojProblemIds: [14706, 14707, 14708, 14709, 14710, 14711, 14712, 14713, 14714, 14715, 14716, 14717, 14718],
+    problemTitles: ["A Lot of Paintings", "Blood Memories", "Crossing River", "Deductive Snooker Scoring", "Escaping from Trap", "Following Arrows", "GCD of Subsets", "Heuristic Knapsack", "Inside Triangle", "Judging Papers", "K-Coverage", "Label Matching", "Meeting for Meals"],
+  },
   { id: "2025-wuhan", year: 2025, name: "ICPC 区域赛武汉站", city: "武汉", type: "区域赛", boardPath: "icpc/50th/wuhan", problemCount: 13, qojContestId: 2609, qojProblemIds: [14719, 14720, 14721, 14722, 14723, 14724, 14725, 14726, 14727, 14728, 14729, 14730, 14731] },
   { id: "2025-nanjing", year: 2025, name: "ICPC 区域赛南京站", city: "南京", type: "区域赛", boardPath: "icpc/50th/nanjing", problemCount: 13, qojContestId: 2581, qojProblemIds: [14801, 14802, 14803, 14804, 14805, 14806, 14807, 14808, 14809, 14810, 14811, 14812, 14813] },
   {

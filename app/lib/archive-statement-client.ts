@@ -51,6 +51,7 @@ export type ArchiveExtractedStatement = {
 
 export type ArchiveStatementRequest = {
   qojContestId?: number;
+  gymId?: number;
   problemId: number;
   contestName: string;
   title: string;
@@ -81,7 +82,7 @@ export type ArchivePrewarmProgress = {
 export type ArchivePrewarmRequest = {
   contestId: string;
   contestName: string;
-  problems: Array<{ slot: string; qojContestId: number; problemId: number; title: string }>;
+  problems: Array<{ slot: string; qojContestId: number; problemId: number; gymId?: number; title: string }>;
 };
 
 export class ArchiveStatementPendingError extends Error {
@@ -149,6 +150,7 @@ export async function loadArchiveStatement(contestId: string, slot: string, requ
     contestName: request.contestName,
     title: request.title,
   });
+  if (request.gymId) query.set("gymId", String(request.gymId));
   const imported = await fetch(browserApiUrl(`/archive/statements?${query}`), { cache: "no-store" });
   const payload = await imported.json().catch(() => ({})) as { statement?: unknown; error?: string };
   if (!imported.ok && imported.status !== 202) throw new Error(payload.error || `题面导入失败（${imported.status}）`);

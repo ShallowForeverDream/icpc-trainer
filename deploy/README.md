@@ -25,6 +25,16 @@ and image OCR with Qwen2.5 1.5B Q4_K_M; llama.cpp has no published host port.
 The GGUF file is preloaded into the private `icpc-trainer-models` volume during deployment.
 While llama.cpp is starting, statement jobs report `model_downloading` and retry health checks.
 
+Recommended server-side update (replace `<commit>` with the released commit):
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/ShallowForeverDream/icpc-trainer/<commit>/deploy/update-backend.sh | bash -s -- <commit>
+```
+
+The script backs up the current backend, preserves `.env` and Docker volumes,
+builds before switching files, recreates only the API container, and verifies
+the persistent submission route.
+
 Upgrade from the repository root on the workstation:
 
 ```powershell

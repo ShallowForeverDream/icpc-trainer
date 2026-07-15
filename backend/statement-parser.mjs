@@ -23,6 +23,10 @@ function normalizeSpace(value) {
   return String(value || "").replace(/\u00a0/g, " ").replace(/[ \t]+/g, " ").replace(/\s*\n\s*/g, " ").trim();
 }
 
+export function normalizeCodeforcesMathFences(value) {
+  return String(value || "").replace(/\${6}([\s\S]*?)\${6}/g, (_match, expression) => `$$$${expression}$$$`);
+}
+
 function allowedRemoteUrl(value, baseUrl, kind) {
   try {
     const url = new URL(value, baseUrl);
@@ -40,6 +44,10 @@ export function sanitizeStatementHtml(input, sourceUrl) {
   const $ = load(`<div id="statement-root">${String(input || "")}</div>`, { xmlMode: false }, false);
   const root = $("#statement-root");
   const images = [];
+  root.find("*").addBack().contents().each((_, node) => {
+    if (node.type !== "text" || $(node).parents("pre, code").length) return;
+    node.data = normalizeCodeforcesMathFences(node.data || "");
+  });
   $("*").each((_, element) => {
     if (element === root[0]) return;
     const tag = String(element.tagName || "").toLowerCase();

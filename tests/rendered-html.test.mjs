@@ -407,6 +407,10 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(problemPage, /archive-draft:/);
   assert.match(problemPage, /loadPersistentJson/);
   assert.match(problemPage, /草稿自动保存/);
+  assert.match(problemPage, /题解与复盘/);
+  assert.match(problemPage, /archive-note:/);
+  assert.match(problemPage, /loadPlatformSubmissions/);
+  assert.match(problemPage, /源码与详情/);
   assert.match(problemPage, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
   assert.match(problemPage, /ArchiveSubmission/);
   assert.match(problemPage, /提交后自动更新/);

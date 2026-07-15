@@ -72,6 +72,17 @@ test("records deliberate-practice outcomes and accepts product feedback", async 
     assert.equal(loadDraftResponse.status, 200);
     assert.deepEqual((await loadDraftResponse.json()).value, archiveDraft);
 
+    const archiveNote = { approach: "先按最后一次决策分类。", pitfalls: "注意空区间。", complexity: "O(n log n)" };
+    const saveNoteResponse = await fetch(`${baseUrl}/state`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ clientId, key: "archive-note:2025-shenyang:A", value: archiveNote }),
+    });
+    assert.equal(saveNoteResponse.status, 200);
+    const loadNoteResponse = await fetch(`${baseUrl}/state?clientId=${clientId}&key=archive-note%3A2025-shenyang%3AA`);
+    assert.equal(loadNoteResponse.status, 200);
+    assert.deepEqual((await loadNoteResponse.json()).value, archiveNote);
+
     const feedbackResponse = await fetch(`${baseUrl}/feedback`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

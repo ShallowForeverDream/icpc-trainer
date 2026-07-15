@@ -460,6 +460,7 @@ function personalStateKey(value) {
   if (["preferences", "dashboard", "favorites", "active-vp", "archive-vp", "archive-vp-history", "shenyang-sprint"].includes(key)) return key;
   if (/^problem:\d{1,7}[A-Z][0-9]?$/.test(key)) return key;
   if (/^archive-draft:[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9]):[A-Z][0-9]?$/.test(key)) return key;
+  if (/^archive-note:[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9]):[A-Z][0-9]?$/.test(key)) return key;
   throw new HttpError(400, "个人数据类型无效");
 }
 

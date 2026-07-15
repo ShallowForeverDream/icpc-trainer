@@ -18,7 +18,7 @@ import { readAuth } from "../../../lib/auth-client";
 import { ARCHIVE_SESSION_EVENT } from "../../../lib/archive-vp-session";
 import { SUBMIT_EXTENSION_LABEL, SUBMIT_EXTENSION_VERSION } from "../../../lib/extension-config";
 import { loadPersistentJson, savePersistentJson } from "../../../lib/persistent-state";
-import { createSubmissionRequestId, recordPlatformSubmission } from "../../../lib/platform-submissions";
+import { createSubmissionRequestId, loadPlatformSubmissions, recordPlatformSubmission, subscribePlatformSubmissions, type PlatformSubmission } from "../../../lib/platform-submissions";
 import { readStoredJson } from "../../../lib/storage";
 
 type Attempt = { wrong: number; solvedAt?: number };
@@ -58,6 +58,8 @@ int main() {
     return 0;
 }`;
 type ArchiveDraft = { sourceCode: string; languageValue: string; fileName: string };
+type ArchiveNote = { approach: string; pitfalls: string; complexity: string };
+type ArchiveProblemTab = "statement" | "submissions" | "review";
 
 function isArchiveDraft(value: unknown): value is ArchiveDraft {
   if (!value || typeof value !== "object") return false;
@@ -66,6 +68,18 @@ function isArchiveDraft(value: unknown): value is ArchiveDraft {
     && typeof draft.languageValue === "string" && SUBMIT_LANGUAGES.some((language) => language.value === draft.languageValue)
     && typeof draft.fileName === "string" && draft.fileName.length <= 180;
 }
+
+function isArchiveNote(value: unknown): value is ArchiveNote {
+  if (!value || typeof value !== "object") return false;
+  const note = value as Partial<ArchiveNote>;
+  return typeof note.approach === "string" && note.approach.length <= 30_000
+    && typeof note.pitfalls === "string" && note.pitfalls.length <= 20_000
+    && typeof note.complexity === "string" && note.complexity.length <= 500;
+}
+
+const ARCHIVE_SUBMISSION_STATUS: Record<PlatformSubmission["status"], string> = {
+  queued: "连接中", submitted: "评测中", accepted: "Accepted", rejected: "未通过", failed: "提交失败", needs_login: "需要登录",
+};
 
 function isArchiveSession(value: unknown): value is ArchiveSession {
   if (!value || typeof value !== "object") return false;
@@ -412,6 +426,7 @@ export default function ArchiveProblemPage() {
   const contestName = contest?.name || "";
   const problemTitle = problem?.title || `Problem ${slot}`;
   const [language, setLanguage] = useState<"english" | "chinese">("english");
+  const [tab, setTab] = useState<ArchiveProblemTab>("statement");
   const [attempt, setAttempt] = useState<Attempt>({ wrong: 0 });
   const [started, setStarted] = useState(false);
   const [statement, setStatement] = useState<ArchiveExtractedStatement | null>(null);
@@ -419,14 +434,47 @@ export default function ArchiveProblemPage() {
   const [submitOpen, setSubmitOpen] = useState(false);
   const [isAdmin, setIsAdmin] = useState(false);
   const [reviewingStatement, setReviewingStatement] = useState(false);
+  const [submissions, setSubmissions] = useState<PlatformSubmission[]>([]);
+  const [note, setNote] = useState<ArchiveNote>({ approach: "", pitfalls: "", complexity: "" });
+  const [noteLoadedFor, setNoteLoadedFor] = useState("");
+  const [noteSaved, setNoteSaved] = useState(false);
   const reviewRequested = useRef(false);
+  const noteStateKey = `archive-note:${contestId}:${slot}`;
+  const noteLocalKey = `icpc-trainer-archive-note:${contestId}:${slot}`;
 
   useEffect(() => {
     const session = readStoredJson<ArchiveSession | null>(SESSION_KEY, null, (value): value is ArchiveSession | null => value === null || isArchiveSession(value));
     reviewRequested.current = false;
+    setTab("statement");
     setStarted(Boolean(session?.contestId === contestId && session.startedAt));
     setAttempt(session?.contestId === contestId ? session.attempts[slot] || { wrong: 0 } : { wrong: 0 });
   }, [contestId, slot]);
+
+  useEffect(() => {
+    void loadPlatformSubmissions().then(setSubmissions);
+    return subscribePlatformSubmissions(setSubmissions);
+  }, []);
+
+  useEffect(() => {
+    let cancelled = false;
+    setNoteLoadedFor("");
+    setNoteSaved(false);
+    void loadPersistentJson<ArchiveNote>(noteStateKey, noteLocalKey, { approach: "", pitfalls: "", complexity: "" }, isArchiveNote).then((saved) => {
+      if (cancelled) return;
+      setNote(saved);
+      setNoteLoadedFor(noteStateKey);
+    });
+    return () => { cancelled = true; };
+  }, [noteLocalKey, noteStateKey]);
+
+  useEffect(() => {
+    if (noteLoadedFor !== noteStateKey) return;
+    setNoteSaved(false);
+    const timer = window.setTimeout(() => {
+      void savePersistentJson(noteStateKey, noteLocalKey, note).then(setNoteSaved);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [note, noteLoadedFor, noteLocalKey, noteStateKey]);
 
   useEffect(() => {
     const refreshRole = () => setIsAdmin(Boolean(readAuth()?.user.role === "admin" && !readAuth()?.user.mustChangePassword));
@@ -492,6 +540,7 @@ export default function ArchiveProblemPage() {
   const solved = attempt.solvedAt !== undefined;
   const chineseReady = Boolean(statement?.chinese.sections.length);
   const canReview = Boolean(isAdmin && statement?.updatedAt && chineseReady && !statement?.source.chinesePdfUrl);
+  const problemSubmissions = submissions.filter((item) => item.archiveContestId === contest.id && item.slot === slot);
   return <AppShell active="模拟赛">
     <header className="archive-problem-head">
       <div>
@@ -515,11 +564,25 @@ export default function ArchiveProblemPage() {
       <div className={`archive-attempt-state${solved ? " solved" : attempt.wrong ? " attempted" : ""}`}><span>{solved ? "已 AC" : attempt.wrong ? `${attempt.wrong} 次 WA` : "未尝试"}</span><small>{started ? "提交后自动更新" : "VP 开始后计入排名"}</small></div>
     </section>
 
-    {!started ? <div className="archive-start-notice"><Icon name="clock" /><span>开始 VP 后，本题结果会计入实时排名。</span><Link href="/vp/archive">返回开始 VP →</Link></div> : null}
+    <nav className="archive-problem-tabs" aria-label="题目工作区">
+      <button className={tab === "statement" ? "active" : ""} onClick={() => setTab("statement")}>题目</button>
+      <button className={tab === "submissions" ? "active" : ""} onClick={() => setTab("submissions")}>提交记录 <small>{problemSubmissions.length || ""}</small></button>
+      <button className={tab === "review" ? "active" : ""} onClick={() => setTab("review")}>题解与复盘</button>
+    </nav>
 
-    <section className="archive-solving-workspace">
-      {statement ? reviewingStatement && canReview ? <ArchiveStatementReviewEditor statement={statement} onCancel={() => setReviewingStatement(false)} onSaved={(nextStatement) => { setStatement(nextStatement); setReviewingStatement(false); setStatementMessage("中文题面已人工校对并持久保存"); }} /> : <ArchiveStatementView statement={statement} language={language} /> : <article className="archive-statement-panel archive-statement-loading"><div className="statement-loader" /><h2>正在整理题面</h2><p>{statementMessage || "首次打开会整理正文、公式、样例和图片，完成后自动保存。"}</p><div className="hero-actions"><a className="button button-ghost" href={problem.statementUrl} target="_blank" rel="noreferrer">查看原始题面 ↗</a></div></article>}
-    </section>
+    {tab === "statement" ? <>
+      {!started ? <div className="archive-start-notice"><Icon name="clock" /><span>开始 VP 后，本题结果会计入实时排名。</span><Link href="/vp/archive">返回开始 VP →</Link></div> : null}
+      <section className="archive-solving-workspace">
+        {statement ? reviewingStatement && canReview ? <ArchiveStatementReviewEditor statement={statement} onCancel={() => setReviewingStatement(false)} onSaved={(nextStatement) => { setStatement(nextStatement); setReviewingStatement(false); setStatementMessage("中文题面已人工校对并持久保存"); }} /> : <ArchiveStatementView statement={statement} language={language} /> : <article className="archive-statement-panel archive-statement-loading"><div className="statement-loader" /><h2>正在整理题面</h2><p>{statementMessage || "首次打开会整理正文、公式、样例和图片，完成后自动保存。"}</p><div className="hero-actions"><a className="button button-ghost" href={problem.statementUrl} target="_blank" rel="noreferrer">查看原始题面 ↗</a></div></article>}
+      </section>
+    </> : tab === "submissions" ? <section className="archive-problem-submissions problem-submission-history panel">
+      <header><div><h2>{slot} 题提交记录</h2><p>评测结果、提交源码和失败重试均保存在平台。</p></div><Link href="/submissions">全部提交 →</Link></header>
+      {problemSubmissions.length ? <div>{problemSubmissions.map((row) => <Link href={`/submissions/${row.requestId}`} key={row.requestId}><time>{new Date(row.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</time><span><b>{row.language}</b><small>{row.message}</small></span><strong className={`submission-state ${row.status}`}>{ARCHIVE_SUBMISSION_STATUS[row.status]}</strong><em>源码与详情 →</em></Link>)}</div> : <div className="empty-state"><Icon name="history" /><h3>本题还没有提交</h3><p>点击下方“提交代码”，记录会立即出现在这里。</p></div>}
+    </section> : <section className="archive-problem-note panel">
+      <header><div><span>TEAM NOTE</span><h2>{slot} 题题解与复盘</h2><p>按比赛复盘习惯整理，自动保存到账号。</p></div><strong>{noteSaved ? "已保存" : noteLoadedFor ? "自动保存中" : "正在载入"}</strong></header>
+      <label><span>核心思路</span><textarea value={note.approach} maxLength={30_000} onChange={(event) => setNote({ ...note, approach: event.target.value })} placeholder="关键观察、算法推导、正确性证明……" /></label>
+      <div><label><span>易错点与失败原因</span><textarea value={note.pitfalls} maxLength={20_000} onChange={(event) => setNote({ ...note, pitfalls: event.target.value })} placeholder="WA 原因、边界条件、实现细节……" /></label><label><span>复杂度</span><input value={note.complexity} maxLength={500} onChange={(event) => setNote({ ...note, complexity: event.target.value })} placeholder="例如 O(n log n)，空间 O(n)" /></label></div>
+    </section>}
 
     <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择文件或粘贴代码，后台代理提交并写入平台记录。</span></div><button type="button" onClick={() => setSubmitOpen(true)}>提交代码 →</button></section>
     {submitOpen ? <ArchiveSubmitDialog contest={contest} currentSlot={slot} slots={slots} onClose={() => setSubmitOpen(false)} /> : null}

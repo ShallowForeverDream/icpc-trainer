@@ -80,6 +80,7 @@ async function copyCodeText(value: string) {
 }
 type ThinkingRecord = { startedAt?: number | null; note?: string; hintLevel?: number; difficulty?: TrainingDifficulty };
 type PersistentProblemState = { draft: string; thinking: ThinkingRecord };
+type ProblemNote = { approach: string; pitfalls: string; complexity: string };
 type VpContext = { id: string; slot: string };
 
 function isStringArray(value: unknown): value is string[] {
@@ -99,6 +100,14 @@ function isPersistentProblemState(value: unknown): value is PersistentProblemSta
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<PersistentProblemState>;
   return typeof item.draft === "string" && item.draft.length <= 200_000 && isThinkingRecord(item.thinking);
+}
+
+function isProblemNote(value: unknown): value is ProblemNote {
+  if (!value || typeof value !== "object") return false;
+  const note = value as Partial<ProblemNote>;
+  return typeof note.approach === "string" && note.approach.length <= 30_000
+    && typeof note.pitfalls === "string" && note.pitfalls.length <= 20_000
+    && typeof note.complexity === "string" && note.complexity.length <= 500;
 }
 
 const initialCode = `#include <bits/stdc++.h>
@@ -395,7 +404,12 @@ export default function ProblemDetailPage() {
   const [problemSubmissions, setProblemSubmissions] = useState<PlatformSubmission[]>([]);
   const [isAdmin, setIsAdmin] = useState(false);
   const [reviewingStatement, setReviewingStatement] = useState(false);
+  const [problemNote, setProblemNote] = useState<ProblemNote>({ approach: "", pitfalls: "", complexity: "" });
+  const [problemNoteLoadedFor, setProblemNoteLoadedFor] = useState("");
+  const [problemNoteSaved, setProblemNoteSaved] = useState(false);
   const statementReviewRequested = useRef(false);
+  const problemNoteStateKey = `problem-note:${requestedCode}`;
+  const problemNoteLocalKey = `icpc-trainer-problem-note:${requestedCode}`;
   const officialProblemUrl = isGym
     ? `https://codeforces.com/gym/${problem.contestId}/problem/${problem.index}`
     : `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
@@ -479,6 +493,27 @@ export default function ProblemDetailPage() {
       setDifficulty(remote.thinking.difficulty && ["easy", "right", "hard"].includes(remote.thinking.difficulty) ? remote.thinking.difficulty : "right");
     });
   }, [requestedCode]);
+
+  useEffect(() => {
+    let cancelled = false;
+    setProblemNoteLoadedFor("");
+    setProblemNoteSaved(false);
+    void loadPersistentJson<ProblemNote>(problemNoteStateKey, problemNoteLocalKey, { approach: "", pitfalls: "", complexity: "" }, isProblemNote).then((saved) => {
+      if (cancelled) return;
+      setProblemNote(saved);
+      setProblemNoteLoadedFor(problemNoteStateKey);
+    });
+    return () => { cancelled = true; };
+  }, [problemNoteLocalKey, problemNoteStateKey]);
+
+  useEffect(() => {
+    if (problemNoteLoadedFor !== problemNoteStateKey) return;
+    setProblemNoteSaved(false);
+    const timer = window.setTimeout(() => {
+      void savePersistentJson(problemNoteStateKey, problemNoteLocalKey, problemNote).then(setProblemNoteSaved);
+    }, 800);
+    return () => window.clearTimeout(timer);
+  }, [problemNote, problemNoteLoadedFor, problemNoteLocalKey, problemNoteStateKey]);
 
   useEffect(() => {
     const refreshRole = () => setIsAdmin(Boolean(readAuth()?.user.role === "admin" && !readAuth()?.user.mustChangePassword));
@@ -689,7 +724,7 @@ export default function ProblemDetailPage() {
           <div className={`problem-meta${trainingMode && !metaRevealed ? " meta-concealed" : ""}`}>{trainingMode && !metaRevealed ? <><b>?</b><span>标签已隐藏</span><button onClick={() => setMetaRevealed(true)}>主动揭示</button></> : <><b>{problem.rating || "—"}</b>{problem.tags.slice(0, 2).map((tag) => <span key={tag}>{tag}</span>)}</>}</div>
         </div>
         <div className={`translation-note${ready ? " statement-ready" : ""}`}><Icon name="spark" /><p><b>原题面默认显示 · 可切换中文</b>　<span>{status}</span></p></div>
-        <div className="tabs">{["题目", "提交记录", "题解"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</div>
+        <div className="tabs">{["题目", "提交记录", "题解与复盘"].map((item) => <button key={item} className={tab === item ? "active" : ""} onClick={() => setTab(item)}>{item}</button>)}</div>
         {tab === "题目" ? <>
           <div className="statement-language-bar" aria-label="题面语言">
             <div className="language-switch"><button className={language === "original" ? "active" : ""} aria-pressed={language === "original"} onClick={() => setLanguage("original")}>原题面 <small>EN</small></button><button className={language === "chinese" ? "active" : ""} aria-pressed={language === "chinese"} onClick={() => setLanguage("chinese")}>中文题面 <small>ZH</small></button></div>
@@ -707,7 +742,7 @@ export default function ProblemDetailPage() {
         </> : tab === "提交记录" ? <section className="problem-submission-history">
           <header><div><h2>本题提交记录</h2><p>代码、最终判题与评测站提交编号均保存在平台。</p></div><Link href="/submissions">全部记录 →</Link></header>
           {problemSubmissions.length ? <div>{problemSubmissions.map((row) => <Link href={`/submissions/${row.requestId}`} key={row.requestId}><time>{new Date(row.createdAt).toLocaleString("zh-CN", { month: "2-digit", day: "2-digit", hour: "2-digit", minute: "2-digit" })}</time><span><b>{row.language}</b><small>{row.message}</small></span><strong className={`submission-state ${row.status}`}>{SUBMISSION_STATUS_LABEL[row.status]}</strong><em>查看代码 →</em></Link>)}</div> : <div className="empty-state"><Icon name="history" /><h3>还没有提交</h3><p>在右侧粘贴代码或选择文件，点击“直接提交”后会立即显示在这里。</p></div>}
-        </section> : <div className="locked-editorial"><Icon name="spark" /><h3>解题导航</h3><p>{strategyByTag[problem.tags[0]] ?? "从约束范围反推目标复杂度，先写出朴素算法，再寻找可以复用的状态或单调性。"}</p><p>建议复杂度方向：根据 <b>{problem.tags.join(" / ")}</b> 标签选择对应模板，并使用样例和极端数据验证。</p><div className="hero-actions"><Link className="button button-primary" href="/templates">打开算法模板</Link><a className="button button-ghost" href={officialProblemUrl} target="_blank" rel="noreferrer">核对官方题面 ↗</a></div></div>}
+        </section> : <div className="problem-editorial-workspace"><section className="locked-editorial"><Icon name="spark" /><h3>解题导航</h3><p>{strategyByTag[problem.tags[0]] ?? "从约束范围反推目标复杂度，先写出朴素算法，再寻找可以复用的状态或单调性。"}</p><p>建议复杂度方向：根据 <b>{problem.tags.join(" / ")}</b> 标签选择对应模板，并使用样例和极端数据验证。</p><div className="hero-actions"><Link className="button button-primary" href="/templates">打开算法模板</Link></div></section><section className="problem-note-editor"><header><div><span>MY EDITORIAL</span><h3>我的题解与复盘</h3></div><strong>{problemNoteSaved ? "已保存" : problemNoteLoadedFor ? "自动保存中" : "正在载入"}</strong></header><label><span>核心思路</span><textarea value={problemNote.approach} maxLength={30_000} onChange={(event) => setProblemNote({ ...problemNote, approach: event.target.value })} placeholder="关键观察、算法推导、正确性证明……" /></label><label><span>易错点与失败原因</span><textarea value={problemNote.pitfalls} maxLength={20_000} onChange={(event) => setProblemNote({ ...problemNote, pitfalls: event.target.value })} placeholder="WA 原因、边界条件、实现细节……" /></label><label><span>复杂度</span><input value={problemNote.complexity} maxLength={500} onChange={(event) => setProblemNote({ ...problemNote, complexity: event.target.value })} placeholder="例如 O(n log n)，空间 O(n)" /></label></section></div>}
       </article>
       {!isGym ? <aside className="code-panel">
         {trainingMode ? <section className="thinking-coach">

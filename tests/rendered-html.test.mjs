@@ -318,6 +318,8 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(detail, /autoSubmit: true/);
   assert.match(detail, /返回实时榜单/);
   assert.match(detail, /或直接粘贴代码/);
+  assert.match(detail, /problem-note:/);
+  assert.match(detail, /我的题解与复盘/);
   assert.match(await readFile(new URL("app/lib/archive-vp-session.ts", root), "utf8"), /submittedAt/);
   assert.match(backendScoring, /teams \* 0\.1/);
   assert.match(backendScoring, /teams \* 0\.2/);

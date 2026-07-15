@@ -233,6 +233,12 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /qojContestId: 3588/);
   assert.match(catalog, /17753, 17754, 17755/);
   assert.match(catalog, /archiveProblemHref/);
+  assert.match(catalog, /qojProblemIds: \[18307, 18308, 18309/);
+  assert.match(catalog, /qojProblemIds: \[10486, 10487, 10488/);
+  assert.match(catalog, /qojContestId: 3169/);
+  assert.match(catalog, /qojContestId: 1913/);
+  assert.match(catalog, /qojContestId: 1885/);
+  assert.match(catalog, /qojContestId: 1894/);
   assert.match(catalog, /type: "省赛"/);
   assert.match(catalog, /2026-wuhan-invitational/);
   assert.match(catalog, /2025-chengdu/);

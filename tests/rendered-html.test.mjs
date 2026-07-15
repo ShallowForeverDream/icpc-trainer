@@ -739,6 +739,9 @@ test("keeps platform submissions, source code, final verdicts, and problem histo
   assert.match(list, /\/submissions\/\$\{row\.requestId\}/);
   assert.match(detail, /复制代码/);
   assert.match(detail, /评测站提交编号/);
+  assert.match(detail, /重新连接并提交/);
+  assert.match(detail, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
+  assert.match(detail, /archivePracticeProblem/);
   assert.match(backend, /platform-submissions\/status/);
   assert.match(persistence, /source_payload/);
   assert.match(persistence, /updatePlatformSubmissionStatus/);

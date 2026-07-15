@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { useEffect, useMemo, useState } from "react";
 import { AppShell, Icon, Pill } from "../components/AppShell";
+import { JudgeReadiness } from "../components/JudgeReadiness";
 import {
   archiveContestIntegrated,
   archiveContests,
@@ -201,6 +202,7 @@ export default function ShenyangSprintPage() {
     .filter((item, index, rows) => rows.findIndex((candidate) => candidate.slot === item.slot) === index)
     .slice(0, 4);
   const completedSteps = Number(vpStartedToday) + Number(accepted === plan.slots.length) + Number(Boolean(plan.reflection.trim()));
+  const sprintJudge = contest.qojContestId && contest.qojProblemIds?.length ? "ucup" : contest.luoguContestId && contest.luoguProblemIds?.length ? "luogu" : "codeforces";
 
   async function saveReflection() {
     setSaveState("saving");
@@ -225,6 +227,7 @@ export default function ShenyangSprintPage() {
     <div className="sprint-loop-bar" aria-label="站内训练闭环">
       {["题面", "准确中文", "提交", "评测记录", "VP 榜单", "复盘"].map((label, index) => <span key={label}><i>{index + 1}</i>{label}</span>)}
     </div>
+    <JudgeReadiness judges={[sprintJudge]} label="今日训练提交环境" />
 
     <section className="sprint-grid sprint-work-grid">
       <article className="panel sprint-today-card sprint-plan-card">

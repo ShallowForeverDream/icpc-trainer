@@ -234,7 +234,13 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
 });
 
 test("renders proactive submission readiness checks and the durable source boundary", async () => {
-  const response = await render("/extension");
+  const [response, readiness, sprint, vp, archiveVp] = await Promise.all([
+    render("/extension"),
+    readFile(new URL("app/components/JudgeReadiness.tsx", root), "utf8"),
+    readFile(new URL("app/sprint/page.tsx", root), "utf8"),
+    readFile(new URL("app/vp/page.tsx", root), "utf8"),
+    readFile(new URL("app/vp/archive/page.tsx", root), "utf8"),
+  ]);
   assert.equal(response.status, 200);
   const html = await response.text();
   assert.match(html, /赛前检查/);
@@ -242,6 +248,11 @@ test("renders proactive submission readiness checks and the durable source bound
   assert.match(html, /Universal Cup \/ QOJ/);
   assert.match(html, /提交源码保存在平台数据库/);
   assert.match(html, /icpc-trainer-extension\.zip/);
+  assert.match(readiness, /ICPC_TRAINER_HEALTH_CHECK/);
+  assert.match(readiness, /修复提交环境/);
+  assert.match(sprint, /JudgeReadiness/);
+  assert.match(vp, /本场 VP 提交环境/);
+  assert.match(archiveVp, /contestJudge/);
 });
 
 test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {

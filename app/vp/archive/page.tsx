@@ -4,6 +4,7 @@
 import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
+import { JudgeReadiness } from "../../components/JudgeReadiness";
 import { archiveContestIntegrated, archiveContests, archivePracticeProblem, archiveProblemHref, findArchiveContest } from "../../data/archive-contests";
 import { type ArchivePrewarmProgress, loadArchivePrewarm, startArchivePrewarm } from "../../lib/archive-statement-client";
 import { ARCHIVE_SESSION_EVENT } from "../../lib/archive-vp-session";
@@ -427,6 +428,7 @@ export default function ArchiveVpPage() {
   </AppShell>;
 
   const contest = findArchiveContest(session.contestId);
+  const contestJudge = contest?.qojContestId && contest.qojProblemIds?.length ? "ucup" : contest?.luoguContestId && contest.luoguProblemIds?.length ? "luogu" : "codeforces";
   const remaining = Math.max(0, duration - elapsed);
   const groupOptions = Object.entries(scoreboard?.contest.groups || {});
   const progress = Math.min(100, elapsed / Math.max(1, duration) * 100);
@@ -438,6 +440,7 @@ export default function ArchiveVpPage() {
       <div className="archive-clock"><small>{session.startedAt ? "剩余时间" : "原场时长"}</small><b>{clock(session.startedAt ? remaining : duration)}</b><span>我的队伍：{!session.startedAt ? "等待开赛" : mine ? `第 ${mine.rank} 名 · ${mine.solved} 题` : "等待榜单"}</span></div>
     </section>
     <div className="archive-timeline"><i style={{ width: `${progress}%` }} /><span className="freeze-marker" style={{ left: `${(scoreboard?.freezeAtSeconds || duration * .8) / duration * 100}%` }}>封榜</span></div>
+    {!session.startedAt ? <JudgeReadiness judges={[contestJudge]} label="本场 VP 提交环境" /> : null}
     <section className="contest-actions archive-actions">
       {!session.startedAt ? <button className="button button-primary" onClick={() => { const startedAt = Date.now(); saveSession({ ...session, startedAt }); setNow(startedAt); }}>开始 VP</button> : <button className="button button-primary" onClick={() => void refresh()} disabled={status === "loading"}>{status === "loading" ? "同步中…" : "立即同步原场榜"}</button>}
       {finished && !session.reveal ? <button className="button button-primary reveal-button" onClick={() => saveSession({ ...session, reveal: true })}>比赛结束 · 揭榜</button> : null}

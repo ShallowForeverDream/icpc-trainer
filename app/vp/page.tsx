@@ -4,6 +4,7 @@
 import { useEffect, useMemo, useRef, useState, type CSSProperties } from "react";
 import Link from "next/link";
 import { AppShell, Icon } from "../components/AppShell";
+import { JudgeReadiness } from "../components/JudgeReadiness";
 import { authFetch } from "../lib/auth-client";
 import { getDeviceId } from "../lib/device-id";
 import { loadPlatformSubmissions, type PlatformSubmission } from "../lib/platform-submissions";
@@ -277,6 +278,7 @@ export default function VpPage() {
         <div className="contest-clock"><small>{finished ? "已结束" : settling ? "正在结算" : contest.startedAt ? "剩余时间" : "比赛时长"}</small><b>{timeLabel}</b><span>{myRow?.solved ?? 0} AC · {settling ? "等待最终排名" : rankedMyRow?.rank ? `第 ${rankedMyRow.rank} 名` : "等待排名"}</span></div>
       </section>
       {contest.startedAt ? <div className="vp-contest-progress"><i style={{ width: `${progress}%` }} /><span style={{ left: `${freezeProgress}%` }}>封榜</span></div> : null}
+      {!contest.startedAt ? <JudgeReadiness judges={["codeforces"]} label="本场 VP 提交环境" /> : null}
       <section className="contest-actions">
         {!contest.startedAt ? <button className="button button-primary" onClick={startContest}><Icon name="play" /> 开始比赛</button> : <button className="button button-primary" onClick={() => void syncStandings(false)} disabled={status === "syncing"}><Icon name="history" /> {status === "syncing" ? "同步中…" : "立即刷新榜单"}</button>}
         <button className="button button-ghost" onClick={finishContest}>{finished ? "重新组卷" : "放弃本场"}</button>

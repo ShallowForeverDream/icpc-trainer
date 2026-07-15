@@ -131,8 +131,8 @@ async function statementRequest(path: string, init?: RequestInit, authenticated 
   return payload.statement;
 }
 
-export async function loadStatement(code: string) {
-  return withDeviceTranslation(await statementRequest(`/codeforces/statements?code=${encodeURIComponent(code)}`, { cache: "no-store" }));
+export async function loadStatement(code: string, source: "problemset" | "gym" = "problemset") {
+  return withDeviceTranslation(await statementRequest(`/codeforces/statements?code=${encodeURIComponent(code)}&source=${source}`, { cache: "no-store" }));
 }
 
 export function importStatementSource(code: string, sourceUrl: string, html: string) {
@@ -165,7 +165,7 @@ export function fetchStatementViaExtension(url: string, timeoutMs = 15_000) {
     const requestId = globalThis.crypto?.randomUUID?.() || `${Date.now()}-${Math.random()}`;
     const timeout = window.setTimeout(() => {
       window.removeEventListener("message", onMessage);
-      reject(new Error("未检测到浏览器扩展；请安装或更新至 v0.4 后重试"));
+      reject(new Error("未检测到浏览器扩展；请安装或更新至 v0.6 后重试"));
     }, timeoutMs);
 
     function onMessage(event: MessageEvent) {
@@ -241,6 +241,24 @@ export function statementHtmlForDisplay(html: string, images: StatementImage[], 
       caption.append(label, text);
       element.insertAdjacentElement("afterend", caption);
     }
+  });
+
+  root.querySelectorAll<HTMLElement>(".sample-test .input, .sample-test .output").forEach((sample, index) => {
+    const pre = sample.querySelector("pre");
+    if (!pre) return;
+    let heading = sample.querySelector<HTMLElement>(":scope > .section-title");
+    if (!heading) {
+      heading = document.createElement("div");
+      heading.className = "section-title";
+      heading.textContent = sample.classList.contains("input") ? (language === "chinese" ? "输入" : "Input") : (language === "chinese" ? "输出" : "Output");
+      sample.prepend(heading);
+    }
+    const button = document.createElement("button");
+    button.type = "button";
+    button.className = "sample-copy";
+    button.dataset.sampleCopy = String(index);
+    button.textContent = language === "chinese" ? "复制" : "Copy";
+    heading.append(button);
   });
   return root.innerHTML;
 }

@@ -135,10 +135,11 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "0.5.0");
+  assert.equal(manifest.version, "0.6.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
+  assert.match(background, /gym\\\/\\d\+\\\/problem/);
   assert.match(background, /problem-statement/);
   assert.match(bridge, /ICPC_TRAINER_SUBMIT_RESULT/);
   assert.match(bridge, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
@@ -227,7 +228,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
     readFile(new URL("app/api/archive/scoreboard/route.ts", root), "utf8"),
     readFile(new URL("app/lib/archive-scoreboard.ts", root), "utf8"),
   ]);
-  assert.equal((catalog.match(/boardPath: "icpc\//g) ?? []).length, 24);
+  assert.equal((catalog.match(/boardPath: "icpc\//g) ?? []).length, 23);
+  assert.equal((catalog.match(/boardPath: "ccpc\//g) ?? []).length, 1);
   assert.equal((catalog.match(/boardPath: "provincial-contest\//g) ?? []).length, 2);
   assert.match(catalog, /2026-shandong-provincial/);
   assert.match(catalog, /qojContestId: 3588/);
@@ -243,6 +245,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /2026-wuhan-invitational/);
   assert.match(catalog, /2025-chengdu/);
   assert.match(catalog, /2024-nanjing/);
+  assert.match(catalog, /gymId: 105143/);
+  assert.match(catalog, /gymId: 106554/);
   assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /URLSearchParams\(window\.location\.search\)/);

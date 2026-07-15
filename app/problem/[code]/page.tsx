@@ -1,10 +1,11 @@
 "use client";
 /* eslint-disable react-hooks/set-state-in-effect */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { ChangeEvent, MouseEvent as ReactMouseEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import Link from "next/link";
-import { useParams } from "next/navigation";
+import { useParams, useSearchParams } from "next/navigation";
 import { AppShell, Icon } from "../../components/AppShell";
+import { findArchiveContest } from "../../data/archive-contests";
 import { findCuratedProblem } from "../../data/problems";
 import { findImportedStatement } from "../../data/problem-statements";
 import { apiJson } from "../../lib/api-client";
@@ -37,6 +38,33 @@ type DisplayProblem = {
 };
 
 type StatementLanguage = "original" | "chinese";
+type SubmitLanguage = { label: string; extensions: string[] };
+
+const SUBMIT_LANGUAGES: SubmitLanguage[] = [
+  { label: "GNU C++20", extensions: ["cpp", "cc", "cxx"] },
+  { label: "GNU C++23", extensions: ["cpp", "cc", "cxx"] },
+  { label: "GNU C++17", extensions: ["cpp", "cc", "cxx"] },
+  { label: "GNU C11", extensions: ["c"] },
+  { label: "PyPy 3", extensions: ["py"] },
+  { label: "Python 3", extensions: ["py"] },
+  { label: "Java 21", extensions: ["java"] },
+  { label: "Java 17", extensions: ["java"] },
+  { label: "Kotlin 1.9", extensions: ["kt", "kts"] },
+  { label: "Rust 2021", extensions: ["rs"] },
+];
+
+async function copyCodeText(value: string) {
+  try { await navigator.clipboard.writeText(value); }
+  catch {
+    const textarea = document.createElement("textarea");
+    textarea.value = value;
+    textarea.style.cssText = "position:fixed;opacity:0";
+    document.body.append(textarea);
+    textarea.select();
+    document.execCommand("copy");
+    textarea.remove();
+  }
+}
 type ThinkingRecord = { startedAt?: number | null; note?: string; hintLevel?: number; difficulty?: TrainingDifficulty };
 type PersistentProblemState = { draft: string; thinking: ThinkingRecord };
 type VpContext = { id: string; slot: string };
@@ -119,14 +147,115 @@ function statusText(statement: CachedStatement | null, error: string) {
 function CachedStatementView({ statement, language }: { statement: CachedStatement; language: StatementLanguage }) {
   const source = language === "original" ? statement.originalHtml : statement.chineseHtml;
   const html = useMemo(() => source ? statementHtmlForDisplay(source, statement.images, language) : "", [language, source, statement.images]);
-  return <div className="statement-body full-statement dynamic-statement">
+  const copySample = (event: ReactMouseEvent<HTMLDivElement>) => {
+    const button = (event.target as HTMLElement).closest<HTMLButtonElement>("button[data-sample-copy]");
+    const pre = button?.closest(".input, .output")?.querySelector("pre");
+    if (!button || !pre) return;
+    const value = pre.textContent || "";
+    void (navigator.clipboard?.writeText(value) ?? Promise.reject()).catch(() => {
+      const textarea = document.createElement("textarea");
+      textarea.value = value;
+      textarea.style.cssText = "position:fixed;opacity:0";
+      document.body.append(textarea);
+      textarea.select();
+      document.execCommand("copy");
+      textarea.remove();
+    }).then(() => {
+      const previous = button.textContent;
+      button.textContent = "已复制 ✓";
+      window.setTimeout(() => { button.textContent = previous; }, 1400);
+    });
+  };
+  return <div className="statement-body full-statement dynamic-statement" onClick={copySample}>
     <div className="statement-facts">
       <span><b>{statement.timeLimitText || "—"}</b> 时间限制</span>
       <span><b>{statement.memoryLimitText || "—"}</b> 内存限制</span>
-      <span><b>{statement.sourceKind === "codeforces" ? "Codeforces" : "CF 数据集"}</b> 题面来源</span>
+      <span><b>{statement.sourceKind === "codeforces-gym" ? "Codeforces Gym" : statement.sourceKind === "codeforces" ? "Codeforces" : "CF 数据集"}</b> 题面来源</span>
     </div>
     <div className="cf-statement-html" dangerouslySetInnerHTML={{ __html: html }} />
     <div className="source-callout"><b>{language === "original" ? "原题面" : statement.revalidating ? "中文缓存题面 · 后台校对中" : "中文题面"}</b><p>{language === "original" ? "首次打开后缓存自 Codeforces；公式、样例和图片保持原始结构。" : statement.revalidating ? "先显示上一版可用中文，不再让你等待；新版术语校对完成后会自动替换。" : "由本地模型翻译并缓存。变量、公式与样例保持原样；如有差异请以原题面为准。"}</p></div>
+  </div>;
+}
+
+function GymSubmitDialog({ contestId, currentIndex, problemCount, titles, onClose }: {
+  contestId: number;
+  currentIndex: string;
+  problemCount: number;
+  titles?: string[];
+  onClose: () => void;
+}) {
+  const slots = Array.from({ length: problemCount }, (_, index) => String.fromCharCode(65 + index));
+  const [selectedIndex, setSelectedIndex] = useState(currentIndex);
+  const [languageLabel, setLanguageLabel] = useState("GNU C++20");
+  const [sourceCode, setSourceCode] = useState("");
+  const [fileName, setFileName] = useState("");
+  const [error, setError] = useState("");
+  const [status, setStatus] = useState("");
+  const [extensionReady, setExtensionReady] = useState(false);
+
+  useEffect(() => {
+    const listener = (event: MessageEvent) => {
+      if (event.source !== window || event.origin !== window.location.origin || event.data?.source !== "icpc-trainer-extension") return;
+      if (event.data.type === "ICPC_TRAINER_PONG") setExtensionReady(true);
+      if (event.data.type === "ICPC_TRAINER_SUBMIT_RESULT") setStatus(event.data.ok ? "提交页已打开，检查后在 Codeforces 确认提交。" : "扩展未能打开提交页，请重新加载扩展。 ");
+    };
+    window.addEventListener("message", listener);
+    window.postMessage({ source: "icpc-trainer", type: "ICPC_TRAINER_PING" }, window.location.origin);
+    return () => window.removeEventListener("message", listener);
+  }, []);
+
+  async function selectFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0];
+    setError("");
+    setStatus("");
+    if (!file) return;
+    if (file.size > 500_000) {
+      setError("代码文件不能超过 500 KB");
+      event.target.value = "";
+      return;
+    }
+    const value = await file.text();
+    if (!value.trim()) return setError("代码文件内容为空");
+    setFileName(file.name);
+    setSourceCode(value);
+    const extension = file.name.split(".").pop()?.toLowerCase() || "";
+    const guessed = SUBMIT_LANGUAGES.find((item) => item.extensions.includes(extension));
+    if (guessed) setLanguageLabel(guessed.label);
+  }
+
+  async function submit() {
+    setError("");
+    setStatus("");
+    if (!sourceCode.trim()) return setError("请先选择代码文件");
+    await copyCodeText(sourceCode);
+    if (extensionReady) {
+      window.postMessage({
+        source: "icpc-trainer",
+        type: "ICPC_TRAINER_SUBMIT",
+        payload: { contestId, index: selectedIndex, languageLabel, sourceCode, isGym: true },
+      }, window.location.origin);
+      setStatus("正在通过扩展打开并填写 Codeforces Gym 提交页…");
+      return;
+    }
+    window.open(`https://codeforces.com/gym/${contestId}/submit?submittedProblemIndex=${encodeURIComponent(selectedIndex)}`, "_blank", "noopener,noreferrer");
+    setStatus("代码已复制；安装 v0.6 扩展后可自动填写，当前请在新页面粘贴。 ");
+  }
+
+  return <div className="archive-submit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
+    <section className="archive-submit-dialog" role="dialog" aria-modal="true" aria-labelledby="gym-submit-title">
+      <header><div><small>提交到 Codeforces Gym</small><h2 id="gym-submit-title">提交代码</h2></div><button type="button" aria-label="关闭提交窗口" onClick={onClose}>×</button></header>
+      <div className="archive-submit-fields">
+        <label><span>题目</span><select value={selectedIndex} onChange={(event) => setSelectedIndex(event.target.value)}>{slots.map((slot, index) => <option value={slot} key={slot}>{slot} · {titles?.[index] || `Problem ${slot}`}</option>)}</select></label>
+        <label><span>语言</span><select value={languageLabel} onChange={(event) => setLanguageLabel(event.target.value)}>{SUBMIT_LANGUAGES.map((item) => <option value={item.label} key={item.label}>{item.label}</option>)}</select></label>
+      </div>
+      <label className={`archive-file-picker${fileName ? " selected" : ""}`}>
+        <input type="file" accept=".cpp,.cc,.cxx,.c,.py,.java,.kt,.kts,.rs,.txt" onChange={(event) => void selectFile(event)} />
+        <Icon name="upload" /><span><b>{fileName || "选择代码文件"}</b><small>{fileName ? `${Math.ceil(new Blob([sourceCode]).size / 1024)} KB · 可更换文件` : "支持 C++、C、Python、Java、Kotlin、Rust"}</small></span>
+      </label>
+      {error ? <p className="archive-submit-error">{error}</p> : null}
+      {status ? <p className="archive-submit-status">{status}</p> : null}
+      <footer><span>{extensionReady ? "v0.6 扩展已连接" : "未检测到扩展：仍会复制代码并打开 Gym"}</span><button type="button" onClick={() => void submit()}>打开并填写提交页 →</button></footer>
+    </section>
   </div>;
 }
 
@@ -144,7 +273,10 @@ function CuratedChineseStatement({ statement }: { statement: NonNullable<ReturnT
 
 export default function ProblemDetailPage() {
   const params = useParams<{ code: string }>();
+  const searchParams = useSearchParams();
   const requestedCode = decodeURIComponent(params.code ?? "1904C").replace(/^CF\s*/i, "").toUpperCase();
+  const archiveContest = findArchiveContest(searchParams.get("archive") || "");
+  const isGym = Boolean(archiveContest?.gymId && requestedCode.startsWith(String(archiveContest.gymId)));
   const curated = useMemo(() => findCuratedProblem(requestedCode), [requestedCode]);
   const importedStatement = useMemo(() => findImportedStatement(requestedCode), [requestedCode]);
   const [problem, setProblem] = useState<DisplayProblem>(() => curated ?? {
@@ -178,11 +310,14 @@ export default function ProblemDetailPage() {
   const [difficulty, setDifficulty] = useState<TrainingDifficulty>("right");
   const [trainingState, setTrainingState] = useState<"active" | "saving" | "saved" | "error">("active");
   const [vpContext, setVpContext] = useState<VpContext | null>(null);
-  const officialProblemUrl = `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
+  const [gymSubmitOpen, setGymSubmitOpen] = useState(false);
+  const officialProblemUrl = isGym
+    ? `https://codeforces.com/gym/${problem.contestId}/problem/${problem.index}`
+    : `https://codeforces.com/problemset/problem/${problem.contestId}/${problem.index}`;
 
   const refreshStatement = useCallback(async () => {
     try {
-      const next = await loadStatement(requestedCode);
+      const next = await loadStatement(requestedCode, isGym ? "gym" : "problemset");
       setStatement(next);
       setStatementError("");
       return next;
@@ -190,7 +325,7 @@ export default function ProblemDetailPage() {
       setStatementError(error instanceof Error ? error.message : "题面服务暂时不可用");
       return null;
     }
-  }, [requestedCode]);
+  }, [isGym, requestedCode]);
 
   const importWithExtension = useCallback(async () => {
     setStatementAction("正在请求浏览器扩展读取 Codeforces 原题");
@@ -359,12 +494,12 @@ export default function ProblemDetailPage() {
     window.postMessage({
       source: "icpc-trainer",
       type: "ICPC_TRAINER_SUBMIT",
-      payload: { contestId: problem.contestId, index: problem.index, languageLabel: "GNU C++20", sourceCode: code },
+      payload: { contestId: problem.contestId, index: problem.index, languageLabel: "GNU C++20", sourceCode: code, isGym },
     }, window.location.origin);
     setSubmitState("sending");
     if (submitTimeout.current) window.clearTimeout(submitTimeout.current);
     submitTimeout.current = window.setTimeout(() => setSubmitState("missing"), 1800);
-  }, [code, problem.contestId, problem.index]);
+  }, [code, isGym, problem.contestId, problem.index]);
 
   useEffect(() => {
     const shortcut = (event: KeyboardEvent) => {
@@ -393,10 +528,10 @@ export default function ProblemDetailPage() {
   return <AppShell active="题库">
     <div className="problem-page-head">
       <div><Link href={vpContext ? "/vp" : "/problem"}>← {vpContext ? "返回 VP" : "返回题库"}</Link><span>{ready ? "原题面已导入" : "首次打开自动导入"} · {problem.code}</span></div>
-      <div><a href={officialProblemUrl} target="_blank" rel="noreferrer">查看 Codeforces 原题 ↗</a><button className={favorite ? "saved" : ""} onClick={toggleFavorite}>☆ {favorite ? "已收藏" : "收藏"}</button></div>
+      <div><a href={officialProblemUrl} target="_blank" rel="noreferrer">查看 {isGym ? "Codeforces Gym" : "Codeforces"} 原题 ↗</a><button className={favorite ? "saved" : ""} onClick={toggleFavorite}>☆ {favorite ? "已收藏" : "收藏"}</button></div>
     </div>
     {vpContext ? <section className="vp-problem-banner"><div><b>VP · Problem {vpContext.slot}</b><span>题面、中文翻译与代码草稿均在站内；提交后榜单会自动更新。</span></div><Link href="/vp">返回实时榜单 →</Link></section> : null}
-    <section className="problem-workspace">
+    <section className={`problem-workspace${isGym ? " gym-statement-workspace" : ""}`}>
       <article className="statement-panel">
         <div className="statement-title">
           <div><span>{problem.code}</span><h1>{problem.title}</h1><p>{problem.titleZh}</p></div>
@@ -410,7 +545,7 @@ export default function ProblemDetailPage() {
             <span className={`statement-status status-${statement?.status || "loading"}`}><i />{status}</span>
           </div>
           {language === "original" ? statement?.originalHtml ? <CachedStatementView statement={statement} language="original" /> : <div className="statement-body statement-loading-card">
-            <div className="statement-loader" /><h2>正在导入原题面</h2><p>这是本题第一次打开。服务器会先尝试 Codeforces 与缓存数据源；若服务器访问受限，v0.4 浏览器扩展会读取公开题面并完成导入。</p>
+            <div className="statement-loader" /><h2>正在导入原题面</h2><p>这是本题第一次打开。服务器会先尝试 {isGym ? "Codeforces Gym" : "Codeforces 与缓存数据源"}；若服务器访问受限，v0.6 浏览器扩展会读取公开题面并完成导入。</p>
             {statementError ? <p className="statement-error">{statementError}</p> : null}
             <div className="hero-actions"><button className="button button-primary" onClick={() => void importWithExtension()} disabled={Boolean(statementAction)}>通过扩展重新导入</button><a className="button button-ghost" href={officialProblemUrl} target="_blank" rel="noreferrer">先打开原题完成验证 ↗</a></div>
           </div> : statement?.chineseHtml ? <CachedStatementView statement={statement} language="chinese" /> : importedStatement ? <CuratedChineseStatement statement={importedStatement} /> : <div className="statement-body statement-loading-card">
@@ -420,7 +555,7 @@ export default function ProblemDetailPage() {
           </div>}
         </> : tab === "提交记录" ? <div className="empty-state"><Icon name="history" /><h3>查看公开提交记录</h3><p>在「提交记录」输入 Codeforces Handle，即可同步最近提交与判题结果。</p><a className="button button-primary" href="/submissions">前往同步</a></div> : <div className="locked-editorial"><Icon name="spark" /><h3>解题导航</h3><p>{strategyByTag[problem.tags[0]] ?? "从约束范围反推目标复杂度，先写出朴素算法，再寻找可以复用的状态或单调性。"}</p><p>建议复杂度方向：根据 <b>{problem.tags.join(" / ")}</b> 标签选择对应模板，并使用样例和极端数据验证。</p><div className="hero-actions"><Link className="button button-primary" href="/templates">打开算法模板</Link><a className="button button-ghost" href={officialProblemUrl} target="_blank" rel="noreferrer">核对官方题面 ↗</a></div></div>}
       </article>
-      <aside className="code-panel">
+      {!isGym ? <aside className="code-panel">
         {trainingMode ? <section className="thinking-coach">
           <div className="thinking-coach-head"><div><span>THINKING MODE</span><h2>思维训练</h2></div><strong>{elapsedLabel}</strong></div>
           {trainingState === "saved" ? <div className="training-saved"><span>✓</span><div><b>本题训练已记录</b><small>后续推荐会区分独立完成、提示后完成和待补题。</small></div><Link href="/problem?recommended=1&mode=balanced&training=1">下一题 →</Link></div> : <>
@@ -435,7 +570,9 @@ export default function ProblemDetailPage() {
         <div className="editor-head"><div><span className="active-dot" /> main.cpp</div><select aria-label="编译语言"><option>GNU C++20</option></select></div>
         <textarea className="code-editor" value={code} onChange={(event) => setCode(event.target.value)} spellCheck={false} aria-label="C++ 代码编辑器" />
         <div className="editor-footer"><div><Link href="/templates">＋ 打开模板库</Link><span>草稿已自动保存</span></div><p className="submit-safety-note">扩展会打开 Codeforces 并预填代码；确认提交后，本场 VP 约 15 秒内更新判题和排名。</p>{submitState === "empty" ? <p className="statement-error" role="alert">请先填写代码。</p> : submitState === "missing" ? <p className="statement-error" role="alert">未检测到 v0.4 扩展，请安装或重新加载扩展后重试。</p> : null}<button className="submit-button" onClick={sendToExtension} disabled={submitState === "sending"}>{submitState === "sent" ? <><Icon name="check" /> 已打开提交页</> : submitState === "sending" ? <>正在连接扩展…</> : <>{vpContext ? "提交本题（打开 CF）" : "填充到 Codeforces"} <span>⌘ ↵</span></>}</button><a className="extension-help" href="/extension">尚未安装扩展？查看安装与使用说明 →</a></div>
-      </aside>
+      </aside> : null}
     </section>
+    {isGym && archiveContest ? <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择本地代码文件、题目和语言，自动打开 Codeforces Gym。</span></div><button type="button" onClick={() => setGymSubmitOpen(true)}>提交代码 →</button></section> : null}
+    {isGym && archiveContest && gymSubmitOpen ? <GymSubmitDialog contestId={archiveContest.gymId || problem.contestId} currentIndex={problem.index} problemCount={archiveContest.problemCount} titles={archiveContest.problemTitles} onClose={() => setGymSubmitOpen(false)} /> : null}
   </AppShell>;
 }

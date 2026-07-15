@@ -335,13 +335,23 @@ function deviceTranslationPreview(row, chineseHtml, images) {
   };
 }
 
-function upsertPending(parsed) {
+function statementSourceUrl(parsed, sourceKind, mirror = false) {
+  const host = mirror ? "mirror.codeforces.com" : "codeforces.com";
+  if (sourceKind === "gym") return `https://${host}/gym/${parsed.contestId}/problem/${parsed.index}`;
+  return `https://${host}/problemset/problem/${parsed.contestId}/${parsed.index}`;
+}
+
+function normalizeStatementSource(value) {
+  return String(value || "").toLowerCase() === "gym" ? "gym" : "problemset";
+}
+
+function upsertPending(parsed, sourceKind = "problemset") {
   const timestamp = now();
   db.prepare(`
-    INSERT INTO problem_statements (code, contest_id, problem_index, status, created_at, updated_at)
-    VALUES (?, ?, ?, 'importing', ?, ?)
+    INSERT INTO problem_statements (code, contest_id, problem_index, source_url, source_kind, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, 'importing', ?, ?)
     ON CONFLICT(code) DO NOTHING
-  `).run(parsed.code, parsed.contestId, parsed.index, timestamp, timestamp);
+  `).run(parsed.code, parsed.contestId, parsed.index, statementSourceUrl(parsed, sourceKind), sourceKind === "gym" ? "pending-gym" : "pending", timestamp, timestamp);
 }
 
 function saveOriginal(document) {
@@ -408,7 +418,7 @@ async function fetchDatasetRow(parsed) {
   return null;
 }
 
-async function importOriginal(parsed) {
+async function importOriginal(parsed, sourceKind = "problemset") {
   if (importJobs.has(parsed.code)) return importJobs.get(parsed.code);
   if (importJobs.size >= 32) {
     setStatus(parsed.code, "source_required", "题面导入队列繁忙，请稍后重试或使用浏览器扩展");
@@ -416,10 +426,8 @@ async function importOriginal(parsed) {
   }
   const job = (async () => {
     setStatus(parsed.code, "importing");
-    const urls = [
-      `https://codeforces.com/problemset/problem/${parsed.contestId}/${parsed.index}?locale=en`,
-      `https://mirror.codeforces.com/problemset/problem/${parsed.contestId}/${parsed.index}?locale=en`,
-    ];
+    const urls = [statementSourceUrl(parsed, sourceKind), statementSourceUrl(parsed, sourceKind, true)]
+      .map((url) => `${url}?locale=en`);
     for (const url of urls) {
       try {
         const page = await fetchText(url);
@@ -431,14 +439,14 @@ async function importOriginal(parsed) {
         // Codeforces may challenge datacenter IPs. The extension and dataset fallbacks handle this.
       }
     }
-    const row = await fetchDatasetRow(parsed);
+    const row = sourceKind === "gym" ? null : await fetchDatasetRow(parsed);
     if (row) {
       const document = datasetRowToStatement(row, parsed.code);
       saveOriginal(document);
       if (!queueTranslation(parsed.code)) setStatus(parsed.code, "ready_original", "原题面已就绪；中文翻译将在稍后开始");
       return document;
     }
-    setStatus(parsed.code, "source_required", "需要浏览器扩展读取 Codeforces 原题面");
+    setStatus(parsed.code, "source_required", `需要浏览器扩展读取 Codeforces ${sourceKind === "gym" ? "Gym " : ""}原题面`);
     return null;
   })().finally(() => importJobs.delete(parsed.code));
   importJobs.set(parsed.code, job);
@@ -880,13 +888,13 @@ async function translateHtml(originalHtml, sourceUrl) {
   return translatedHtml;
 }
 
-async function downloadImage(image, code) {
+async function downloadImage(image, code, referer) {
   const existing = db.prepare("SELECT id, content_type FROM statement_assets WHERE source_url = ? AND code = ? LIMIT 1").get(image.sourceUrl, code);
   if (existing) return { ...image, assetId: existing.id, contentType: existing.content_type };
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 30_000);
   try {
-    const response = await fetchCodeforcesResource(image.sourceUrl, { headers: { "User-Agent": USER_AGENT, Referer: `https://codeforces.com/problemset/problem/${code.replace(/([A-Z])/, "/$1")}` }, signal: controller.signal });
+    const response = await fetchCodeforcesResource(image.sourceUrl, { headers: { "User-Agent": USER_AGENT, Referer: referer }, signal: controller.signal });
     if (!response.ok) throw new Error(`图片 HTTP ${response.status}`);
     const contentType = String(response.headers.get("content-type") || "").split(";")[0].toLowerCase();
     if (!contentType.startsWith("image/")) throw new Error("资源不是图片");
@@ -930,7 +938,7 @@ async function translateStatement(code) {
     const originalImages = safeImages(row.images_json);
     const images = [];
     for (const image of originalImages.slice(0, 20)) {
-      try { images.push(await downloadImage(image, code)); }
+      try { images.push(await downloadImage(image, code, row.source_url)); }
       catch (error) { images.push({ ...image, error: error instanceof Error ? error.message : "图片缓存失败" }); }
     }
     db.prepare("UPDATE problem_statements SET images_json = ?, updated_at = ? WHERE code = ?").run(JSON.stringify(images), now(), code);
@@ -1102,7 +1110,7 @@ function codeFromSourceUrl(sourceUrl) {
   try {
     const url = new URL(sourceUrl);
     if (!/(^|\.)codeforces\.(com|org)$/.test(url.hostname.toLowerCase())) return null;
-    const match = url.pathname.match(/\/problem(?:set)?\/problem\/(\d+)\/([A-Z][0-9]?)/i);
+    const match = url.pathname.match(/\/(?:problem(?:set)?\/problem|gym)\/(\d+)(?:\/problem)?\/([A-Z][0-9]?)/i);
     return match ? `${match[1]}${match[2].toUpperCase()}` : null;
   } catch { return null; }
 }
@@ -1153,10 +1161,11 @@ export function createStatementHandler({ json, clientIp }) {
       if (request.method === "GET" && url.pathname === "/codeforces/statements") {
         const parsed = normalizeStatementCode(url.searchParams.get("code"));
         if (!parsed) return json(response, 400, { error: "题号格式无效" }), true;
+        const sourceKind = normalizeStatementSource(url.searchParams.get("source"));
         let row = statementRow(parsed.code);
         if (!row) {
-          upsertPending(parsed);
-          void importOriginal(parsed);
+          upsertPending(parsed, sourceKind);
+          void importOriginal(parsed, sourceKind);
           row = statementRow(parsed.code);
         } else if (row.original_html && (!row.chinese_html || Number(row.translation_version || 0) < TRANSLATION_VERSION)) {
           const queued = queueTranslation(parsed.code);
@@ -1164,8 +1173,12 @@ export function createStatementHandler({ json, clientIp }) {
             setStatus(parsed.code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在生成中文题面");
             row = statementRow(parsed.code);
           }
-        } else if (!row.original_html && row.status === "source_required" && now() - row.updated_at > 10 * 60_000) {
-          void importOriginal(parsed);
+        } else if (!row.original_html && row.status === "source_required"
+          && (sourceKind === "gym" && row.source_kind !== "pending-gym" || now() - row.updated_at > 10 * 60_000)) {
+          db.prepare("UPDATE problem_statements SET source_url = ?, source_kind = ?, status = 'importing', error = NULL, updated_at = ? WHERE code = ?")
+            .run(statementSourceUrl(parsed, sourceKind), sourceKind === "gym" ? "pending-gym" : "pending", now(), parsed.code);
+          void importOriginal(parsed, sourceKind);
+          row = statementRow(parsed.code);
         }
         return json(response, row?.original_html ? 200 : 202, { statement: publicStatement(row) }), true;
       }

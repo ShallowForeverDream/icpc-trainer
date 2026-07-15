@@ -95,7 +95,10 @@ export function parseCodeforcesStatement(pageHtml, sourceUrl, expectedCode) {
   if (!parsedCode) throw new Error("题号格式无效");
   const source = new URL(sourceUrl);
   if (!/(^|\.)codeforces\.(com|org)$/.test(source.hostname.toLowerCase())) throw new Error("题面来源域名无效");
-  if (!new RegExp(`/problem(?:set)?/problem/${parsedCode.contestId}/${parsedCode.index}(?:[/?#]|$)`, "i").test(source.pathname + source.search)) throw new Error("题面地址与题号不匹配");
+  const sourcePath = source.pathname + source.search;
+  const isProblemset = new RegExp(`/problem(?:set)?/problem/${parsedCode.contestId}/${parsedCode.index}(?:[/?#]|$)`, "i").test(sourcePath);
+  const isGym = new RegExp(`/gym/${parsedCode.contestId}/problem/${parsedCode.index}(?:[/?#]|$)`, "i").test(sourcePath);
+  if (!isProblemset && !isGym) throw new Error("题面地址与题号不匹配");
 
   const $ = load(String(pageHtml || ""));
   const statement = $(".problem-statement").first();
@@ -114,7 +117,7 @@ export function parseCodeforcesStatement(pageHtml, sourceUrl, expectedCode) {
     timeLimitText,
     memoryLimitText,
     sourceUrl,
-    sourceKind: "codeforces",
+    sourceKind: isGym ? "codeforces-gym" : "codeforces",
     originalHtml: sanitized.html,
     images: sanitized.images,
   };

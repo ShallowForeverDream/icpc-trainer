@@ -9,7 +9,8 @@ function trustedSender(sender) {
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (!trustedSender(sender)) return;
-  if (message?.type === "OPEN_CODEFORCES_SUBMIT" && /^https:\/\/codeforces\.com\/problemset\/submit/.test(message.url)) {
+  if (message?.type === "OPEN_CODEFORCES_SUBMIT"
+    && /^https:\/\/codeforces\.com\/(?:problemset\/submit(?:\?|$)|gym\/\d+\/submit(?:\?|$))/.test(message.url)) {
     chrome.tabs.create({ url: message.url });
     return;
   }
@@ -19,7 +20,8 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return;
   }
 
-  if (message?.type !== "FETCH_CODEFORCES_STATEMENT" || !/^https:\/\/codeforces\.com\/problemset\/problem\/\d+\/[A-Z][0-9]?(?:[/?#]|$)/.test(message.url)) return;
+  if (message?.type !== "FETCH_CODEFORCES_STATEMENT"
+    || !/^https:\/\/codeforces\.com\/(?:problemset\/problem\/\d+\/[A-Z][0-9]?|gym\/\d+\/problem\/[A-Z][0-9]?)(?:[/?#]|$)/.test(message.url)) return;
   (async () => {
     try {
       const response = await fetch(message.url, { credentials: "include", redirect: "follow", headers: { "Accept-Language": "en-US,en;q=0.9" } });

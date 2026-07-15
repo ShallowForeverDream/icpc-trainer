@@ -181,6 +181,8 @@ input,select,textarea{background:#fff!important;color:#3d3047!important;border-c
 .archive-sample-section .statement-sample pre{margin:0}
 .sample-copy{padding:6px 9px;border:1px solid #dfd0e4;border-radius:7px;background:#fff;color:#8557b4;font-size:11px;font-weight:750}
 .sample-copy:hover{border-color:#bd94d0;background:#fff8fc}
+.cf-statement-html .sample-test .section-title{display:flex;align-items:center;justify-content:space-between;gap:12px}.cf-statement-html .sample-test .sample-copy{margin:-3px -5px -3px auto;padding:5px 9px;font-size:11px}
+.problem-workspace.gym-statement-workspace{grid-template-columns:minmax(0,1fr)}.gym-statement-workspace .statement-panel{min-height:680px}
 .archive-submit-dock{display:flex;align-items:center;justify-content:space-between;gap:24px;max-width:1240px;margin:16px auto 0;padding:18px 20px;border:1px solid #e3d4e7;border-radius:14px;background:linear-gradient(135deg,#fff 0%,#fff8fc 52%,#f8f3ff 100%);box-shadow:0 12px 32px rgba(85,45,97,.07)}
 .archive-submit-dock>div{display:flex;flex-direction:column;gap:3px}.archive-submit-dock b{color:#49374f;font-size:16px}.archive-submit-dock span{color:#8a7890;font-size:12px}
 .archive-submit-dock>button{flex:none;padding:12px 22px;border:0;border-radius:10px;background:linear-gradient(135deg,#8758ce,#d96da9);box-shadow:0 9px 22px rgba(135,88,206,.2);color:#fff;font-size:14px;font-weight:800}

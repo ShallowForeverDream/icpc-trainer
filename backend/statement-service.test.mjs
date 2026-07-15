@@ -78,6 +78,24 @@ test("imports, sanitizes, and reads a first-open statement through HTTP", async 
     assert.equal(cached.statement.code, "2176C");
     assert.equal(cached.statement.images[0].sourceUrl, "https://codeforces.com/images/test.png");
 
+    const gymImportResponse = await fetch(`${baseUrl}/codeforces/statements/import`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", ...authorization },
+      body: JSON.stringify({
+        code: "105143A",
+        sourceUrl: "https://codeforces.com/gym/105143/problem/A?locale=en",
+        html: `<div class="problem-statement"><div class="header"><div class="title">A. Public Gym Problem</div><div class="time-limit">time limit per test 1 second</div><div class="memory-limit">memory limit per test 512 megabytes</div></div><div class="legend"><p>Read this Gym statement directly in icpc-trainer.</p></div><div class="input-specification"><div class="section-title">Input</div><p>One integer.</p></div><div class="output-specification"><div class="section-title">Output</div><p>Print it.</p></div></div>`,
+      }),
+    });
+    assert.equal(gymImportResponse.status, 201);
+    const gymStatement = (await gymImportResponse.json()).statement;
+    assert.equal(gymStatement.sourceKind, "codeforces-gym");
+    assert.match(gymStatement.sourceUrl, /\/gym\/105143\/problem\/A/);
+
+    const cachedGymResponse = await fetch(`${baseUrl}/codeforces/statements?code=105143A&source=gym`);
+    assert.equal(cachedGymResponse.status, 200);
+    assert.equal((await cachedGymResponse.json()).statement.title, "A. Public Gym Problem");
+
     const translationResponse = await fetch(`${baseUrl}/codeforces/statements/translation`, {
       method: "POST",
       headers: { "Content-Type": "application/json", ...authorization },

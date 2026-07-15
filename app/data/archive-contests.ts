@@ -22,7 +22,7 @@ export const archiveContests: ArchiveContest[] = [
     chineseStatementUrl: "https://sua.ac/wiki/2026-icpc-invitational-shenzhen/contest-zh.pdf",
   },
   { id: "2026-wuhan-invitational", year: 2026, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/51st/wuhan-invitational", problemCount: 13, qojContestId: 3799, qojProblemIds: [18428, 18429, 18430, 18431, 18432, 18433, 18434, 18435, 18436, 18437, 18438, 18439, 18440] },
-  { id: "2026-jiangxi-invitational", year: 2026, name: "ICPC 南昌全国邀请赛暨江西省赛", city: "南昌", type: "邀请赛", boardPath: "icpc/51st/jiangxi-invitational", problemCount: 13 },
+  { id: "2026-jiangxi-invitational", year: 2026, name: "CCPC 南昌全国邀请赛暨江西省赛", city: "南昌", type: "邀请赛", boardPath: "ccpc/12th/nanchang-invitational", problemCount: 13, gymId: 106554 },
   {
     id: "2026-shandong-provincial", year: 2026, name: "ICPC 山东省大学生程序设计竞赛", city: "山东", type: "省赛", boardPath: "provincial-contest/2026/shandong", problemCount: 13,
     qojContestId: 3767,
@@ -59,7 +59,7 @@ export const archiveContests: ArchiveContest[] = [
     qojProblemIds: [9422, 9423, 9424, 9425, 9426, 9427, 9428, 9429, 9430, 9431, 9432, 9433, 9434],
     problemTitles: ["Two-star Contest", "Gold Medal", "Stop the Castle 2", "Generated String", "Relearn through Review", "Collect the Coins", "Be Positive", "Subarray", "Left Shifting 2", "The Quest for El Dorado", "Permutation", "Trails", "Italian Cuisine"],
   },
-  { id: "2024-wuhan-invitational", year: 2024, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/49th/wuhan-invitational", problemCount: 13 },
+  { id: "2024-wuhan-invitational", year: 2024, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/49th/wuhan-invitational", problemCount: 13, gymId: 105143 },
   { id: "2024-nanjing", year: 2024, name: "ICPC 区域赛南京站", city: "南京", type: "区域赛", boardPath: "icpc/49th/nanjing", problemCount: 13, gymId: 105484 },
   { id: "2024-hangzhou", year: 2024, name: "ICPC 区域赛杭州站", city: "杭州", type: "区域赛", boardPath: "icpc/49th/hangzhou", problemCount: 13, gymId: 105657 },
   { id: "2024-chengdu", year: 2024, name: "ICPC 区域赛成都站", city: "成都", type: "区域赛", boardPath: "icpc/49th/chengdu", problemCount: 13, gymId: 105486 },

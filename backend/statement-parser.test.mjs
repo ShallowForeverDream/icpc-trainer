@@ -25,6 +25,23 @@ test("parses and sanitizes a Codeforces statement with images and samples", () =
   assert.doesNotMatch(result.originalHtml, /script|onerror|alert/);
 });
 
+test("parses a Codeforces Gym statement from its gym URL", () => {
+  const html = `<div class="problem-statement">
+    <div class="header"><div class="title">A. Gym Sample</div><div class="time-limit">time limit per test 1 second</div><div class="memory-limit">memory limit per test 512 megabytes</div></div>
+    <div class="legend"><p>This public Gym statement is readable on the trainer.</p></div>
+    <div class="input-specification"><div class="section-title">Input</div><p>One integer.</p></div>
+    <div class="output-specification"><div class="section-title">Output</div><p>Print it.</p></div>
+  </div>`;
+  const result = parseCodeforcesStatement(html, "https://codeforces.com/gym/105143/problem/A?locale=en", "105143A");
+  assert.equal(result.sourceKind, "codeforces-gym");
+  assert.equal(result.title, "A. Gym Sample");
+  assert.match(result.originalHtml, /public Gym statement/);
+});
+
+test("rejects a Gym URL whose contest does not match the requested code", () => {
+  assert.throws(() => parseCodeforcesStatement('<div class="problem-statement"><p>Enough statement text to parse safely.</p></div>', "https://codeforces.com/gym/105144/problem/A", "105143A"), /题面地址与题号不匹配/);
+});
+
 test("rejects remote images outside Codeforces", () => {
   const result = sanitizeStatementHtml('<p>Diagram</p><img src="https://evil.example/x.png">', "https://codeforces.com/problemset/problem/4/A");
   assert.equal(result.images.length, 0);

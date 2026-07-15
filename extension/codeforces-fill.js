@@ -1,7 +1,7 @@
 (async () => {
   const { pendingSubmission } = await chrome.storage.local.get("pendingSubmission");
   if (!pendingSubmission || Date.now() - pendingSubmission.createdAt > 30 * 60 * 1000) return;
-  if (!Number.isInteger(pendingSubmission.contestId) || !/^[A-Z][0-9]?$/.test(pendingSubmission.index) || typeof pendingSubmission.sourceCode !== "string" || !pendingSubmission.sourceCode.trim() || pendingSubmission.sourceCode.length > 500_000) {
+  if (!Number.isInteger(pendingSubmission.contestId) || !/^[A-Z][0-9]?$/.test(pendingSubmission.index) || typeof pendingSubmission.sourceCode !== "string" || !pendingSubmission.sourceCode.trim() || pendingSubmission.sourceCode.length > 500_000 || (pendingSubmission.isGym !== undefined && typeof pendingSubmission.isGym !== "boolean")) {
     await chrome.storage.local.remove("pendingSubmission");
     return;
   }

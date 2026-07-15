@@ -3,7 +3,7 @@ import { AppShell, Icon, Pill } from "../components/AppShell";
 export default function ExtensionPage() {
   return <AppShell active="提交扩展">
     <section className="extension-hero">
-      <div><span className="eyebrow"><span className="live-dot" /> CHROME / EDGE · MANIFEST V3</span><h1>选择代码文件，<br /><em>直接预填官方提交页。</em></h1><p>支持 Codeforces 与 Universal Cup / QOJ。题目、语言和代码会自动填入，最终提交始终由你确认。</p><div className="hero-actions"><a className="button button-primary" href="/icpc-trainer-extension.zip" download><Icon name="spark" /> 下载扩展包 v0.5</a><a className="button button-ghost" href="https://contest.ucup.ac/" target="_blank" rel="noreferrer">打开 Universal Cup ↗</a></div></div>
+      <div><span className="eyebrow"><span className="live-dot" /> CHROME / EDGE · MANIFEST V3</span><h1>选择代码文件，<br /><em>直接预填官方提交页。</em></h1><p>支持 Codeforces、Codeforces Gym 与 Universal Cup / QOJ。题目、语言和代码会自动填入，最终提交始终由你确认。</p><div className="hero-actions"><a className="button button-primary" href="/icpc-trainer-extension.zip" download><Icon name="spark" /> 下载扩展包 v0.6</a><a className="button button-ghost" href="https://contest.ucup.ac/" target="_blank" rel="noreferrer">打开 Universal Cup ↗</a></div></div>
       <div className="extension-flow"><div><b>01</b><span>选择本地代码文件</span><Pill>不设站内编辑器</Pill></div><i>→</i><div><b>02</b><span>选择题目与语言</span><Pill>自动识别</Pill></div><i>→</i><div><b>03</b><span>预填官方提交页</span><Pill>手动确认</Pill></div></div>
     </section>
     <section className="install-grid">

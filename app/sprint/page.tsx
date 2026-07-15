@@ -39,6 +39,8 @@ const SPRINT_LOCAL_KEY = "icpc-trainer-shenyang-sprint";
 const sprintContestIds = [
   "2025-shenyang",
   "2024-shenyang",
+  "2023-shenyang",
+  "2022-shenyang",
   "2025-chengdu",
   "2025-nanjing",
   "2025-wuhan",
@@ -49,7 +51,7 @@ const sprintContestIds = [
 const sprintContests = sprintContestIds
   .map((id) => archiveContests.find((contest) => contest.id === id))
   .filter((contest): contest is ArchiveContest => Boolean(contest && archiveContestIntegrated(contest)));
-const contestCycle = ["2025-shenyang", "2024-shenyang", "2025-shenyang", "2025-chengdu", "2024-shenyang", "2025-nanjing"];
+const contestCycle = ["2025-shenyang", "2024-shenyang", "2023-shenyang", "2025-shenyang", "2022-shenyang", "2025-chengdu", "2024-shenyang", "2025-nanjing"];
 
 function dateKey(date = new Date()) {
   return `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, "0")}-${String(date.getDate()).padStart(2, "0")}`;

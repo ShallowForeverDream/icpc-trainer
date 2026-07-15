@@ -28,6 +28,7 @@ type ScoreboardPayload = {
 type MyAttempt = { wrong: number; solvedAt?: number };
 type ArchiveSubmission = { id: string; slot: string; verdict: "WA" | "AC"; atSeconds: number };
 type ArchiveRoomTab = "problems" | "standings" | "submissions";
+type ArchiveYearFilter = 2024 | 2025 | 2026 | "past";
 type VpMedal = "gold" | "silver" | "bronze" | null;
 type ArchiveFinalResult = { rank: number; teamCount: number; solved: number; penalty: number; lastSolvedMinutes: number | null; medal: VpMedal };
 type Session = { id?: string; contestId: string; startedAt?: number; finishedAt?: number; reveal: boolean; group: string; myTeam: string; attempts: Record<string, MyAttempt>; submissions?: ArchiveSubmission[]; finalResult?: ArchiveFinalResult };
@@ -102,7 +103,7 @@ function medalForRank(rank: number, teamCount: number): VpMedal {
 const medalText: Record<Exclude<VpMedal, null>, string> = { gold: "金奖", silver: "银奖", bronze: "铜奖" };
 
 export default function ArchiveVpPage() {
-  const [year, setYear] = useState<2024 | 2025 | 2026>(2026);
+  const [year, setYear] = useState<ArchiveYearFilter>(2026);
   const [type, setType] = useState("全部");
   const [query, setQuery] = useState("");
   const [session, setSession] = useState<Session | null>(null);
@@ -291,7 +292,7 @@ export default function ArchiveVpPage() {
     return () => { active = false; unsubscribe(); };
   }, []);
 
-  const filteredContests = useMemo(() => archiveContests.filter((contest) => contest.year === year && (type === "全部" || contest.type === type) && (!query.trim() || `${contest.name}${contest.city}`.toLowerCase().includes(query.trim().toLowerCase()))), [query, type, year]);
+  const filteredContests = useMemo(() => archiveContests.filter((contest) => (year === "past" ? contest.year <= 2023 : contest.year === year) && (type === "全部" || contest.type === type) && (!query.trim() || `${contest.name}${contest.city}`.toLowerCase().includes(query.trim().toLowerCase()))), [query, type, year]);
 
   const combinedRows = useMemo(() => {
     if (!scoreboard || !session) return [];
@@ -383,7 +384,7 @@ export default function ArchiveVpPage() {
       <Link className="button button-ghost" href="/vp">返回常规 VP</Link>
     </section>
     <section className="archive-filters">
-      <div className="segmented">{([2026, 2025, 2024] as const).map((value) => <button key={value} className={year === value ? "active" : ""} onClick={() => setYear(value)}>{value}</button>)}</div>
+      <div className="segmented">{([2026, 2025, 2024, "past"] as const).map((value) => <button key={value} className={year === value ? "active" : ""} onClick={() => setYear(value)}>{value === "past" ? "往届" : value}</button>)}</div>
       <div className="segmented">{["全部", "邀请赛", "省赛", "区域赛", "东亚决赛"].map((value) => <button key={value} className={type === value ? "active" : ""} onClick={() => setType(value)}>{value}</button>)}</div>
       <input aria-label="搜索赛事" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索城市或赛事" />
     </section>

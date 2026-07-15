@@ -189,7 +189,7 @@ export default function Home() {
     </section>
 
     <section className="sprint-home-banner">
-      <div><span>7 月底目标</span><h2>沈阳邀请赛冲刺</h2><p>优先完成 2025、2024 沈阳站真题 VP，再穿插近年区域赛。</p></div>
+      <div><span>7 月底目标</span><h2>沈阳邀请赛冲刺</h2><p>优先完成 2022–2025 沈阳站真题 VP，再穿插近年同强度区域赛。</p></div>
       <div className="sprint-home-problems">{["A", "B", "C", "D"].map((slot) => {
         const contest = archiveContests.find((item) => item.id === "2025-shenyang");
         const solved = platformSubmissions.some((item) => item.archiveContestId === contest?.id && item.slot === slot && (item.status === "accepted" || item.verdict === "AC"));

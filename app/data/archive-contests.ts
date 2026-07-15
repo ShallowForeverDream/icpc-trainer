@@ -1,6 +1,6 @@
 export type ArchiveContest = {
   id: string;
-  year: 2024 | 2025 | 2026;
+  year: 2022 | 2023 | 2024 | 2025 | 2026;
   name: string;
   city: string;
   type: "邀请赛" | "省赛" | "区域赛" | "东亚决赛";
@@ -113,6 +113,19 @@ export const archiveContests: ArchiveContest[] = [
     qojContestId: 1894,
     qojProblemIds: [9975, 9976, 9977, 9978, 9979, 9980, 9981, 9982, 9983, 9984, 9985, 9986],
     problemTitles: ["Hitoshizuku", "Guess the Polygon 2", "Norte da Universidade", "Keystone Correction", "Corrupted Scoreboard Log", "Boolean Function Reconstruction", "Collatz Conjecture", "Staircase Museum", "Color-Balanced Tree", "The Mysterious Shop", "Exploration Boundary", "Shiori"],
+  },
+
+  {
+    id: "2023-shenyang", year: 2023, name: "ICPC 区域赛沈阳站", city: "沈阳", type: "区域赛", boardPath: "icpc/48th/shenyang", problemCount: 13, gymId: 104869,
+    qojContestId: 1449,
+    qojProblemIds: [7777, 7778, 7779, 7780, 7781, 7782, 7783, 7784, 7785, 7786, 7787, 7788, 7789],
+    problemTitles: ["Intro: Dawn of a New Era", "Turning Permutation", "Swiss Stage", "Dark LaTeX vs. Light LaTeX", "Sheep Eat Wolves", "Ursa Minor", "Military Maneuver", "Line Graph Sequence", "Three Rectangles", "Graft and Transplant", "Maximum Rating", "Rook Detection", "Outro: True Love Waits"],
+  },
+  {
+    id: "2022-shenyang", year: 2022, name: "ICPC 区域赛沈阳站", city: "沈阳", type: "区域赛", boardPath: "icpc/47th/shenyang", problemCount: 13, gymId: 104160,
+    qojContestId: 1096,
+    qojProblemIds: [5433, 5434, 5435, 5436, 5437, 5438, 5439, 5440, 5441, 5442, 5443, 5444, 5445],
+    problemTitles: ["Absolute Difference", "Binary Substrings", "Clamped Sequence", "DRX vs. T1", "Graph Completing", "Half Mixed", "Meet in the Middle", "P-P-Palindrome", "Quartz Collection", "Referee Without Red", "Security at Museums", "Tavern Chess", "Vulpecula"],
   },
 ];
 

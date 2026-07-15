@@ -54,6 +54,8 @@ test("ships an automatic Shenyang sprint loop driven by persistent submissions",
   assert.match(page, /站内题面 · 中文切换 · 直接提交/);
   assert.match(page, /由平台自动记录/);
   assert.match(page, /查看代码与评测记录/);
+  assert.match(page, /"2023-shenyang"/);
+  assert.match(page, /"2022-shenyang"/);
   assert.doesNotMatch(page, /toggleTask/);
   assert.match(backend, /shenyang-sprint/);
 
@@ -314,7 +316,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
     readFile(new URL("app/lib/archive-scoreboard.ts", root), "utf8"),
     readFile(new URL("backend/archive-scoreboards.mjs", root), "utf8"),
   ]);
-  assert.equal((catalog.match(/boardPath: "icpc\//g) ?? []).length, 23);
+  assert.equal((catalog.match(/boardPath: "icpc\//g) ?? []).length, 25);
   assert.equal((catalog.match(/boardPath: "ccpc\//g) ?? []).length, 1);
   assert.equal((catalog.match(/boardPath: "provincial-contest\//g) ?? []).length, 2);
   assert.match(catalog, /2026-shandong-provincial/);
@@ -332,6 +334,10 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /2026-wuhan-invitational/);
   assert.match(catalog, /2025-chengdu/);
   assert.match(catalog, /2024-nanjing/);
+  assert.match(catalog, /id: "2023-shenyang"[\s\S]*boardPath: "icpc\/48th\/shenyang"[\s\S]*gymId: 104869/);
+  assert.match(catalog, /qojProblemIds: \[7777, 7778, 7779/);
+  assert.match(catalog, /id: "2022-shenyang"[\s\S]*boardPath: "icpc\/47th\/shenyang"[\s\S]*gymId: 104160/);
+  assert.match(catalog, /qojProblemIds: \[5433, 5434, 5435/);
   assert.match(catalog, /gymId: 105143/);
   assert.match(catalog, /gymId: 106554/);
   assert.match(page, /同时间轴真实榜单/);
@@ -351,6 +357,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(page, /finishedAt/);
   assert.match(page, /archive-vp-history/);
   assert.match(page, /我的历届 VP/);
+  assert.match(page, /value === "past" \? "往届"/);
   assert.match(page, /继续 VP/);
   assert.match(page, /题面与提交已接入/);
   assert.doesNotMatch(page, />\+ WA</);
@@ -399,6 +406,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(html, /历届补题/);
   assert.match(html, /ICPC 武汉全国邀请赛/);
   assert.match(html, /省赛/);
+  assert.match(html, /往届/);
 
   const problemResponse = await render("/vp/archive/problem?contest=2026-shenzhen-invitational&slot=A");
   assert.equal(problemResponse.status, 200);

@@ -1,0 +1,97 @@
+{
+  "contestId": "2025-shenyang",
+  "officialChinese": true,
+  "problems": [
+    {
+      "slot": "A",
+      "problemId": 14940,
+      "titleEn": "Square Kingdom",
+      "titleZh": "平方王国",
+      "path": "/archive-statements/2025-shenyang/A.json"
+    },
+    {
+      "slot": "B",
+      "problemId": 14941,
+      "titleEn": "Buggy Painting Software I",
+      "titleZh": "出 Bug 的绘画软件 I",
+      "path": "/archive-statements/2025-shenyang/B.json"
+    },
+    {
+      "slot": "C",
+      "problemId": 14942,
+      "titleEn": "Buggy Painting Software II",
+      "titleZh": "出 Bug 的绘画软件 II",
+      "path": "/archive-statements/2025-shenyang/C.json"
+    },
+    {
+      "slot": "D",
+      "problemId": 14943,
+      "titleEn": "LED Display Renovation",
+      "titleZh": "LED 显示器翻新",
+      "path": "/archive-statements/2025-shenyang/D.json"
+    },
+    {
+      "slot": "E",
+      "problemId": 14944,
+      "titleEn": "Play It by Ear",
+      "titleZh": "出奇制胜",
+      "path": "/archive-statements/2025-shenyang/E.json"
+    },
+    {
+      "slot": "F",
+      "problemId": 14945,
+      "titleEn": "The Bond Beyond Time",
+      "titleZh": "友谊地久天长",
+      "path": "/archive-statements/2025-shenyang/F.json"
+    },
+    {
+      "slot": "G",
+      "problemId": 14946,
+      "titleEn": "Collision Damage",
+      "titleZh": "碰撞伤害",
+      "path": "/archive-statements/2025-shenyang/G.json"
+    },
+    {
+      "slot": "H",
+      "problemId": 14947,
+      "titleEn": "Cute Young Diagram Counting",
+      "titleZh": "可爱的杨图计数",
+      "path": "/archive-statements/2025-shenyang/H.json"
+    },
+    {
+      "slot": "I",
+      "problemId": 14948,
+      "titleEn": "Volunteer Simulator",
+      "titleZh": "志愿者模拟器",
+      "path": "/archive-statements/2025-shenyang/I.json"
+    },
+    {
+      "slot": "J",
+      "problemId": 14949,
+      "titleEn": "The Echoes of Chronos",
+      "titleZh": "时痕回响",
+      "path": "/archive-statements/2025-shenyang/J.json"
+    },
+    {
+      "slot": "K",
+      "problemId": 14950,
+      "titleEn": "Relay Jump",
+      "titleZh": "接力跳",
+      "path": "/archive-statements/2025-shenyang/K.json"
+    },
+    {
+      "slot": "L",
+      "problemId": 14951,
+      "titleEn": "Leo",
+      "titleZh": "狮子座",
+      "path": "/archive-statements/2025-shenyang/L.json"
+    },
+    {
+      "slot": "M",
+      "problemId": 14952,
+      "titleEn": "The End?",
+      "titleZh": "大结局？",
+      "path": "/archive-statements/2025-shenyang/M.json"
+    }
+  ]
+}

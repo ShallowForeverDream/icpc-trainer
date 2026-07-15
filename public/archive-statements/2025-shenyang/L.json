@@ -1,0 +1,223 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "L",
+  "problemId": 14951,
+  "titleEn": "Leo",
+  "titleZh": "狮子座",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14951&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14951&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      23,
+      24
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14951?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In a future where digital logic has evolved beyond binary, a new system of signal processing, known as tri-color logic, has become the standard. This system defines four fundamental states in two categories:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Colored: There are three colored states, denoted by R (Red), G (Green), and B (Blue), respectively. Each serves as a distinguishable “on” state, analogous to the traditional logic 1 signal.",
+              "Colorless: The only colorless state is denoted by ∗ (Transparent). It serves as an “off” state, analogous to the traditional logic 0 signal."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Sulfox the fennec fox is designing a computing device based on tri-color logic technology, named Leo. It employs a simple combinational logic architecture, so we can regard it as a directed acyclic graph in which each node holds a state from the set {R, G, B, ∗}. After fixing the machine’s input scale to n, the graph is constructed as follows:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Nodes 1, 2,..., n are input nodes, whose states should be given as the input to the machine. Input nodes have no predecessors.",
+              "Nodes n + 1, n + 2,..., n + m are internal nodes, whose states are computed based on the states of two predecessors, where the two predecessors of each internal node may be the same and are chosen from nodes with indices strictly less than its own. To ensure the machine’s operating speed, m (the number of internal nodes) must not exceed 6n.",
+              "The internal node n + m is also the only output node, whose state is the output of the machine."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Every internal node is of exactly one of the following two types, depending on how it combines the signals from its two predecessors:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Tri-Color AND: If the states of its predecessors are identical, its own state will be that same state. If they differ, its own state will be ∗.",
+              "Tri-Color OR: If the states of its predecessors are identical, its own state will be that same state. If one predecessor’s state is ∗ while the other’s is colored, its own state will be the colored one. If they differ and both are colored, its own state will be the colored state that is different from both."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "With everything prepared, we now specify Leo’s intended functionality. The states given to the n input nodes will be guaranteed to contain at least one occurrence of each of R, G, and B, where ∗ may appear any number (possibly zero) of times."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For every such input, the state of the output node n + m must be identical to the third distinct colored state encountered when examining the input nodes from node 1 to node n (ignoring all ∗). In other words, among R, G, and B it must output the colored state whose first occurrence has the largest index."
+          },
+          {
+            "kind": "paragraph",
+            "text": "To verify your design, the judge generates $\\left\\lceil\\frac{10^7}{n}\\right\\rceil$ valid inputs for each test. Your solution passes if Leo produces the required output for every one of them."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The only line contains an integer n (3 ≤ n ≤ $10^{5}$ ), denoting the number of input nodes."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In the first line, output an integer m (1 ≤ m ≤ 6n), denoting the number of internal nodes in your design. Then output m lines, the i-th line containing a character ti (ti ∈ { ‘&’, ‘|’ }) and two integers ui and vi (1 ≤ ui, vi < n + i), denoting the type of the internal node n + i and the indices of its two predecessors, where ‘&’ represents the tri-color AND type and ‘|’ represents the tri-color OR type. If there are multiple designs, you may output any of them. Note that you do not have to minimize m."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "It can be proven that the design in the sample case can always find the third encountered distinct colored state for every valid input of n = 4. For example, the figure below illustrates the machine’s computation for the input “RGRB”:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "The figure below illustrates the machine’s computation for the input “BRG∗”:"
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在数字逻辑已然超脱于二进制的未来，一种被称为三色逻辑的全新信号处理系统已成为标准。该系统分两类定义了的四种基本状态："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "有色：有三种不同的有色状态，分别表示为R (红色)、G (绿色)和B (蓝色)。每种有色状态都可作为一种可区分的“开”状态，类似于传统逻辑中的1信号。",
+              "无色：唯一的无色状态表示为∗(透明)。它可作为一种“关”状态，类似于传统逻辑中的0信号。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "耳廓狐亚砜正在设计一款基于三色逻辑技术的计算设备，其名为Leo（狮子座）。它采用简单的组合逻辑结构，因此我们可以将其视为一个有向无环图，其中每个节点都持有一个来自集合{R,G,B,∗}的状态。在将机器的输入规模固定为n后，该图按如下方式构造："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "节点1,2,...,n是输入节点，其状态将作为机器的输入给出。输入节点没有前驱。",
+              "节点n+1,n+2,...,n+m是内部节点，其状态由两个前驱的状态计算得出。每个内部节点的两个前驱可以相同，且从标号严格小于其自身标号的节点中选择。为保证机器的运行速度，m (内部节点的数量)不得超过6n。",
+              "内部节点n+m同时也是唯一的输出节点，其状态即为机器的输出。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "每个内部节点都恰好是以下两种类型之一，具体取决于它如何组合其两个前驱的信号："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "三色AND：若其前驱的状态相同，则自身状态也为该状态。若状态不同，则自身状态为∗。",
+              "三色OR：若其前驱的状态相同，则自身状态也为该状态。若一个前驱的状态为∗而另一个为有色状态，则自身状态为该有色状态。若两个前驱的状态不同且均为有色状态，则自身状态为与这两个状态都不同的那个有色状态。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "为检验设计的正确性，每个测试点会生成 $\\left\\lceil\\frac{10^7}{n}\\right\\rceil$ 组合法输入。若 Leo 对所有输入均输出预期结果，你的方案即通过该测试点。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "仅有的一行包含一个整数n (3≤n≤$10^{5}$)，表示输入节点的个数。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行中输出一个整数m (1≤m≤6n)，表示你的设计里内部节点的数量。然后输出m行，第i行包含一个字符ti (ti∈{‘&’,‘|’})和两个整数ui和vi (1≤ui,vi<n+i)，表示内部节点n+i的类型及其两个前驱的标号。其中‘&’代表三色AND类型，‘|’代表三色OR类型。若存在多种设计方案，你可以输出任意一种。注意，你不需要最小化m的值。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "可以证明，对于n=4的任意合法输入，样例中给出的设计总能找到遇到的第三种不同的有色状态。例如，下图展示了机器对输入“RGRB”的计算过程："
+          },
+          {
+            "kind": "paragraph",
+            "text": "下图展示了机器对输入“BRG∗”的计算过程："
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "4",
+    "output": "5\n| 1 2\n& 3 5\n| 4 6\n& 4 7\n| 6 8",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "4",
+      "output": "5\n| 1 2\n& 3 5\n| 4 6\n& 4 7\n| 6 8",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2025-shenyang/assets/L-1.png",
+      "captionEn": "Leo evaluates the input RGRB",
+      "captionZh": "Leo 处理输入 RGRB 的过程",
+      "imageTextZh": "input 表示输入，output 表示输出，OR 表示三色 OR 节点。"
+    },
+    {
+      "src": "/archive-statements/2025-shenyang/assets/L-2.png",
+      "captionEn": "Leo evaluates the input BRG*",
+      "captionZh": "Leo 处理输入 BRG∗ 的过程",
+      "imageTextZh": "input 表示输入，output 表示输出，OR 表示三色 OR 节点，∗ 表示透明状态。"
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

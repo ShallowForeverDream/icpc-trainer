@@ -1,0 +1,257 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "D",
+  "problemId": 14943,
+  "titleEn": "LED Display Renovation",
+  "titleZh": "LED 显示器翻新",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14943&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14943&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      7,
+      8
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14943?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "You have an LED display capable of showing an n-digit integer, where each digit is represented using the standard 7-segment layout."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Initially, each of the 7 digit segments in every digit block may be in one of three states:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Functional (denoted by ‘W’): behaves correctly, i.e., it lights up or turns off as required by the digit being displayed;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Stuck ON (denoted by ‘1’): always lit regardless of the digit being displayed;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Stuck OFF (denoted by ‘0’): always unlit regardless of the digit being displayed."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "You can renovate at most k digit segments, i.e., convert at most k digit segments into functional. You need to maximize the number of integers that can be correctly displayed and find the number of ways to achieve the maximum. Note that you can renovate digit segments that are initially functional, and each digit segment can be renovated at most once."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Two ways of renovation are considered different if there is at least one digit segment that is renovated in one way but not in the other. An integer is correctly displayed if and only if:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "It has no leading zeros, unless the integer is exactly 0;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "It is right-aligned on the display: if the integer has d (1 ≤ d ≤ n) digits, then only the rightmost d digit blocks are used, and the leftmost (n − d) blocks should be left blank and show nothing;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "For each of the d used digit blocks, all 7 digit segments match the target digit’s display pattern when functional segments show the correct state for that digit and faulty segments remain stuck in their state."
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains an integer T (1 ≤ T ≤ 100), denoting the number of test cases. For each test case: The first line contains two integers n (1 ≤ n ≤ 9) and k (0 < k < 7n), denoting the number of digits the LED display can show and the number of digit segments you can repair."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The next 7 lines each contain a string of exactly (5n − 1) characters, describing the initial state of the LED display in the form of an ASCII image. The display consists of n digit blocks, each occupying 4 columns, separated by single-column gaps."
+          },
+          {
+            "kind": "paragraph",
+            "text": "All digit segments are represented by two identical characters of ‘W’, ‘0’, or ‘1’, and all other positions are filled with the character ‘.’ that are purely for formatting. See the sample input and the notes for details."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output a line containing two integers, denoting the maximum number of integers that can be correctly displayed by renovating at most k digit segments, as well as the number of ways to achieve the maximum."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In each digit block of the LED display in the form of an ASCII image, the digit segments are as follows:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Segment Part Positions (row, column) 0 Top horizontal (1, 2), (1, 3) 1 Upper-left vertical (2, 1), (3, 1) 2 Upper-right vertical (2, 4), (3, 4) 3 Middle horizontal (4, 2), (4, 3) 4 Lower-left vertical (5, 1), (6, 1) 5 Lower-right vertical (5, 4), (6, 4) 6 Bottom horizontal (7, 2), (7, 3)"
+          },
+          {
+            "kind": "paragraph",
+            "text": "The display patterns for digits 0, 1, 2,..., 9 (1 = lit, 0 = unlit) are as follows:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Digit Pattern (segments 0, 1, 2,..., 6) Explanation 0 1110111 All except middle 1 0010010 Upper-right and lower-right 2 1011101 Top, upper-right, middle, lower-left, and bottom 3 1011011 Top, upper-right, middle, lower-right, and bottom 4 0111010 Upper-left, upper-right, middle, and lower-right 5 1101011 Top, upper-left, middle, lower-right, and bottom 6 1101111 All except upper-right 7 1010010 Top, upper-right, and lower-right 8 1111111 All segments 9 1111011 All except lower-left"
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "你有一个能够显示n位整数的LED显示器，每位数字均采用标准的7段显示布局。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "开始时，每个数字块中的7个数字段可能处于三种状态之一："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "正常（用‘W’表示）：表现正确，即根据显示的数字点亮或熄灭；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "常亮（用‘1’表示）：无论显示什么数字，始终点亮；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "常灭（用‘0’表示）：无论显示什么数字，始终熄灭。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "你可以翻新最多k个数字段，也就是转换最多k个数字段为正常状态。你需要最大化可以正确显示的整数数量，并计算得到最大值的方案数。请注意，你可以翻新开始时就处于正常状态的数字段，每个数字段最多可以被翻新一次，两种翻新方案不同当且仅当存在至少一个数字段在一种方案中被翻新而在另一种方案中未被翻新。一个整数被正确显示当且仅当："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "除非整数恰好为0，否则不能有前导零；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在显示器上右对齐：如果整数有d (1≤d≤n)位，则仅使用最右侧的d个数字块，最左侧的(n−d)个块应留空且不显示任何内容；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "对于每个使用的d个数字块，当正常段显示该数字的正确状态且故障段保持其状态时，所有7个数字段都符合目标数字的显示模式。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤100)，表示测试数据的组数。对于每组测试数据：第一行包含两个整数n (1≤n≤9)和k (0<k<7n)，表示LED显示器可以显示的数字位数，以及你可以翻新的数字段数量。接下来的7行每行包含一个恰好(5n−1)个字符的字符串，以ASCII图像的形式描述LED显示器的初始状态。显示器由n个数字块组成，每个占用4列，由单列间隙分隔。所有数字段由两个相同的字符‘W’、‘0’或‘1’表示，所有其他位置用字符‘.’填充，仅用于格式化。有关详细信息，请参见示例输入和说明。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据，输出一行包含两个整数，表示通过翻新最多k个数字段时可以正确显示的整数的最大数量，以及得到最大值的方案数。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在以ASCII图像的形式描述LED显示器的每个数字块中，数字段的分布如下："
+          },
+          {
+            "kind": "paragraph",
+            "text": "段部分位置（行，列）0顶部水平段(1,2),(1,3) 1左上竖直段(2,1),(3,1) 2右上竖直段(2,4),(3,4) 3中间水平段(4,2),(4,3) 4左下竖直段(5,1),(6,1) 5右下竖直段(5,4),(6,4) 6底部水平段(7,2),(7,3)"
+          },
+          {
+            "kind": "paragraph",
+            "text": "数字0,1,2,...,9的显示模式（‘1’=点亮，‘0’=熄灭）如下："
+          },
+          {
+            "kind": "paragraph",
+            "text": "数字模式（段0,1,2,...,6）解释0 1110111除了中间段1 0010010右上段和右下段2 1011101顶部、右上、中间、左下、底部段3 1011011顶部、右上、中间、右下、底部段4 0111010左上、右上、中间、右下段5 1101011顶部、左上、中间、右下、底部段6 1101111除了右上段7 1010010顶部、右上、右下段8 1111111所有段9 1111011除了左下段"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\n3 2\n.00...00...00.\n0..0.0..0.0..1\n0..0.0..0.0..1\n.00...00...00.\n0..W.0..0.0..1\n0..W.0..0.0..1\n.00...00...00.\n9 62\n.WW...WW...WW...WW...WW...WW...WW...WW...WW.\nW..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W\nW..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W\n.WW...WW...WW...WW...WW...WW...WW...WW...WW.\nW..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W\nW..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W\n.WW...WW...WW...WW...WW...WW...WW...WW...WW.",
+    "output": "2 23\n1000000000 9223372036854775807",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2\n3 2\n.00...00...00.\n0..0.0..0.0..1\n0..0.0..0.0..1\n.00...00...00.\n0..W.0..0.0..1\n0..W.0..0.0..1\n.00...00...00.\n9 62\n.WW...WW...WW...WW...WW...WW...WW...WW...WW.\nW..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W\nW..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W\n.WW...WW...WW...WW...WW...WW...WW...WW...WW.\nW..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W\nW..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W.W..W\n.WW...WW...WW...WW...WW...WW...WW...WW...WW.",
+      "output": "2 23\n1000000000 9223372036854775807",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2025-shenyang/assets/D-1.png",
+      "captionEn": "Standard seven-segment display layout",
+      "captionZh": "标准七段数码管布局",
+      "imageTextZh": null
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

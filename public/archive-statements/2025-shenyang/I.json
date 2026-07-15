@@ -1,0 +1,134 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "I",
+  "problemId": 14948,
+  "titleEn": "Volunteer Simulator",
+  "titleZh": "志愿者模拟器",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14948&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14948&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      17,
+      17
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14948?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In an ICPC contest, there are multiple problems, and the contest lasts for a long duration. There are n accepted submissions in total, each representing a successful attempt by a team on a problem. When a team makes an accepted submission for a problem, we say that the team has solved that problem."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Note that if a team submits multiple accepted solutions for the same problem, only the first such submission is considered as solving the problem for the first time. You need to determine for each submission whether a balloon should be awarded according to the following rules:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Before the scoreboard freeze (submission time < 240 minutes): when a team solves a problem for the first time, award a balloon corresponding to that problem."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "After the scoreboard freeze (submission time ≥ 240 minutes): when a team solves a problem for the first time, award a balloon corresponding to that problem if and only if the team has received strictly fewer than 3 balloons in total so far."
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of input contains n (1 ≤ n ≤ 5 000), denoting the number of accepted submissions. The next n lines describe the submissions in chronological order. Each submission contains three integers a (1 ≤ a ≤ 410), b (1 ≤ b ≤ 13), and c (0 ≤ c < 300), representing the team ID, the problem ID, and the submission time in minutes, respectively. It is guaranteed that the submission times are non-decreasing."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each submission, output the problem ID if a balloon corresponding to that problem should be awarded, or otherwise output 0."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在一场ICPC比赛中，有多个题目，且比赛持续时间较长。总共有n个正确提交，每个提交都代表一个队伍对某道题目的成功解答。当一个队伍对某道题目提交并通过时，我们称该队伍解决了该题目。需要注意的是，如果一个队伍对同一道题目有多个正确提交，只有第一次的提交才被视为首次解决该题目。你需要根据以下规则判断每个提交是否需要发放气球："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在封榜前（提交时间<240分钟）：一个队伍首次解决某道题目时，为该队发放对应题号的气球。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "在封榜后（提交时间≥240分钟）：一个队伍首次解决某道题目时，仅当该队伍截至目前获得的气球总数严格少于3个时，才为该队发放对应题号的气球。"
+            ]
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入第一行包含n (1≤n≤5 000)，表示正确提交的数量。接下来n行按时间顺序描述这些提交。每行包含三个整数a (1≤a≤410)、b (1≤b≤13)和c (0≤c<300)，分别表示队伍编号、题目编号和提交时间（分钟）。保证提交时间单调不降。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每个提交，如果需要发放对应题目的气球，则输出该题目编号，否则输出0。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "8\n1 1 10\n1 2 20\n1 3 30\n1 4 250\n1 5 260\n1 6 270\n1 7 280\n2 1 290",
+    "output": "1\n2\n3\n0\n0\n0\n0\n1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "8\n1 1 10\n1 2 20\n1 3 30\n1 4 250\n1 5 260\n1 6 270\n1 7 280\n2 1 290",
+      "output": "1\n2\n3\n0\n0\n0\n0\n1",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

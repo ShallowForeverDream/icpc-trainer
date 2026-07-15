@@ -1,0 +1,173 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "M",
+  "problemId": 14952,
+  "titleEn": "The End?",
+  "titleZh": "大结局？",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14952&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14952&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      25,
+      26
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14952?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "At the 2025 League of Legends Season 15 World Championship, T1 battled KT Rolster in a full five-game series, ultimately defeating KT with a 3-2 score to claim the championship. This match was exceptionally significant, giving birth to multiple new historical records."
+          },
+          {
+            "kind": "paragraph",
+            "text": "As T1’s star mid-laner, Faker has now achieved six World Championship titles in his personal career with this victory, further cementing his status as the “Greatest Player of All Time” in League of Legends. Besides Faker, his teammates Oner, Gumayusi, and Keria also accomplished the remarkable feat of securing three consecutive World Championship titles."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Meanwhile, the newly joined top-laner Doran filled the gap in his personal accolades by winning his first World Championship. The journey for the LPL region, however, was full of drama. The highly-touted first seed Bilibili Gaming (BLG) suffered a surprising upset loss to the North American team 100 Thieves in the very first round of the Swiss Stage."
+          },
+          {
+            "kind": "paragraph",
+            "text": "They were then eliminated in the crucial qualification match by Top Esports (TES), stopping at the Top 16 as a first seed and becoming one of the major upsets of the tournament. TES itself was swept 3-0 by T1 in the semi-finals, leaving the LPL region absent from the finals. Has the LPL reached its conclusion?"
+          },
+          {
+            "kind": "paragraph",
+            "text": "When we look back at the journey of the two finalist teams, everything began with the life-or-death knockout stage. The eight-team single-elimination bracket stipulated that teams were placed into the bracket based on their performance in the Swiss Stage, entering a series of head-to-head battles where the loser was immediately eliminated."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The entire stage consisted of three rounds: the quarter-finals, where eight teams were narrowed down to four; the semi-finals, where these four teams produced two finalists; and the finals, where one ultimate champion was crowned from these two teams. For Season 16, can our Team 1 win the championship? Please find the maximum probability of Team 1 winning the entire tournament."
+          },
+          {
+            "kind": "paragraph",
+            "text": "More specifically, there are 8 teams participating in a single-elimination tournament. Each team i has two strength values ai and bi. Before the tournament starts, you need to assign each team to a distinct seed from 1 to 8. The tournament follows the standard single-elimination bracket format:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Round 1: seed 1 vs seed 2, seed 3 vs seed 4, seed 5 vs seed 6, seed 7 vs seed 8",
+              "Round 2: winner of (1, 2) vs winner of (3, 4), winner of (5, 6) vs winner of (7, 8)",
+              "Round 3 (Final): winner of upper bracket (1, 2, 3, 4) vs winner of lower bracket (5, 6, 7, 8)"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "When two teams meet, the team with the smaller seed uses its $a$ value and the team with the larger seed uses its $b$ value. If strengths $x$ and $y$ compete, the first team wins with probability $\\frac{x}{x+y}$. Consider every seed assignment and maximize the probability that Team 1 wins the tournament."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The input consists of 8 lines. The i-th line contains two integers ai and bi (1 ≤ ai, bi ≤ 100), denoting the two strength values of team i."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output the maximum probability that Team 1 wins. The answer is accepted if $\\frac{|a-b|}{\\max(1,|b|)} \\le 10^{-6}$, where $a$ is your output and $b$ is the jury answer."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在2025年《英雄联盟》S15全球总决赛中，T1战队与KT战队鏖战五局，最终T1以3:2的比分战胜KT，成功夺冠。这场比赛意义非凡，诞生了多项新的历史纪录。作为T1的核心中单，Faker选手在此次夺冠后，个人职业生涯的S赛冠军数已达到6次，这让他“英雄联盟第一人”的地位更加无可撼动。除了Faker，队内的Oner、Gumayusi和Keria也一同实现了S赛的三连冠伟业。同时，新加入的上单选手Doran也凭借此次冠军，填补了个人荣誉的空白，首度加冕全球总决赛冠军。而LPL赛区的征程充满戏剧性。赛前被寄予厚望的BLG战队在瑞士轮首轮便爆冷输给北美战队100T，随后在关键的出线战中不敌TES，作为一号种子止步十六强，成为本届赛事的一大冷门。TES在半决赛中被T1 3:0横扫，LPL赛区无缘总决赛。LPL是否迎来了大结局？当我们回顾这两支决赛队伍的旅程，一切都始于那生死攸关的淘汰赛阶段。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "八队单败淘汰赛制规定，各支队伍根据其在瑞士轮阶段的表现被分配至赛程表中，进入逐轮的一对一鏖战，败者立即面临淘汰。整个赛程共分三轮：四分之一决赛由八支队伍决出四强，半决赛由这四支队伍决出双雄，决赛再从这两支队伍中加冕一位无上的冠军。在S16中，我们的1号队伍能否夺冠呢？请你找到队伍1赢得整个锦标赛的最大概率。更具体地，有8支队伍参加一场单败淘汰制锦标赛。每支队伍i有两个强度值ai和bi。在锦标赛开始前，你需要为每支队伍分配1到8的不同种子。锦标赛采用标准的单败淘汰制对阵格式："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第一轮：种子1对阵种子2，种子3对阵种子4，种子5对阵种子6，种子7对阵种子8"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第二轮：(1,2)的胜者对阵(3,4)的胜者，(5,6)的胜者对阵(7,8)的胜者"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "第三轮（决赛）：上半区(1,2,3,4)的胜者对阵下半区(5,6,7,8)的胜者"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "两队交手时，种子编号较小的队伍使用其 $a$ 值，种子编号较大的队伍使用其 $b$ 值。若强度为 $x$ 的队伍与强度为 $y$ 的队伍比赛，则前者获胜的概率为 $\\frac{x}{x+y}$。你需要在所有种子分配方案中，最大化队伍 1 夺冠的概率。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入包含8行。第i行包含两个整数ai和bi（1≤ai,bi≤100），表示队伍i的两个强度值。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出队伍 1 夺冠的最大概率。设你的输出为 $a$、标准答案为 $b$；当 $\\frac{|a-b|}{\\max(1,|b|)} \\le 10^{-6}$ 时，答案视为正确。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "10 80\n20 70\n30 60\n40 50\n50 40\n60 30\n70 20\n80 10",
+    "output": "0.329505822460368",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "10 80\n20 70\n30 60\n40 50\n50 40\n60 30\n70 20\n80 10",
+      "output": "0.329505822460368",
+      "mode": "columns"
+    },
+    {
+      "input": "100 100\n100 100\n100 100\n100 100\n100 100\n100 100\n100 100\n100 100",
+      "output": "0.125000000000000",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

@@ -1,0 +1,137 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "A",
+  "problemId": 14940,
+  "titleEn": "Square Kingdom",
+  "titleZh": "平方王国",
+  "timeLimitText": "4 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14940&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14940&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      1,
+      1
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14940?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "In the Square Kingdom, $n$ residents numbered from $1$ to $n$ live alone on top of a tall stone pillar. The height of the pillar for the $i$-th resident is $\\left(i+\\frac{b}{a}\\right)^2$ units above the ground."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Since everyone lives so high up, the only way to visit a neighbor is by using a ladder. The kingdom builds one ladder for every pair of residents. The length of each ladder is exactly the absolute difference in height between the two pillars it connects."
+          },
+          {
+            "kind": "paragraph",
+            "text": "There are $\\frac{n(n-1)}{2}$ ladders in total. Find the length of the $k$-th ladder in ascending order of length."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The only line contains four integers $n$ ($2 \\le n \\le 10^{12}$), $k$ ($1 \\le k \\le \\min(\\frac{n(n-1)}{2},10^{12})$), $a$ ($1 \\le a \\le 10^6$), and $b$ ($0 \\le b \\le 10^{12}$)."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output two integers $p$ and $q$ such that the $k$-th ladder length is $p/q$, where $p \\ge 0$, $q \\ge 1$, and $\\gcd(p,q)=1$."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在平方王国中，有 $n$ 名编号从 $1$ 到 $n$ 的居民各自生活在高高的石柱上。第 $i$ 名居民的石柱高度为 $\\left(i+\\frac{b}{a}\\right)^2$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "由于每个人都生活得如此高，拜访邻居的唯一方式是使用梯子。王国为每对居民都建造了一个梯子，每个梯子的长度正好是所连接两根柱子高度之差的绝对值。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "总共有 $\\frac{n(n-1)}{2}$ 个梯子。请找出按长度升序排列的第 $k$ 个梯子的长度。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "仅有的一行包含四个整数 $n$（$2 \\le n \\le 10^{12}$）、$k$（$1 \\le k \\le \\min(\\frac{n(n-1)}{2},10^{12})$）、$a$（$1 \\le a \\le 10^6$）和 $b$（$0 \\le b \\le 10^{12}$）。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出两个整数 $p$ 和 $q$，表示按长度升序排列的第 $k$ 个梯子的长度为 $p/q$，其中 $p \\ge 0$、$q \\ge 1$ 且 $\\gcd(p,q)=1$。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3 1 3 1",
+    "output": "11 3",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3 1 3 1",
+      "output": "11 3",
+      "mode": "columns"
+    },
+    {
+      "input": "3 2 3 1",
+      "output": "17 3",
+      "mode": "columns"
+    },
+    {
+      "input": "3 3 3 1",
+      "output": "28 3",
+      "mode": "columns"
+    },
+    {
+      "input": "1414215 1000000000000 1000000 1000000000000",
+      "output": "4823373069559 1",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

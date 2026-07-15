@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "B",
+  "problemId": 14941,
+  "titleEn": "Buggy Painting Software I",
+  "titleZh": "出 Bug 的绘画软件 I",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14941&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14941&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      3,
+      4
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14941?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Sulfox the fennec fox is a coder who loves creating digital art in his spare time. Worn out from a day of debugging, he opens his painting software as usual, only to find the software itself is also riddled with bugs after the latest update, one major issue being that it stutters noticeably whenever he edits a pixel. The painting software treats the canvas as an ordered stack of layers."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Each layer is a grid of pixels with n rows and m columns, each pixel holding a visible value in {0, 1,..., nm}, where 0 denotes transparent, and positive values are identifiers for nm distinct colors."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Since layers may occlude one another, at any position, the visible value of the composite image equals the visible value of the topmost non-transparent pixel among all layers; if all layers are transparent at that position, the visible value is 0. Sulfox already knows exactly what he wants to draw: a target image denoted by a matrix (pi,j )n×m of visible values."
+          },
+          {
+            "kind": "paragraph",
+            "text": "To finish as quickly as possible, he wants to minimize the total “lag cost” caused by the software bug. Starting with no layers, Sulfox may perform the following operations any number of times:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Create Layer: insert a new layer on top for free and initialize it either as a constant color layer with every pixel set to the same chosen color c (1 ≤ c ≤ nm), or as an empty layer with every pixel transparent;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Brush Tool: spend a to set any single pixel of any layer to any chosen color c (1 ≤ c ≤ nm);"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "Eraser Tool: spend b to make any single pixel of any layer transparent."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Help Sulfox determine the minimum total cost needed to perform operations so that the composite image matches the target image, i.e., the visible values at corresponding positions of both images are equal."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains an integer T (1 ≤ T ≤ $10^{5}$ ), denoting the number of test cases. For each test case: The first line contains four integers n, m (1 ≤ n, m ≤ 500), a, and b (1 ≤ a, b ≤ $10^{6}$ ), denoting the image dimensions, the cost of using the Brush Tool, and the cost of using the Eraser Tool, respectively."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The i-th line of the next n lines contains m integers pi,1, pi,2,..., pi,m (0 ≤ pi,j ≤ nm), where pi,j denotes the visible value of the target image at the i-th row and the j-th column. It is guaranteed that the sum of nm over all test cases does not exceed $10^{6}$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, output one line containing an integer, representing the minimum total cost."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the first test case of the sample case, Sulfox can first create a layer with color 1, and then spend b = 2 to make the pixel at the first row and the first column transparent."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "耳廓狐亚砜是一名喜欢在闲暇时间创作数字艺术的码农。在调了一整天的Bug后，他已精疲力尽，但当他像往常一样打开绘画软件时，却不曾想软件本身在最近一次更新后也充斥着Bug，一个主要问题是：软件在他每编辑一个像素时都会明显卡顿。该绘画软件将画布视作一个有序的图层栈。每个图层是一个n行、m列的像素网格，每个像素拥有一个在{0,1,...,nm}范围内的可见值，其中0表示透明，正数值则为nm种不同颜色的标识符。由于图层之间可能存在遮挡，在任意位置上，合成图像的可见值等于所有图层中最顶层的非透明像素的可见值；如果该位置上的所有图层均是透明像素，则可见值为0。亚砜已经确切地想好了他要画什么：一个由可见值矩阵(pi,j)n×m表示的目标图像。为了尽快画完，他希望最小化由软件Bug造成的总“卡顿代价”。从没有任何图层的状态开始，亚砜可以执行以下操作任意次："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "创建图层：免费在顶部插入一个新图层，并将其初始化为一个纯色图层（每个像素设为同一种所选颜色c (1≤c≤nm)），或初始化为空图层（每个像素均为透明）；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "画笔工具：花费a将任一图层的任一单个像素设置为任一种所选颜色c (1≤c≤nm)；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "橡皮工具：花费b将任一图层的任一单个像素变为透明。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "请帮助亚砜确定所需的最小总代价，使得经过操作后合成图像与目标图像匹配，即两张图像在对应位置的可见值相等。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤$10^{5}$)，表示测试数据的组数。对于每组测试数据：第一行包含四个整数n、m (1≤n,m≤500)、a和b (1≤a,b≤$10^{6}$)，分别表示图像的尺寸、使用画笔工具的代价和使用橡皮工具的代价。接下来n行的第i行包含m个整数pi,1,pi,2,...,pi,m (0≤pi,j≤nm)，其中pi,j表示目标图像在第i行、第j列上的可见值。保证所有测试数据中nm的和不超过$10^{6}$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组数据，输出一行包含一个整数，表示最小总代价。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于样例的第一组测试数据，亚砜可以先创建颜色为1的图层，再花费b=2的代价将第一行、第一列上的像素变为透明。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n1 2 3 2\n0 1\n2 2 1 1\n1 0\n2 3\n3 3 5 3\n2 4 4\n4 1 4\n4 4 2",
+    "output": "2\n3\n11",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n1 2 3 2\n0 1\n2 2 1 1\n1 0\n2 3\n3 3 5 3\n2 4 4\n4 1 4\n4 4 2",
+      "output": "2\n3\n11",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2025-shenyang/assets/B-1.png",
+      "captionEn": "Sulfox creating digital art",
+      "captionZh": "耳廓狐亚砜创作数字艺术",
+      "imageTextZh": null
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

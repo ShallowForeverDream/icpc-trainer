@@ -1,0 +1,150 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "E",
+  "problemId": 14944,
+  "titleEn": "Play It by Ear",
+  "titleZh": "出奇制胜",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14944&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14944&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      9,
+      9
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14944?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "You are playing a popular card game. There are 2n distinct cards labeled 1 through 2n, shuffled uniformly at random and piled up into a deck. You draw the top n cards as your starting hand, and the remaining deck order is hidden from you. Each turn, you choose any one card from your hand, play it by placing it at the bottom of the deck, and then draw the current top card, so your hand size remains n."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You have m quests to complete in order: the i-th quest requires you to play the card labeled ai, and it becomes active only after the (i − 1)-th quest is completed (unless it is the first quest, which is initially active). Playing the card labeled ai before the i-th quest is active does not count toward the i-th quest. You know any of a1, a2,..., am (values may repeat) in advance."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Assuming you play cards under the optimal pure strategy, compute the minimum expected number of turns needed to complete all m quests over the random initial shuffle, modulo 998244353."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Formally, a pure strategy means that at each turn, the card chosen depends only on the observable history, and identical known information (initial hand, respective played and drawn cards in past turns, and quest completion status) deterministically yields the same chosen card."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For a pure strategy σ and an initial shuffle π, let fσ (π) be the number of turns needed to complete all m quests when following σ; the value to be computed equals (minσ E[fσ (π)]) mod 998244353, where the expectation E[·] is taken over the uniform distribution on all (2n)! possible shuffles of the initial deck."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line of the input contains an integer T (1 ≤ T ≤ 1 000), denoting the number of test cases. For each test case: The first line contains two integers n and m (2 ≤ n ≤ 5 000, 1 ≤ m ≤ 2 × $10^{5}$ ). The second line contains m integers a1, a2,..., am (1 ≤ ai ≤ 2n). It is guaranteed that the sum of n over all test cases does not exceed 5 000, and the sum of m over all test cases does not exceed 2 × $10^{5}$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case, let the minimum expected number of rounds be the irreducible fraction $p/q$. Output the unique integer $r$ with $0 \\le r < 998244353$ satisfying $r q \\equiv p \\pmod{998244353}$."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the first test case of the sample case, an optimal pure strategy is: if the card labeled 1 is in your initial hand, play it immediately; otherwise repeatedly play any card until you draw it and play it in your next"
+          },
+          {
+            "kind": "paragraph",
+            "text": "turn. Hence the minimum expected number of turns is 21 × 1 + 14 × 2 + 14 × 3 = 74."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "你正在玩一款知名卡牌游戏。有2n张标号为1到2n的不同卡牌，它们被均匀随机地洗牌并叠成一副牌堆。你抽取牌堆顶部的n张牌作为你的起始手牌，而牌堆中剩余牌的顺序对你是不可见的。每一轮，你从手牌中任选一张牌打出，即将其置于牌堆底部然后抽取当前牌堆顶部的牌，你的手牌数量从而保持为n。你有m个任务需要按顺序完成：第i个任务要求你打出标号为ai的牌，并且该任务只有在第(i−1)个任务完成后才会被激活（第一个任务除外，它初始就是激活的）。在第i个任务被激活之前打出标号为ai的牌不计入第i个任务的完成进度。你事先知道完整的a1,a2,...,am（值可能重复）。假设你采取最优的纯策略，请计算在初始洗牌随机的情形下完成全部m个任务所需轮数的最小期望值，对998244353取模。形式化地，纯策略指的是在每轮选择打出的牌仅取决于可观测的历史，且相同的已知信息（初始手牌、过去每轮分别打出及抽到的牌、任务完成状态）会确定性地导致你打出相同的牌。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "对于一个纯策略σ和一个初始洗牌π，记fσ(π)为遵循σ时完成全部m个任务所需的轮数；需要计算的值等于(minσE[fσ(π)]) mod 998244353，其中期望E[·]是在所有(2n)!种可能的初始牌堆排列的均匀分布上计算的。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤1 000)，表示测试数据的组数。对于每组测试数据：第一行包含两个整数n和m (2≤n≤5 000,1≤m≤2×$10^{5}$)。第二行包含m个整数a1,a2,...,am (1≤ai≤2n)。保证所有测试数据中n的总和不超过5 000，且所有测试数据中m的总和不超过2×$10^{5}$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据，设最小期望轮数为最简分数 $p/q$。输出唯一的整数 $r$，满足 $0 \\le r < 998244353$ 且 $r q \\equiv p \\pmod{998244353}$。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于样例的第一组测试数据，一个最优的纯策略是：如果标号为1的牌在你的初始手牌里，立即将其打出；否则重复打出任意牌直到你抽到了它并将其在下一轮打出。因此轮数的最小期望值为1 1 1 7 2×1+4×2+4×3=4。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n2 1\n1\n3 7\n2 5 1 2 6 2 1\n1000 2\n1116 1116",
+    "output": "249561090\n299473317\n748684517",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n2 1\n1\n3 7\n2 5 1 2 6 2 1\n1000 2\n1116 1116",
+      "output": "249561090\n299473317\n748684517",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

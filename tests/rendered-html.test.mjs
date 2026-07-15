@@ -422,6 +422,42 @@ test("integrates the 2024 Xi'an Invitational as local bilingual statements", asy
   assert.match(importer, /lentille-context/);
 });
 
+test("ships the 2025 Shenyang regional as instant official bilingual statements", async () => {
+  const slots = "ABCDEFGHIJKLM".split("");
+  const [catalog, archivePage, manifestText, importer, ...statementTexts] = await Promise.all([
+    readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
+    readFile(new URL("app/vp/archive/page.tsx", root), "utf8"),
+    readFile(new URL("public/archive-statements/2025-shenyang/manifest.json", root), "utf8"),
+    readFile(new URL("scripts/import_shenyang_statements.py", root), "utf8"),
+    ...slots.map((slot) => readFile(new URL(`public/archive-statements/2025-shenyang/${slot}.json`, root), "utf8")),
+  ]);
+  const manifest = JSON.parse(manifestText);
+  const statements = statementTexts.map((text) => JSON.parse(text));
+  assert.equal(manifest.problems.length, 13);
+  assert.equal(manifest.officialChinese, true);
+  assert.match(catalog, /id: "2025-shenyang"[\s\S]*staticStatements: "official-chinese"/);
+  assert.match(catalog, /"Square Kingdom", "Buggy Painting Software I"/);
+  assert.match(archivePage, /contest\?\.staticStatements/);
+  assert.match(importer, /ver=zh_cn/);
+  assert.match(importer, /official-pdf-extract/);
+  assert.equal(statements.every((problem) => problem.english.sections.length > 0), true);
+  assert.equal(statements.every((problem) => problem.chinese.sections.length > 0), true);
+  assert.equal(statements.every((problem) => problem.source.chinesePdfUrl.includes("ver=zh_cn")), true);
+  assert.equal(statements.some((problem) => problem.images.length > 0), true);
+  assert.equal(statements.flatMap((problem) => problem.images).every((image) => image.src.startsWith("/archive-statements/2025-shenyang/assets/")), true);
+  assert.equal(statements.some((problem) => problem.samples.length > 1), true);
+  assert.match(statementTexts[0], /\\\\frac\{n\(n-1\)\}\{2\}/);
+  assert.match(statementTexts[6], /\\\\int_D/);
+  assert.match(statementTexts[11], /\\\\left\\\\lceil\\\\frac\{10\^7\}\{n\}/);
+  assert.doesNotMatch(statementTexts.join("\n"), /\(cid:|\u0001|RRR/);
+
+  const response = await render("/vp/archive/problem?contest=2025-shenyang&slot=A");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  assert.match(html, /Square Kingdom/);
+  assert.match(html, /提交代码/);
+});
+
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {
   const [backend, persistence, persistentClient, statements, compose, dockerfile, nginx, browserApi, worker] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),

@@ -1,0 +1,193 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "H",
+  "problemId": 14947,
+  "titleEn": "Cute Young Diagram Counting",
+  "titleZh": "可爱的杨图计数",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14947&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14947&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      15,
+      15
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14947?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "A Young diagram is a finite set of cells, arranged in left-aligned rows, with the row lengths in non-increasing order. It can be uniquely represented by an unordered integer partition λ = (λ1, λ2,..., λr ) satisfying λ1 ≥ λ2 ≥ · · · ≥ λr ≥ 1, where r corresponds to the number of rows of the Young diagram, and λi corresponds to the number of cells in the i-th row for i = 1, 2,..., r."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The conjugate of a Young diagram λ is another Young diagram obtained by transposing rows and columns, represented by the conjugate partition λT. More specifically, if λ has c = λ1 columns, then λT = (µ1, µ2,..., µc ) where µj = |{ i: λi ≥ j }| for j = 1, 2,..., c."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For a cell at the i-th row and the j-th column that belongs to λ, let the subdiagram anchored at (i, j) be the set of all cells (x, y) of λ with x ≥ i and y ≥ j. It is easy to see that, this set is itself a Young diagram when viewed with (i, j) as its top-left corner."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Define the cuteness of a Young diagram λ as the number of distinct Young diagrams that can be obtained from λ by performing the following operation any number (possibly zero) of times: choose any cell (i, j) of the current Young diagram, take the subdiagram anchored at (i, j), and replace it with its conjugate anchored at the same position."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The operation is allowed if and only if the overall set of cells still forms a valid Young diagram; otherwise the operation is denied and undone, as illustrated below."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You are given a non-increasing sequence of positive integers a1, a2,..., an. For each i = 1, 2,..., n, compute the cuteness of the Young diagram λ(i), modulo 998244353, where λ(i) = (a1, a2,..., ai )."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains a single integer n (1 ≤ n ≤ $10^{6}$ ), denoting the length of the given sequence. The second line contains n integers a1, a2,..., an (1 ≤ ai ≤ n). It is guaranteed that a1 ≥ a2 ≥ · · · ≥ an."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Output n integers separated by spaces, where the i-th integer represents the cuteness of the Young diagram λ(i), modulo 998244353."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the sample case:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The distinct Young diagrams that can be obtained from λ(1) are (3) and (1, 1, 1);"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The distinct Young diagrams that can be obtained from λ(2) are (3, 2), (3, 1, 1), and (2, 2, 1);"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "The only Young diagram that can be obtained from λ(3) is (3, 2, 1) itself."
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "杨图是一个有限的单元格集合，单元格排列成左对齐的若干行，且行长按顺序非递增。它可以被一个满足λ1≥λ2≥···≥λr≥1的无序整数分拆λ=(λ1,λ2,...,λr)唯一地表示。其中，r对应杨图的行数，而i=1,2,...,r时λi对应第i行的单元格数量。一个杨图λ的共轭是另一个杨图，它是通过将原图的行和列进行转置得到的，并由共轭分拆λT表示。具体来说，如果λ有c=λ1列，那么λT=(µ1,µ2,...,µc)，其中j=1,2,...,c时µj=|{i:λi≥j}|。对于λ中位于第i行、第j列的单元格，我们将锚定于(i,j)的子图定义为λ中所有满足x≥i且y≥j的单元格(x,y)的集合。容易看出，当我们将(i,j)视为其左上角时，这个集合本身也是一个杨图。我们将一个杨图λ的可爱度定义为从λ出发，通过任意（可能为零）次执行下述操作所能得到的不同杨图的数量。操作过程如下：选择当前杨图中的任意一个单元格(i,j)，取出锚定于(i,j)的子图，将其替换为它的共轭并锚定在同一位置。当且仅当操作后整体的单元格集合仍然构成一个合法的杨图时，该操作才被允许；否则，该操作将被禁止并撤销，如下图所示。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "给定一个非递增的正整数序列a1,a2,...,an。对于每个i=1,2,...,n，你需要计算杨图λ(i)的可爱度，对998244353取模，其中λ(i)=(a1,a2,...,ai)。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含一个整数n (1≤n≤$10^{6}$)，代表给定序列的长度。第二行包含n个整数a1,a2,...,an (1≤ai≤n)。保证a1≥a2≥···≥an。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输出n个整数，由空格隔开，其中第i个整数代表杨图λ(i)的可爱度，对998244353取模。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于样例："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "从λ(1)出发所能得到的不同杨图有(3)和(1,1,1)；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "从λ(2)出发所能得到的不同杨图有(3,2)、(3,1,1)和(2,2,1)；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "从λ(3)出发所能得到的唯一杨图是(3,2,1)本身。"
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n3 2 1",
+    "output": "2 3 1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n3 2 1",
+      "output": "2 3 1",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2025-shenyang/assets/H-1.png",
+      "captionEn": "Allowed and forbidden conjugation operations",
+      "captionZh": "允许与不允许的共轭操作示意",
+      "imageTextZh": null
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

@@ -1,0 +1,170 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "C",
+  "problemId": 14942,
+  "titleEn": "Buggy Painting Software II",
+  "titleZh": "出 Bug 的绘画软件 II",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14942&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14942&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      5,
+      6
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14942?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "This is a communication problem. Well... after surviving the nightmarish stutter in Problem B. Buggy Painting Software I, Sulfox soon faces a far more serious bug — his painting software saves any color image in black-and-white format. Here, a color image supports m distinct colors labeled 1 through m, and can be viewed as a sequence of length 3m composed of color labels, where each color appears exactly three times."
+          },
+          {
+            "kind": "paragraph",
+            "text": "A black-and-white image supports only black (labeled 0) and white (labeled 1), and can be viewed as a binary sequence."
+          },
+          {
+            "kind": "paragraph",
+            "text": "When saving a color image, the software chooses a non-empty bipartition (S0, S1 ) of S = {1, 2,..., m} (so S0 ∪ S1 = S, S0 ∩ S1 = ∅, and both S0 and S1 are non-empty) and converts the original sequence into a binary sequence of the same length by mapping every color in S0 to 0 and every color in S1 to 1. The resulting binary sequence will be the saved black-and-white image."
+          },
+          {
+            "kind": "paragraph",
+            "text": "To outsmart this bug, Sulfox wants to create n color images with respective integer feature values x1, x2,..., xn (values may repeat) ranging from 1 to m. Your task is to help Sulfox design these color images so that each image’s feature remains identifiable even after the color loss."
+          },
+          {
+            "kind": "paragraph",
+            "text": "More specifically, the i-th color image (1 ≤ i ≤ n) must satisfy that, no matter how the non-empty bipartition (S0, S1 ) is chosen, its feature value xi can always be recovered from the saved black-and-white image."
+          },
+          {
+            "kind": "paragraph",
+            "text": "To verify the correctness of your design, your program will be run twice on each test: first for constructing n color images, and then for recovering the original feature values from n black-and-white images. The second run will receive exactly the n binary sequences mapped from each of the n sequences you output in the first run by independently chosen non-empty bipartitions."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Apart from that, the second run will receive no additional information from the first run. Your solution passes a test if you correctly recover the corresponding feature value from each black-and-white image. Note that the applied bipartitions are unpredictable and may be adaptive to your design, and different bipartitions may apply to the color images with the same feature value."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains three integers op (op ∈ {1, 2}), n, and m (2 ≤ n, m ≤ 5 × $10^{5}$, nm ≤ $10^{6}$ ), denoting which run of the program it is, the number of color images, and the number of distinct colors, respectively. It is guaranteed that n and m remain consistent across both runs. If op = 1, your program must construct the color images."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The next n lines follow, where the i-th line contains a single integer xi (1 ≤ xi ≤ m), representing the feature value for the i-th image to be designed. If op = 2, your program must recover the feature values. The next n lines follow, each describing a black-and-white image. Each line contains 3m space-separated integers of 0 or 1, forming a binary sequence that results from one of your designed color images."
+          },
+          {
+            "kind": "paragraph",
+            "text": "These n sequences are given in an arbitrary order and do not necessarily correspond to the order in which the feature values were given in the first run."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "If op = 1, output n lines, where the i-th line describes the designed color image for the i-th feature value xi from the input. Each line contains 3m space-separated integers. The sequence on each line must be a valid color image, i.e., a sequence where each integer from 1 to m appears exactly three times. If op = 2, output n lines."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For each of the n binary sequences given in the input, output a single line containing one integer, representing the original feature value recovered from that image. The order of your output must correspond to the order of the binary sequences in the input."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The example shows two runs of a certain solution on the sample case. In the first run, a simple (and incorrect for general cases) strategy is used: feature value 1 is designed as consecutive blocks of three identical colors, and feature value 2 is designed as a repeating pattern of three distinct colors."
+          },
+          {
+            "kind": "paragraph",
+            "text": "In the second run, the first binary sequence (from bipartition (S0 = {3}, S1 = {1, 2})) is identified by its repeating pattern of three to recover feature value 2, while the second binary sequence (from bipartition (S0 = {1, 3}, S1 = {2})) is identified by its consecutive blocks of three to recover feature value 1. Since the judge provides these sequences in a swapped order, the output is 2 and then 1."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "这是一道通信题。呃……在挺过了Problem B.出Bug的绘画软件I中那噩梦般的卡顿之后，亚砜很快又遇到了一个更严重的Bug—他的绘画软件会把任意彩色图像都以黑白格式保存。这里，彩色图像支持标号为1到m的m种不同颜色，并可看成一个长度为3m、由颜色标号构成的序列，其中每种颜色都恰好出现三次。黑白图像仅支持标号为0的黑色和标号为1的白色，并可看成一个二进制序列。在保存彩色图像时，软件会选择S={1,2,...,m}的一个非空二划分(S0,S1)（即S0∪S1=S、S0∩S1=∅，且S0与S1均非空）并通过将S0中的每种颜色映射为0、将S1中的每种颜色映射为1的方式，将原始序列转换为一个等长的二进制序列。得到的二进制序列将作为保存后的黑白图像。为了智取这个Bug，亚砜想要创作n张彩色图像，它们分别具有1到m范围内的整数特征值x1,x2,...,xn（值可能重复）。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "你的任务是帮助亚砜设计这些彩色图像，使得每张图像的特征在颜色信息丢失后仍然可被识别。更具体地，第i张彩色图像(1≤i≤n)必须满足无论何种非空二划分(S0,S1)被选择，其特征值xi一定能从保存后的黑白图像中恢复出来。为了检验你设计的正确性，你的程序将在每个测试点上被运行两次：第一次用于构造n张彩色图像，第二次用于从n张黑白图像中恢复原始特征值。第二次运行将会收到n个二进制序列，这些序列正是由你第一次运行时输出的n个序列经过各自独立的非空二划分映射得到的。除此之外，第二次运行将不会收到来自第一次运行的任何额外信息。如果你对每张黑白图像都能正确地恢复出其对应的特征值，则你的解决方案通过此测试点。注意，采用的二划分是不可预测的，并且可能自适应于你的设计，具有相同特征值的彩色图像可能会采用不同的二划分。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含三个整数op (op∈{1,2})、n和m (2≤n,m≤5×$10^{5}$,nm≤$10^{6}$)，分别表示程序的第几次运行、彩色图像的数量和不同颜色的数量。保证n和m在两次运行中保持一致。如果op=1，你的程序必须构造彩色图像。接下来n行，其中第i行包含一个整数xi (1≤xi≤m)，代表将设计的第i张图像的特征值。如果op=2，你的程序必须恢复特征值。接下来n行，每行描述一张黑白图像，即每行包含3m个由空格隔开的、取值0或1的整数，构成一个从你某张设计的彩色图像得到的二进制序列。这n个序列将以任意顺序给出，不一定对应第一次运行时特征值给出的顺序。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "如果op=1，输出n行，其中第i行描述针对输入中第i个特征值xi设计的彩色图像。每行包含3m个由空格隔开的整数。每行的序列必须是一张合法的彩色图像，即从1到m的各整数恰好出现三次的序列。如果op=2，输出n行。对于输入中给定的n个二进制序列的每一个，输出一行包含一个整数，表示从该图像中恢复的原始特征值。你输出的顺序必须对应这些二进制序列在输入中的顺序。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "示例展示了某个解决方案在样例数据中的两次运行。第一次运行采用了一个简单（对一般情况不正确）的策略：特征值1被设计成三个相同颜色的连续段，特征值2被设计成三种不同颜色的循环结构。第二次运行中，第一个二进制序列（来自二划分(S0={3},S1={1,2})）可通过辨识其循环结构恢复出特征值2，第二个二进制序列（来自二划分(S0={1,3},S1={2})）可通过辨识其连续段恢复出特征值1。由于评测机以交换顺序提供了这两个序列，输出为先2再1。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "1 2 3\n1\n2\n2 2 3\n1 1 0 1 1 0 1 1 0\n0 0 0 1 1 1 0 0 0",
+    "output": "1 1 1 2 2 2 3 3 3\n1 2 3 1 2 3 1 2 3\n\n2\n1",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "1 2 3\n1\n2\n2 2 3\n1 1 0 1 1 0 1 1 0\n0 0 0 1 1 1 0 0 0",
+      "output": "1 1 1 2 2 2 3 3 3\n1 2 3 1 2 3 1 2 3\n\n2\n1",
+      "mode": "columns"
+    }
+  ],
+  "images": [],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

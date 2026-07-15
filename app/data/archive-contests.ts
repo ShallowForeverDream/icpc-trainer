@@ -12,12 +12,13 @@ export type ArchiveContest = {
   luoguContestId?: number;
   luoguProblemIds?: string[];
   problemTitles?: string[];
+  staticStatements?: "official-chinese" | "translated-chinese";
   chineseStatementUrl?: string;
 };
 
 export const archiveContests: ArchiveContest[] = [
   {
-    id: "2026-shenzhen-invitational", year: 2026, name: "ICPC 深圳全国邀请赛", city: "深圳", type: "邀请赛", boardPath: "icpc/51st/shenzhen-invitational", problemCount: 13,
+    id: "2026-shenzhen-invitational", year: 2026, name: "ICPC 深圳全国邀请赛", city: "深圳", type: "邀请赛", boardPath: "icpc/51st/shenzhen-invitational", problemCount: 13, staticStatements: "official-chinese",
     qojContestId: 3588,
     qojProblemIds: [17753, 17754, 17755, 17756, 17757, 17758, 17759, 17760, 17761, 17762, 17763, 17764, 17765],
     problemTitles: ["Greetings from Prof. Chen", "All-Star Showdown", "One Item Away", "City Management", "Card Checking", "Astra", "Snake", "Telepathy", "Calendar Cubes", "Crossroads", "Sum and Product", "Critical Strike", "Night at the Museum"],
@@ -44,7 +45,13 @@ export const archiveContests: ArchiveContest[] = [
   { id: "2025-chengdu", year: 2025, name: "ICPC 区域赛成都站", city: "成都", type: "区域赛", boardPath: "icpc/50th/chengdu", problemCount: 13, gymId: 106161, qojContestId: 2567, qojProblemIds: [14706, 14707, 14708, 14709, 14710, 14711, 14712, 14713, 14714, 14715, 14716, 14717, 14718] },
   { id: "2025-wuhan", year: 2025, name: "ICPC 区域赛武汉站", city: "武汉", type: "区域赛", boardPath: "icpc/50th/wuhan", problemCount: 13, qojContestId: 2609, qojProblemIds: [14719, 14720, 14721, 14722, 14723, 14724, 14725, 14726, 14727, 14728, 14729, 14730, 14731] },
   { id: "2025-nanjing", year: 2025, name: "ICPC 区域赛南京站", city: "南京", type: "区域赛", boardPath: "icpc/50th/nanjing", problemCount: 13, qojContestId: 2581, qojProblemIds: [14801, 14802, 14803, 14804, 14805, 14806, 14807, 14808, 14809, 14810, 14811, 14812, 14813] },
-  { id: "2025-shenyang", year: 2025, name: "ICPC 区域赛沈阳站", city: "沈阳", type: "区域赛", boardPath: "icpc/50th/shenyang", problemCount: 13, gymId: 106252, qojContestId: 2641, qojProblemIds: [14940, 14941, 14942, 14943, 14944, 14945, 14946, 14947, 14948, 14949, 14950, 14951, 14952] },
+  {
+    id: "2025-shenyang", year: 2025, name: "ICPC 区域赛沈阳站", city: "沈阳", type: "区域赛", boardPath: "icpc/50th/shenyang", problemCount: 13, gymId: 106252,
+    qojContestId: 2641,
+    qojProblemIds: [14940, 14941, 14942, 14943, 14944, 14945, 14946, 14947, 14948, 14949, 14950, 14951, 14952],
+    problemTitles: ["Square Kingdom", "Buggy Painting Software I", "Buggy Painting Software II", "LED Display Renovation", "Play It by Ear", "The Bond Beyond Time", "Collision Damage", "Cute Young Diagram Counting", "Volunteer Simulator", "The Echoes of Chronos", "Relay Jump", "Leo", "The End?"],
+    staticStatements: "official-chinese",
+  },
   { id: "2025-shanghai", year: 2025, name: "ICPC 区域赛上海站", city: "上海", type: "区域赛", boardPath: "icpc/50th/shanghai", problemCount: 13, qojContestId: 2908, qojProblemIds: [15314, 15315, 15316, 15317, 15318, 15319, 15320, 15321, 15322, 15323, 15324, 15325, 15326] },
   {
     id: "2025-hongkong", year: 2025, name: "ICPC 区域赛香港站", city: "香港", type: "区域赛", boardPath: "icpc/50th/hongkong", problemCount: 12,
@@ -55,7 +62,7 @@ export const archiveContests: ArchiveContest[] = [
   { id: "2025-ecfinal", year: 2025, name: "ICPC 东亚区决赛", city: "EC-Final", type: "东亚决赛", boardPath: "icpc/50th/ecfinal", problemCount: 12, qojContestId: 3295, qojProblemIds: [16328, 16329, 16330, 16331, 16332, 16333, 16334, 16335, 16336, 16337, 16338, 16339] },
 
   {
-    id: "2024-xian-invitational", year: 2024, name: "ICPC 西安全国邀请赛", city: "西安", type: "邀请赛", boardPath: "icpc/49th/xian-invitational", problemCount: 13,
+    id: "2024-xian-invitational", year: 2024, name: "ICPC 西安全国邀请赛", city: "西安", type: "邀请赛", boardPath: "icpc/49th/xian-invitational", problemCount: 13, staticStatements: "translated-chinese",
     luoguContestId: 173404,
     luoguProblemIds: ["P10553", "P10554", "P10555", "P10556", "P10557", "P10558", "P10559", "P10560", "P10561", "P10562", "P10563", "P10564", "P10565"],
     problemTitles: ["Guess The Tree", "Turn Off The Lights", "Fix the Tree", "Make Them Straight", "Dumb Robot", "XOR Game", "The Last Cumulonimbus Cloud", "Holes and Balls", "Smart Quality Inspector", "Triangle", "Yet Another Maximum Matching Counting Problem", "Rubbish Sorting", "Chained Lights"],

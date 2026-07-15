@@ -226,19 +226,20 @@ export default function ArchiveVpPage() {
     let cancelled = false;
     let timer = 0;
     const contest = prewarmContestId ? findArchiveContest(prewarmContestId) : undefined;
-    if (contest && contest.luoguProblemIds?.length === contest.problemCount) {
+    if (contest?.staticStatements) {
+      const officialChinese = contest.staticStatements === "official-chinese";
       setPrewarm({
         contestId: contest.id,
         total: contest.problemCount,
         readyOriginal: contest.problemCount,
         readyChinese: contest.problemCount,
-        officialChinese: 0,
+        officialChinese: officialChinese ? contest.problemCount : 0,
         failed: 0,
         status: "ready",
         progress: 100,
-        items: contest.luoguProblemIds.map((_, index) => ({
+        items: Array.from({ length: contest.problemCount }, (_, index) => ({
           slot: String.fromCharCode(65 + index), originalReady: true, chineseReady: true,
-          officialChinese: false, status: "ready", message: null,
+          officialChinese, status: "ready", message: null,
         })),
         updatedAt: null,
       });

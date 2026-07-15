@@ -1,0 +1,199 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2025-shenyang",
+  "contestName": "ICPC 区域赛沈阳站",
+  "slot": "F",
+  "problemId": 14945,
+  "titleEn": "The Bond Beyond Time",
+  "titleZh": "友谊地久天长",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "official-pdf-extract",
+    "englishPdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14945&contest_id=2641",
+    "chinesePdfUrl": "https://contest.ucup.ac/download.php?type=statement&id=14945&contest_id=2641&ver=zh_cn",
+    "chinesePages": [
+      11,
+      12
+    ],
+    "sourceUrl": "https://contest.ucup.ac/contest/2641/problem/14945?v=1",
+    "sourceLabel": "Universal Cup / QOJ"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Sulfox the fennec fox has built a maze and invited his two friends, Alice and Bob, to try it. The maze can be abstracted as a simple, connected undirected graph with n vertices and m edges, where Alice and Bob start at two distinct specified vertices. Before any player moves, Sulfox must choose a direction for every undirected edge, turning the maze into a directed graph."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Then, in an attempt to find each other, both players move in rounds within the oriented maze. In each round, they act simultaneously and independently, neither leaving marks nor communicating; rather, they adopt the “most brainless” strategy:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "If a player is currently at a vertex that has one or more outgoing edges, they arbitrarily traverse an outgoing edge to the adjacent vertex;"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "otherwise, if their current vertex has no outgoing edges, they remain at that vertex."
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "Sulfox, being proud of his maze-design skills, wants to orient the passages so that Alice and Bob can never meet. Given the undirected graph and the starting vertices of Alice and Bob, please help Sulfox orient every edge so that no matter how Alice and Bob make their choices in every round, they will never occupy the same vertex at the end of any round. If such orientation does not exist, report it."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains four integers $n$ ($2 \\le n \\le 300$), $m$ ($n-1 \\le m \\le \\frac{n(n-1)}{2}$), $x$, and $y$ ($1 \\le x,y \\le n$, $x \\ne y$), denoting the numbers of vertices and edges and the starting vertices of Alice and Bob."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Each of the next m lines contains two integers u and v (1 ≤ u, v ≤ n), describing an undirected edge connecting vertices u and v. It is guaranteed that the given graph is connected and contains no self-loops or multiple edges. It is guaranteed that there is at most 1 test case with n greater than 30."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each test case: If it is possible to orient all edges so that Alice and Bob can never occupy the same vertex at the end of any round, print “Yes” (without quotes) in the first line. Then output m lines, each containing two integers u′ and v ′ (1 ≤ u′, v ′ ≤ n), describing a directed edge from u′ to v ′. The unordered pair (u′, v ′ ) must correspond to an existing undirected edge in the input."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The edges may be printed in any order. If no valid orientation exists, output a single line containing “No” (without quotes)."
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "Note",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For the first sample case, a valid orientation is illustrated as follows. In the first round, Alice must move from vertex 2 to vertex 1, while Bob must move from vertex 4 to vertex 5. After this round, both players are at vertices with no outgoing edges and will remain there forever, thus never meeting."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For the second sample case, a valid orientation is illustrated as follows. Both players are confined to the cycle 1 → 2 → 3 → 4 → 1. Since they both advance one step along the cycle in each round, Alice will always remain one step behind Bob, thus never meeting."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For the third sample case, with only one edge connecting the two vertices, directing it 1 → 2 forces Alice to move to Bob’s vertex, whereas directing it 2 → 1 forces Bob to move to Alice’s vertex. Since one player always joins the stationary player, a meeting is unavoidable regardless of the orientation."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "耳廓狐亚砜建造了一个迷宫，并邀请了他的两位朋友Alice和Bob来尝试。这个迷宫可以被抽象为一个包含n个顶点和m条边的简单连通无向图，其中Alice和Bob从两个不同的指定顶点出发。在任何玩家移动之前，亚砜必须为每条无向边选择一个方向，从而将迷宫变成一个有向图。然后，为了找到彼此，两名玩家在定向后的迷宫里分回合移动。在每个回合中，他们同时、独立地行动，既不留下标记也不进行交流；而是采用“最无脑”的策略："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "如果一名玩家当前所在的顶点有一条或多条出边，他们会任意地沿着一条出边移动到相邻的顶点；"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "否则，如果他们当前所在的顶点没有出边，他们会停留在该顶点。"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "亚砜对自己的迷宫设计技巧感到自豪，他想要为通道定向，使得Alice和Bob永远不会相遇。给定该无向图以及Alice和Bob的起始顶点，请帮助亚砜为每条边定向，使得无论Alice和Bob在每个回合中如何选择，他们都永远不会在任何回合结束时位于同一个顶点。如果这样的定向方案不存在，请报告这一点。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "输入的第一行包含一个整数T (1≤T≤1 000)，表示测试数据的组数。对于每组测试数据：第一行包含四个整数n (2≤n≤300)、m (n−1≤m≤$\\frac{n(n-1)}{2}$)、x和y (1≤x,y≤n,x≠y)，分别表示迷宫的点数、边数，以及Alice和Bob的出发顶点。接下来m行每行包含两个整数u和v (1≤u,v≤n)，描述一条连接顶点u和v的无向边。保证给定图是连通的并且不含自环或重边。保证有至多1组测试数据满足n大于30。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每组测试数据：如果可以定向所有边使得Alice和Bob永远无法在任一回合结束时占据同个顶点，在第一行中打印“Yes”（没有引号）。接下来m行，每行包含两个整数u′和v′(1≤u′,v′≤n)，描述一条从u′到v′的有向边。无序对(u′,v′)必须对应输入里一条存在的无向边。你可以以任意顺序打印这些有向边。如果不存在合法的定向方案，输出一行包含“No”（没有引号）。"
+          }
+        ]
+      },
+      {
+        "key": "note",
+        "title": "说明",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于样例的第一组测试数据，一个合法的定向方案如下。在第一个回合，Alice必须从顶点2移动到顶点1，而Bob必须从顶点4移动到顶点5。此回合后，两名玩家都处于没有出边的顶点，并将永远停留在那里，因此永远不会相遇。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "对于样例的第二组测试数据，一个合法的定向方案如下。两名玩家都被限制在环1→2→3→4→1中。由于他们每回合都在环上前进一格，Alice将始终落后Bob一步，因此永远不会相遇。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "对于样例的第三组测试数据，只有一条边连接两个顶点，若将其定向为1→2，则会迫使Alice移动到Bob所在的顶点，而若将其定向为2→1，则会迫使Bob移动到Alice所在的顶点。由于总有一名玩家会移动到另一名静止玩家所在的顶点，因此无论如何定向，相遇都是不可避免的。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "3\n5 4 2 4\n1 2\n2 3\n3 4\n4 5\n5 7 1 2\n1 2\n2 3\n3 4\n4 5\n1 5\n3 5\n1 4\n2 1 1 2\n1 2",
+    "output": "Yes\n2 1\n3 2\n3 4\n4 5\nYes\n1 2\n2 3\n3 4\n4 1\n5 1\n5 3\n5 4\nNo",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "3\n5 4 2 4\n1 2\n2 3\n3 4\n4 5\n5 7 1 2\n1 2\n2 3\n3 4\n4 5\n1 5\n3 5\n1 4\n2 1 1 2\n1 2",
+      "output": "Yes\n2 1\n3 2\n3 4\n4 5\nYes\n1 2\n2 3\n3 4\n4 1\n5 1\n5 3\n5 4\nNo",
+      "mode": "columns"
+    }
+  ],
+  "images": [
+    {
+      "src": "/archive-statements/2025-shenyang/assets/F-1.png",
+      "captionEn": "A valid orientation for the first sample",
+      "captionZh": "第一组样例的一种合法定向",
+      "imageTextZh": null
+    },
+    {
+      "src": "/archive-statements/2025-shenyang/assets/F-2.png",
+      "captionEn": "A valid orientation for the second sample",
+      "captionZh": "第二组样例的一种合法定向",
+      "imageTextZh": null
+    }
+  ],
+  "status": "ready",
+  "message": null,
+  "translationCurrent": true
+}

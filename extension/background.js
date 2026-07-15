@@ -10,6 +10,7 @@ function trustedJudgeSender(sender, judge) {
   try {
     const url = new URL(sender.url || "");
     if (judge === "codeforces") return url.origin === "https://codeforces.com";
+    if (judge === "luogu") return url.origin === "https://www.luogu.com.cn";
     return ["https://contest.ucup.ac", "https://qoj.ac"].includes(url.origin);
   } catch { return false; }
 }
@@ -28,7 +29,7 @@ function withStorageLock(task) {
 }
 
 function validPendingJob(item) {
-  return item && validRequestId(item.requestId) && ["codeforces", "ucup"].includes(item.judge)
+  return item && validRequestId(item.requestId) && ["codeforces", "ucup", "luogu"].includes(item.judge)
     && Number.isInteger(item.originTabId) && Number.isInteger(item.judgeTabId)
     && Number.isFinite(item.createdAt) && Date.now() - item.createdAt < 30 * 60 * 1000;
 }
@@ -85,10 +86,12 @@ function rememberTrainerResult(result) {
 }
 
 async function openJudgeTab(message, sender, sendResponse) {
-  const isCodeforces = message.type === "OPEN_CODEFORCES_SUBMIT";
-  const validUrl = isCodeforces
+  const judge = message.type === "OPEN_CODEFORCES_SUBMIT" ? "codeforces" : message.type === "OPEN_LUOGU_SUBMIT" ? "luogu" : "ucup";
+  const validUrl = judge === "codeforces"
     ? /^https:\/\/codeforces\.com\/(?:problemset\/submit(?:\?|$)|gym\/\d+\/submit(?:\?|$))/.test(message.url)
-    : /^https:\/\/contest\.ucup\.ac\/contest\/\d+\/problem\/\d+\?v=1#tab-submit-answer$/.test(message.url);
+    : judge === "luogu"
+      ? /^https:\/\/www\.luogu\.com\.cn\/problem\/P\d{4,8}$/.test(message.url)
+      : /^https:\/\/contest\.ucup\.ac\/contest\/\d+\/problem\/\d+\?v=1#tab-submit-answer$/.test(message.url);
   const submission = message.submission;
   if (!validUrl || !submission || !validRequestId(submission.requestId) || typeof submission.sourceCode !== "string"
     || !submission.sourceCode.trim() || submission.sourceCode.length > 500_000 || sender.tab?.id === undefined) {
@@ -102,7 +105,7 @@ async function openJudgeTab(message, sender, sendResponse) {
     if (!Number.isInteger(tab.id)) throw new Error("无法创建评测标签页");
     const pending = {
       ...submission,
-      judge: isCodeforces ? "codeforces" : "ucup",
+      judge,
       originTabId: sender.tab.id,
       judgeTabId: tab.id,
       createdAt: Date.now(),
@@ -120,24 +123,37 @@ async function openJudgeTab(message, sender, sendResponse) {
 }
 
 async function checkJudgeSession(judge) {
-  const url = judge === "codeforces" ? "https://codeforces.com/settings/general" : "https://contest.ucup.ac/";
+  const url = judge === "codeforces" ? "https://codeforces.com/settings/general"
+    : judge === "luogu" ? "https://www.luogu.com.cn/problem/P1000"
+      : "https://contest.ucup.ac/";
+  const judgeName = judge === "codeforces" ? "Codeforces" : judge === "luogu" ? "洛谷" : "Universal Cup";
   try {
     const response = await fetch(url, { credentials: "include", redirect: "follow", cache: "no-store" });
     const html = await response.text();
     if (judge === "codeforces" && (/Just a moment/i.test(html) || /challenge-platform|cf-chl-/i.test(html))) {
       return { status: "challenge", message: "需要完成 Codeforces 人机验证" };
     }
-    if (!response.ok) return { status: "unreachable", message: `${judge === "codeforces" ? "Codeforces" : "Universal Cup"} 返回 HTTP ${response.status}` };
+    if (!response.ok) return { status: "unreachable", message: `${judgeName} 返回 HTTP ${response.status}` };
     if (judge === "codeforces") {
       if (/href=["'][^"']*\/logout/i.test(html) && !/name=["']handleOrEmail/i.test(html)) return { status: "ready", message: "Codeforces 会话可用" };
       if (/name=["']handleOrEmail|href=["'][^"']*\/enter/i.test(html)) return { status: "signed_out", message: "Codeforces 尚未登录" };
+    } else if (judge === "luogu") {
+      if (/\/auth\/login(?:[/?#]|$)/.test(response.url)) return { status: "signed_out", message: "洛谷尚未登录" };
+      const contextMatch = html.match(/<script[^>]+id=["']lentille-context["'][^>]*>([\s\S]*?)<\/script>/i);
+      if (contextMatch) {
+        try {
+          const context = JSON.parse(contextMatch[1]);
+          if (context?.user && Number(context.user.uid) > 0) return { status: "ready", message: "洛谷会话可用" };
+          return { status: "signed_out", message: "洛谷尚未登录" };
+        } catch { /* Fall through to the unknown state. */ }
+      }
     } else {
       if (/href=["'][^"']*\/logout/i.test(html)) return { status: "ready", message: "Universal Cup 会话可用" };
       if (/href=["'](?:\/\/contest\.ucup\.ac)?\/login/i.test(html)) return { status: "signed_out", message: "Universal Cup 尚未登录" };
     }
     return { status: "unknown", message: "未能确认登录状态，可在提交前重新检测" };
   } catch {
-    return { status: "unreachable", message: `无法连接 ${judge === "codeforces" ? "Codeforces" : "Universal Cup"}` };
+    return { status: "unreachable", message: `无法连接 ${judgeName}` };
   }
 }
 
@@ -194,12 +210,12 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (!trustedTrainerSender(sender)) return;
   if (message?.type === "CHECK_JUDGE_SESSIONS") {
-    void Promise.all([checkJudgeSession("codeforces"), checkJudgeSession("ucup")])
-      .then(([codeforces, ucup]) => sendResponse({ sessions: { codeforces, ucup } }))
+    void Promise.all([checkJudgeSession("codeforces"), checkJudgeSession("ucup"), checkJudgeSession("luogu")])
+      .then(([codeforces, ucup, luogu]) => sendResponse({ sessions: { codeforces, ucup, luogu } }))
       .catch(() => sendResponse({ sessions: {} }));
     return true;
   }
-  if (message?.type === "OPEN_CODEFORCES_SUBMIT" || message?.type === "OPEN_UCUP_SUBMIT") {
+  if (["OPEN_CODEFORCES_SUBMIT", "OPEN_UCUP_SUBMIT", "OPEN_LUOGU_SUBMIT"].includes(message?.type)) {
     void openJudgeTab(message, sender, sendResponse);
     return true;
   }

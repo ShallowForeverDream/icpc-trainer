@@ -145,20 +145,22 @@ test("ships readable Chinese fallbacks and a QOJ-like cached statement reader", 
 });
 
 test("ships a constrained Manifest V3 statement and submit bridge", async () => {
-  const [manifestText, background, bridge, fill, qojFill] = await Promise.all([
+  const [manifestText, background, bridge, fill, qojFill, luoguFill] = await Promise.all([
     readFile(new URL("extension/manifest.json", root), "utf8"),
     readFile(new URL("extension/background.js", root), "utf8"),
     readFile(new URL("extension/trainer-bridge.js", root), "utf8"),
     readFile(new URL("extension/codeforces-fill.js", root), "utf8"),
     readFile(new URL("extension/qoj-fill.js", root), "utf8"),
+    readFile(new URL("extension/luogu-fill.js", root), "utf8"),
   ]);
   const manifest = JSON.parse(manifestText);
   assert.equal(manifest.manifest_version, 3);
   assert.ok(manifest.host_permissions.includes("https://codeforces.com/*"));
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
+  assert.ok(manifest.host_permissions.includes("https://www.luogu.com.cn/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "1.3.0");
+  assert.equal(manifest.version, "1.4.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -168,7 +170,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(bridge, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
   assert.match(qojFill, /input-answer_answer_editor/);
   assert.match(qojFill, /answer_answer_language/);
-  assert.match(`${bridge}\n${fill}\n${qojFill}`, /autoSubmit/);
+  assert.match(`${bridge}\n${fill}\n${qojFill}\n${luoguFill}`, /autoSubmit/);
   assert.match(fill, /submitButton\.click\(\)/);
   assert.match(qojFill, /button-submit-answer/);
   assert.match(background, /active: false/);
@@ -178,6 +180,10 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(fill, /phase === "tracking"/);
   assert.match(fill, /status-verdict-cell/);
   assert.match(fill, /"judged"/);
+  assert.match(luoguFill, /fe\/api\/problem\/submit/);
+  assert.match(luoguFill, /X-CSRF-TOKEN/);
+  assert.match(luoguFill, /phase === "tracking"/);
+  assert.match(luoguFill, /status === 12/);
   assert.match(bridge, /archiveContestId/);
   assert.match(fill, /archiveContestId/);
   assert.match(background, /archiveContestId/);
@@ -337,7 +343,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.doesNotMatch(page, />\+ WA</);
   assert.doesNotMatch(page, />标记 AC</);
   assert.match(page, /同时间轴真实榜单/);
-  assert.match(problemPage, /正文、样例与图片已从官方 PDF 提取/);
+  assert.match(problemPage, /正文、样例与图片已从官方题册提取/);
   assert.match(problemPage, /复制输入/);
   assert.match(problemPage, /提交代码/);
   assert.match(problemPage, /或直接粘贴代码/);
@@ -386,6 +392,34 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   const problemHtml = await problemResponse.text();
   assert.match(problemHtml, /Greetings from Prof\. Chen/);
   assert.match(problemHtml, /提交代码/);
+});
+
+test("integrates the 2024 Xi'an Invitational as local bilingual statements", async () => {
+  const [catalog, manifestText, statementA, statementJ, problemPage, statementClient, importer] = await Promise.all([
+    readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
+    readFile(new URL("public/archive-statements/2024-xian-invitational/manifest.json", root), "utf8"),
+    readFile(new URL("public/archive-statements/2024-xian-invitational/A.json", root), "utf8"),
+    readFile(new URL("public/archive-statements/2024-xian-invitational/J.json", root), "utf8"),
+    readFile(new URL("app/vp/archive/problem/page.tsx", root), "utf8"),
+    readFile(new URL("app/lib/archive-statement-client.ts", root), "utf8"),
+    readFile(new URL("scripts/import_xian_luogu_statements.py", root), "utf8"),
+  ]);
+  const manifest = JSON.parse(manifestText);
+  const problemA = JSON.parse(statementA);
+  const problemJ = JSON.parse(statementJ);
+  assert.equal(manifest.problems.length, 13);
+  assert.equal(manifest.luoguContestId, 173404);
+  assert.match(catalog, /luoguProblemIds: \["P10553", "P10554"/);
+  assert.equal(problemA.titleZh, "猜树");
+  assert.equal(problemA.english.sections.length > 0, true);
+  assert.equal(problemA.chinese.sections.length > 0, true);
+  assert.equal(problemJ.images[0].src, "/archive-statements/2024-xian-invitational/assets/J-1.png");
+  assert.equal(problemJ.samples.length, 3);
+  assert.match(problemPage, /katex\.renderToString/);
+  assert.match(problemPage, /statement\.samples/);
+  assert.match(problemPage, /problem\.judge === "luogu"/);
+  assert.match(statementClient, /mirror-structured/);
+  assert.match(importer, /lentille-context/);
 });
 
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {

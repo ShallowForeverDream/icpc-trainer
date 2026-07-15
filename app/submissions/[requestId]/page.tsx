@@ -60,7 +60,7 @@ export default function SubmissionDetailPage() {
     <div className="submission-detail-back"><Link href="/submissions">← 返回提交记录</Link></div>
     {loading ? <div className="panel submission-detail-empty"><div className="statement-loader" /><h2>正在读取提交记录</h2></div> : !submission ? <div className="panel submission-detail-empty"><Icon name="history" /><h2>没有找到这条提交</h2><p>它可能属于另一账号，或尚未同步到服务器。</p><Link className="button button-primary" href="/submissions">返回提交记录</Link></div> : <>
       <section className="submission-detail-hero">
-        <div><span>{submission.judge === "codeforces" ? "Codeforces" : "Universal Cup / QOJ"}</span><h1>{submission.problemCode} · {submission.problemTitle}</h1><p>{new Date(submission.createdAt).toLocaleString("zh-CN")} · {submission.language}{submission.judgeSubmissionId ? ` · 评测站提交编号 #${submission.judgeSubmissionId}` : ""}</p></div>
+        <div><span>{submission.judge === "codeforces" ? "Codeforces" : submission.judge === "luogu" ? "洛谷" : "Universal Cup / QOJ"}</span><h1>{submission.problemCode} · {submission.problemTitle}</h1><p>{new Date(submission.createdAt).toLocaleString("zh-CN")} · {submission.language}{submission.judgeSubmissionId ? ` · 评测站提交编号 #${submission.judgeSubmissionId}` : ""}</p></div>
         <strong className={`submission-state ${submission.status}`}>{STATUS_LABEL[submission.status]}</strong>
       </section>
       <section className="submission-detail-grid">

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "icpc-trainer Browser Bridge",
-  "version": "1.3.0",
-  "description": "Import statements and securely submit to Codeforces or Universal Cup from icpc-trainer.",
+  "version": "1.4.0",
+  "description": "Import statements and securely submit to Codeforces, Universal Cup, or Luogu from icpc-trainer.",
   "permissions": ["storage", "tabs"],
   "background": { "service_worker": "background.js" },
   "host_permissions": [
@@ -11,7 +11,8 @@
     "http://127.0.0.1/*",
     "https://codeforces.com/*",
     "https://contest.ucup.ac/*",
-    "https://qoj.ac/*"
+    "https://qoj.ac/*",
+    "https://www.luogu.com.cn/*"
   ],
   "content_scripts": [
     {
@@ -27,6 +28,11 @@
     {
       "matches": ["https://contest.ucup.ac/*", "https://qoj.ac/*"],
       "js": ["qoj-fill.js"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": ["https://www.luogu.com.cn/problem/*", "https://www.luogu.com.cn/record/*"],
+      "js": ["luogu-fill.js"],
       "run_at": "document_idle"
     }
   ]

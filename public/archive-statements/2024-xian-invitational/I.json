@@ -1,0 +1,172 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-xian-invitational",
+  "contestName": "ICPC 西安全国邀请赛",
+  "slot": "I",
+  "problemId": 10561,
+  "titleEn": "Smart Quality Inspector",
+  "titleZh": "聪明的质检员",
+  "timeLimitText": "0.5 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "mirror-structured",
+    "englishPdfUrl": null,
+    "chinesePdfUrl": null,
+    "chinesePages": null,
+    "sourceUrl": "https://www.luogu.com.cn/problem/P10561",
+    "sourceLabel": "ICPC 2024 西安邀请赛原题原数据镜像"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Ella has a factory. One day, her factory is facing a product quality inspection."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Her factory has $N$ production lines. Among the $N$ production lines, $N-K$ of them are qualified, and the other $K$ lines are unqualified. The fine of the $i$ -th$(1\\leq i\\leq K)$ unqualified line is $i$ Yuan."
+          },
+          {
+            "kind": "paragraph",
+            "text": "There are $M$ quality inspectors here. For the $j$ -th$(1\\leq j\\leq M)$ quality inspector, he will inspect from the $l_i$ -th line to the $r_i$ -th line and find the unqualified production line with the largest fine among them, then impose this fine on Ella."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Ella does not want to receive so many fines, so she decides to renumber the $N$ production lines to receive the least amount of fines. Please help her."
+          },
+          {
+            "kind": "paragraph",
+            "text": "In simple terms:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "You have a sequence $A$ of length $N$, $A=[1,2,3,...,K,0,0,0,...,0]$. Here $N,K$ are given."
+          },
+          {
+            "kind": "paragraph",
+            "text": "There are $M$ pairs of integers, each pair consists of two numbers $l_i,r_i$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You need to rearrange sequence $A$ to minimize the following:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "$$\\sum_{i=1}^M \\max_{j=l_i}^{r_i} (A_{j})$$"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains three integers $N,K,M(1\\leq K\\leq N\\leq 20,1\\leq M\\leq 10^5)$, described in the statement."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Then $M$ lines, the $i$ -th line of them contains two integers $l_i,r_i(1\\leq l_i\\leq r_i\\leq N)$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "An integer indicates the answer."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Ella 有一家工厂。一天，她的工厂面临产品质量检查。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "她的工厂有 $N$ 条生产线。在这 $N$ 条生产线中，有 $N-K$ 条是合格的，另外 $K$ 条是不合格的。第 $i$ 条（$1\\leq i\\leq K$）不合格生产线的罚款为 $i$ 元。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "这里有 $M$ 名质量检查员。对于第 $j$ 名（$1\\leq j\\leq M$）质量检查员，他将检查从第 $l_i$ 条到第 $r_i$ 条的生产线，并在其中找到罚款最高的不合格生产线，然后将此罚款施加给 Ella。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "Ella 不想收到太多罚款，所以她决定重新编号这 $N$ 条生产线以使收到的罚款最少。请帮助她。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "简单来说："
+          },
+          {
+            "kind": "paragraph",
+            "text": "你有一个长度为 $N$ 的序列 $A$，$A=[1,2,3,...,K,0,0,0,...,0]$。这里 $N,K$ 已知。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "有 $M$ 对整数，每对由两个数字 $l_i,r_i$ 组成。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "你需要重新排列序列 $A$ 以最小化以下值："
+          },
+          {
+            "kind": "paragraph",
+            "text": "$$\\sum_{i=1}^M \\max_{j=l_i}^{r_i} (A_{j})$$"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含三个整数 $N,K,M(1\\leq K\\leq N\\leq 20,1\\leq M\\leq 10^5)$，如题所述。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "接下来 $M$ 行，每行包含两个整数 $l_i,r_i(1\\leq l_i\\leq r_i\\leq N)$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "一个整数，表示答案。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "4 4 3\n1 2\n3 4\n1 4",
+    "output": "10",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "4 4 3\n1 2\n3 4\n1 4",
+      "output": "10",
+      "mode": "columns"
+    }
+  ],
+  "images": []
+}

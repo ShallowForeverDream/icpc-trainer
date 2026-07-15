@@ -1,0 +1,111 @@
+{
+  "contestId": "2024-xian-invitational",
+  "luoguContestId": 173404,
+  "sourceContestUrl": "https://www.luogu.com.cn/contest/173404",
+  "problems": [
+    {
+      "slot": "A",
+      "problemId": "P10553",
+      "titleEn": "Guess The Tree",
+      "titleZh": "猜树",
+      "path": "/archive-statements/2024-xian-invitational/A.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10553"
+    },
+    {
+      "slot": "B",
+      "problemId": "P10554",
+      "titleEn": "Turn Off The Lights",
+      "titleZh": "关灯",
+      "path": "/archive-statements/2024-xian-invitational/B.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10554"
+    },
+    {
+      "slot": "C",
+      "problemId": "P10555",
+      "titleEn": "Fix the Tree",
+      "titleZh": "修复树",
+      "path": "/archive-statements/2024-xian-invitational/C.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10555"
+    },
+    {
+      "slot": "D",
+      "problemId": "P10556",
+      "titleEn": "Make Them Straight",
+      "titleZh": "让它们成直线",
+      "path": "/archive-statements/2024-xian-invitational/D.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10556"
+    },
+    {
+      "slot": "E",
+      "problemId": "P10557",
+      "titleEn": "Dumb Robot",
+      "titleZh": "笨机器人",
+      "path": "/archive-statements/2024-xian-invitational/E.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10557"
+    },
+    {
+      "slot": "F",
+      "problemId": "P10558",
+      "titleEn": "XOR Game",
+      "titleZh": "异或游戏",
+      "path": "/archive-statements/2024-xian-invitational/F.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10558"
+    },
+    {
+      "slot": "G",
+      "problemId": "P10559",
+      "titleEn": "The Last Cumulonimbus Cloud",
+      "titleZh": "最后的积雨云",
+      "path": "/archive-statements/2024-xian-invitational/G.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10559"
+    },
+    {
+      "slot": "H",
+      "problemId": "P10560",
+      "titleEn": "Holes and Balls",
+      "titleZh": "洞与球",
+      "path": "/archive-statements/2024-xian-invitational/H.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10560"
+    },
+    {
+      "slot": "I",
+      "problemId": "P10561",
+      "titleEn": "Smart Quality Inspector",
+      "titleZh": "聪明的质检员",
+      "path": "/archive-statements/2024-xian-invitational/I.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10561"
+    },
+    {
+      "slot": "J",
+      "problemId": "P10562",
+      "titleEn": "Triangle",
+      "titleZh": "三角形",
+      "path": "/archive-statements/2024-xian-invitational/J.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10562"
+    },
+    {
+      "slot": "K",
+      "problemId": "P10563",
+      "titleEn": "Yet Another Maximum Matching Counting Problem",
+      "titleZh": "又一道最大匹配计数问题",
+      "path": "/archive-statements/2024-xian-invitational/K.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10563"
+    },
+    {
+      "slot": "L",
+      "problemId": "P10564",
+      "titleEn": "Rubbish Sorting",
+      "titleZh": "垃圾分类",
+      "path": "/archive-statements/2024-xian-invitational/L.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10564"
+    },
+    {
+      "slot": "M",
+      "problemId": "P10565",
+      "titleEn": "Chained Lights",
+      "titleZh": "连锁灯",
+      "path": "/archive-statements/2024-xian-invitational/M.json",
+      "sourceUrl": "https://www.luogu.com.cn/problem/P10565"
+    }
+  ]
+}

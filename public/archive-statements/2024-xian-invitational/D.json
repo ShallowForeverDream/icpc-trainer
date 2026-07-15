@@ -1,0 +1,153 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-xian-invitational",
+  "contestName": "ICPC 西安全国邀请赛",
+  "slot": "D",
+  "problemId": 10556,
+  "titleEn": "Make Them Straight",
+  "titleZh": "让它们成直线",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "mirror-structured",
+    "englishPdfUrl": null,
+    "chinesePdfUrl": null,
+    "chinesePages": null,
+    "sourceUrl": "https://www.luogu.com.cn/problem/P10556",
+    "sourceLabel": "ICPC 2024 西安邀请赛原题原数据镜像"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There is a sequence $a$ of non-negative integers of length $n$, the $i$-th element of it is $a_i(1\\leq i\\leq n)$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "A sequence is defined as 'good' if and only if there exists a non negative integer $k(0\\leq k\\leq 10^6)$ that satisfies the following condition:"
+          },
+          {
+            "kind": "paragraph",
+            "text": "$a_{i}=a_{1}+(i-1)k$ for all $1\\leq i\\leq n$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "To make this sequence 'good', for each $i(1\\leq i\\leq n)$, you can do nothing, or pay $b_i$ coin to replace $a_i$ with any non-negative integer."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The question is, what is the minimum cost to make this sequence 'good'."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains an integer $n(1\\leq n\\leq 2\\times 10^5)$, described in the statement."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The second line contains $n$ integers $a_1,...,a_n(0\\leq a_i\\leq 10^6)$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The third line contains $n$ integers $b_1,...,b_n(0\\leq b_i\\leq 10^6)$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "One integer, the answer."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有一个长度为 $n$ 的非负整数序列 $a$，其中第 $i$ 个元素为 $a_i(1\\leq i\\leq n)$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "如果存在一个非负整数 $k(0\\leq k\\leq 10^6)$ 满足以下条件，则该序列被定义为「好」序列："
+          },
+          {
+            "kind": "paragraph",
+            "text": "对于所有 $1\\leq i\\leq n$，都有 $a_{i}=a_{1}+(i-1)k$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "为了使这个序列成为「好」序列，对于每个 $i(1\\leq i\\leq n)$，你可以选择不做任何操作，或者支付 $b_i$ 个硬币将 $a_i$ 替换为任意非负整数。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "问题是，使这个序列成为「好」序列的最小代价是多少。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含一个整数 $n(1\\leq n\\leq 2\\times 10^5)$，如题述。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "第二行包含 $n$ 个整数 $a_1,...,a_n(0\\leq a_i\\leq 10^6)$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "第三行包含 $n$ 个整数 $b_1,...,b_n(0\\leq b_i\\leq 10^6)$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "一个整数，表示答案。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "5\n1 4 3 2 5\n1 1 1 1 1",
+    "output": "2",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "5\n1 4 3 2 5\n1 1 1 1 1",
+      "output": "2",
+      "mode": "columns"
+    },
+    {
+      "input": "5\n1 4 3 2 5\n1 9 1 1 1",
+      "output": "3",
+      "mode": "columns"
+    }
+  ],
+  "images": []
+}

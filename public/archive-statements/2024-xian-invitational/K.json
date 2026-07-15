@@ -1,0 +1,148 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-xian-invitational",
+  "contestName": "ICPC 西安全国邀请赛",
+  "slot": "K",
+  "problemId": 10563,
+  "titleEn": "Yet Another Maximum Matching Counting Problem",
+  "titleZh": "又一道最大匹配计数问题",
+  "timeLimitText": "3 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "mirror-structured",
+    "englishPdfUrl": null,
+    "chinesePdfUrl": null,
+    "chinesePages": null,
+    "sourceUrl": "https://www.luogu.com.cn/problem/P10563",
+    "sourceLabel": "ICPC 2024 西安邀请赛原题原数据镜像"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There is a two-dimensional plane."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You have a set of points $\\{(x_i,y_i)\\}$ that satisfies $1\\le x_i\\le n, 1\\le y_i\\le m$ (Both $x_i$ and $y_i$ are integers), and there are no two points with the same coordinates."
+          },
+          {
+            "kind": "paragraph",
+            "text": "If two points have the same horizontal or vertical coordinates, we will connect an edge between these two points. This forms a graph."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You need to find the sum of the maximum number of matches in the graphs formed by all possible $2^{nm}-1$ non empty sets, and output the result modulo $998244353$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Here, the maximum number of matches in a graph is defined as: selecting the most edges so that there are no common vertices between any two edges."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are multiple testcases in this problem."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The first line contains an integer $T(1\\le T\\le 100)$, which represents the number of testcases."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Each of the testcases contains two integers $n,m(1\\leq n,m\\leq 500)$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each of the testcases, print an integer representing the result modulo $998244353$."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "在一个二维平面上，"
+          },
+          {
+            "kind": "paragraph",
+            "text": "你有一组点 $\\{(x_i,y_i)\\}$，满足 $1\\le x_i\\le n, 1\\le y_i\\le m$（$x_i$ 和 $y_i$ 都是整数），并且没有两个点具有相同的坐标。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "如果两个点具有相同的水平或垂直坐标，我们将在这两个点之间连接一条边。这将形成一个图。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "你需要找到由所有可能的 $2^{nm}-1$ 个非空集合形成的图中的最大匹配大小之和，并输出结果对 $998244353$ 取模。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "在这里，图中最大匹配的大小定义为：选择最多的边，使得任何两条边之间没有公共顶点。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "这个问题有多个测试用例。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "第一行包含一个整数 $T(1\\le T\\le 100)$，表示测试用例的数量。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "每个测试用例包含两个整数 $n,m(1\\leq n,m\\leq 500)$。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每个测试用例，输出一个整数，表示结果对 $998244353$ 取模。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "10\n1 1\n1 2\n2 2\n4 4\n3 3\n5 5\n1 8\n20 20\n100 100\n500 500",
+    "output": "0\n1\n10\n241456\n964\n200419152\n448\n985051144\n370696900\n357517517",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "10\n1 1\n1 2\n2 2\n4 4\n3 3\n5 5\n1 8\n20 20\n100 100\n500 500",
+      "output": "0\n1\n10\n241456\n964\n200419152\n448\n985051144\n370696900\n357517517",
+      "mode": "columns"
+    }
+  ],
+  "images": []
+}

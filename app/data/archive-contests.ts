@@ -9,6 +9,8 @@ export type ArchiveContest = {
   gymId?: number;
   qojContestId?: number;
   qojProblemIds?: number[];
+  luoguContestId?: number;
+  luoguProblemIds?: string[];
   problemTitles?: string[];
   chineseStatementUrl?: string;
 };
@@ -52,7 +54,12 @@ export const archiveContests: ArchiveContest[] = [
   },
   { id: "2025-ecfinal", year: 2025, name: "ICPC 东亚区决赛", city: "EC-Final", type: "东亚决赛", boardPath: "icpc/50th/ecfinal", problemCount: 12, qojContestId: 3295, qojProblemIds: [16328, 16329, 16330, 16331, 16332, 16333, 16334, 16335, 16336, 16337, 16338, 16339] },
 
-  { id: "2024-xian-invitational", year: 2024, name: "ICPC 西安全国邀请赛", city: "西安", type: "邀请赛", boardPath: "icpc/49th/xian-invitational", problemCount: 13 },
+  {
+    id: "2024-xian-invitational", year: 2024, name: "ICPC 西安全国邀请赛", city: "西安", type: "邀请赛", boardPath: "icpc/49th/xian-invitational", problemCount: 13,
+    luoguContestId: 173404,
+    luoguProblemIds: ["P10553", "P10554", "P10555", "P10556", "P10557", "P10558", "P10559", "P10560", "P10561", "P10562", "P10563", "P10564", "P10565"],
+    problemTitles: ["Guess The Tree", "Turn Off The Lights", "Fix the Tree", "Make Them Straight", "Dumb Robot", "XOR Game", "The Last Cumulonimbus Cloud", "Holes and Balls", "Smart Quality Inspector", "Triangle", "Yet Another Maximum Matching Counting Problem", "Rubbish Sorting", "Chained Lights"],
+  },
   {
     id: "2024-kunming-invitational", year: 2024, name: "ICPC 昆明全国邀请赛", city: "昆明", type: "邀请赛", boardPath: "icpc/49th/kunming-invitational", problemCount: 13,
     qojContestId: 1802,
@@ -90,7 +97,9 @@ export function findArchiveContest(id: string) {
 }
 
 export function archiveContestIntegrated(contest: ArchiveContest) {
-  return Boolean(contest.gymId || (contest.qojContestId && contest.qojProblemIds?.length && contest.qojProblemIds.length >= contest.problemCount));
+  return Boolean(contest.gymId
+    || (contest.qojContestId && contest.qojProblemIds?.length && contest.qojProblemIds.length >= contest.problemCount)
+    || (contest.luoguContestId && contest.luoguProblemIds?.length && contest.luoguProblemIds.length >= contest.problemCount));
 }
 
 export function archiveProblemUrl(contest: ArchiveContest, slot: string) {
@@ -98,12 +107,17 @@ export function archiveProblemUrl(contest: ArchiveContest, slot: string) {
   const problemId = contest.qojProblemIds?.[slot.charCodeAt(0) - 65];
   if (contest.qojContestId && problemId) return `https://contest.ucup.ac/contest/${contest.qojContestId}/problem/${problemId}?v=1`;
   if (contest.qojContestId) return `https://qoj.ac/contest/${contest.qojContestId}`;
+  const luoguProblemId = contest.luoguProblemIds?.[slot.charCodeAt(0) - 65];
+  if (luoguProblemId) return `https://www.luogu.com.cn/problem/${luoguProblemId}`;
+  if (contest.luoguContestId) return `https://www.luogu.com.cn/contest/${contest.luoguContestId}`;
   return `https://board.xcpcio.com/${contest.boardPath}`;
 }
 
 export function archiveProblemHref(contest: ArchiveContest, slot: string) {
   const problemId = contest.qojProblemIds?.[slot.charCodeAt(0) - 65];
   if (contest.qojContestId && problemId) return `/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
+  const luoguProblemId = contest.luoguProblemIds?.[slot.charCodeAt(0) - 65];
+  if (contest.luoguContestId && luoguProblemId) return `/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
   if (contest.gymId) return `/problem/${contest.gymId}${slot}?archive=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
   return archiveProblemUrl(contest, slot);
 }
@@ -111,15 +125,35 @@ export function archiveProblemHref(contest: ArchiveContest, slot: string) {
 export function archivePracticeProblem(contest: ArchiveContest, slot: string) {
   const index = slot.charCodeAt(0) - 65;
   const problemId = contest.qojProblemIds?.[index];
-  if (!contest.qojContestId || !problemId) return null;
-  const officialUrl = `https://contest.ucup.ac/contest/${contest.qojContestId}/problem/${problemId}?v=1`;
-  return {
-    id: problemId,
-    slot,
-    title: contest.problemTitles?.[index] || `Problem ${slot}`,
-    officialUrl,
-    statementUrl: `https://contest.ucup.ac/download.php?type=statement&id=${problemId}&contest_id=${contest.qojContestId}`,
-    submitUrl: `${officialUrl}#tab-submit-answer`,
-    chineseStatementUrl: contest.chineseStatementUrl,
-  };
+  if (contest.qojContestId && problemId) {
+    const officialUrl = `https://contest.ucup.ac/contest/${contest.qojContestId}/problem/${problemId}?v=1`;
+    return {
+      judge: "ucup" as const,
+      id: problemId,
+      contestId: contest.qojContestId,
+      slot,
+      title: contest.problemTitles?.[index] || `Problem ${slot}`,
+      officialUrl,
+      statementUrl: `https://contest.ucup.ac/download.php?type=statement&id=${problemId}&contest_id=${contest.qojContestId}`,
+      submitUrl: `${officialUrl}#tab-submit-answer`,
+      chineseStatementUrl: contest.chineseStatementUrl,
+    };
+  }
+  const luoguProblemId = contest.luoguProblemIds?.[index];
+  if (contest.luoguContestId && luoguProblemId && /^P\d{4,8}$/.test(luoguProblemId)) {
+    const officialUrl = `https://www.luogu.com.cn/problem/${luoguProblemId}`;
+    return {
+      judge: "luogu" as const,
+      id: Number(luoguProblemId.slice(1)),
+      contestId: contest.luoguContestId,
+      luoguProblemId,
+      slot,
+      title: contest.problemTitles?.[index] || `Problem ${slot}`,
+      officialUrl,
+      statementUrl: officialUrl,
+      submitUrl: officialUrl,
+      chineseStatementUrl: undefined,
+    };
+  }
+  return null;
 }

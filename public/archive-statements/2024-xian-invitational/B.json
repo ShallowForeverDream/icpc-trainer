@@ -1,0 +1,229 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-xian-invitational",
+  "contestName": "ICPC 西安全国邀请赛",
+  "slot": "B",
+  "problemId": 10554,
+  "titleEn": "Turn Off The Lights",
+  "titleZh": "关灯",
+  "timeLimitText": "2 seconds",
+  "memoryLimitText": "512 megabytes",
+  "source": {
+    "kind": "mirror-structured",
+    "englishPdfUrl": null,
+    "chinesePdfUrl": null,
+    "chinesePages": null,
+    "sourceUrl": "https://www.luogu.com.cn/problem/P10554",
+    "sourceLabel": "ICPC 2024 西安邀请赛原题原数据镜像"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Kitty has $n^2$ lights, which form an $n\\times n$ matrix."
+          },
+          {
+            "kind": "paragraph",
+            "text": "One day, Kitty found that some of these lights were on, and some were off. Kitty wants to turn them all off."
+          },
+          {
+            "kind": "paragraph",
+            "text": "To achieve her goal, Kitty can perform three types of operations:"
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "(1) Choose a row, reverse the state of this row. It means if a light of this row is on, after this operation, it is now off. If a light of this row is off, after this operation, it is now on."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "(2) Choose a column, reverse the state of this column. It means if a light of this column is on, after this operation, it is now off. If a light of this column is off, after this operation, it is now on."
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "(3) Choose exactly one light, reverse the state of this light. **This operation can only be performed not more than $k$ times.**"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "For the current state, help Kitty achieve her goal within $3n$ operations."
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "The first line contains two integers $n(1\\leq n\\leq 1000),k(0\\leq k < n)$, indicating as described above."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Then $n$ lines follow, each line has exactly $n$ numbers, $0$ represents that the light is turned off at this time, while $1$ represents the opposite."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The $y$-th number of the $(x+1)$-th line in input means the light at coordinate $(x,y)$."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "If Kitty can not achieve her goal,print $-1$ in a single line."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Otherwise, print $M(0\\leq M\\leq 3n)$ in the first line, indicating the number of operations she needs to perform."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The next $M$ lines, each line contains $2$ integers $x,y$, separated by white space."
+          },
+          {
+            "kind": "paragraph",
+            "text": "If $1\\leq x\\leq n,1\\leq y\\leq n$, it means Kitty will reverse the light at coordinate $(x,y)$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "If $x=0,1\\leq y\\leq n$, it means Kitty will reverse all lights at coordinates $(z,y)1\\leq z\\leq n$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "If $1\\leq x\\leq n,y=0$, it means Kitty will reverse all lights at coordinates $(x,z)1\\leq z\\leq n$."
+          },
+          {
+            "kind": "paragraph",
+            "text": "If there are multiple answers, print any of them."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "Kitty 有 $n^2$ 个灯泡，这些灯泡组成了一个 $n\\times n$ 的矩阵。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "有一天，Kitty 发现这些灯泡中有些是亮的，有些是灭的。Kitty 想要把它们全部关闭。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "为了实现她的目标，Kitty 可以执行三种类型的操作："
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "(1) 选择一行，反转这一行的状态。这意味着如果这一行的灯泡是亮的，经过此操作后，它将变为灭的。如果这一行的灯泡是灭的，经过此操作后，它将变为亮的。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "(2) 选择一列，反转这一列的状态。这意味着如果这一列的灯泡是亮的，经过此操作后，它将变为灭的。如果这一列的灯泡是灭的，经过此操作后，它将变为亮的。"
+            ]
+          },
+          {
+            "kind": "bullets",
+            "items": [
+              "(3) 选择一个灯泡，反转这个灯泡的状态。**这种操作最多只能执行 $k$ 次。**"
+            ]
+          },
+          {
+            "kind": "paragraph",
+            "text": "对于当前状态，帮助 Kitty 在 $3n$ 次操作内实现她的目标。"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "第一行包含两个整数 $n(1\\leq n\\leq 1000),k(0\\leq k < n)$，如上所述。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "接下来有 $n$ 行，每行有正好 $n$ 个数字，$0$ 表示此时灯泡是灭的，而 $1$ 表示相反。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "输入中第 $(x+1)$ 行的第 $y$ 个数字表示坐标 $(x,y)$ 处的灯泡。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "如果 Kitty 无法实现目标，在一行中输出 $-1$。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "否则，第一行输出 $M(0\\leq M\\leq 3n)$，表示她需要执行的操作次数。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "接下来的 $M$ 行中，每行包含 $2$ 个整数 $x,y$，用空格分隔。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "如果 $1\\leq x\\leq n,1\\leq y\\leq n$，表示 Kitty 将反转坐标 $(x,y)$ 处的灯泡。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "如果 $x=0,1\\leq y\\leq n$，表示 Kitty 将反转所有坐标为 $(z,y)$（$1\\leq z\\leq n$） 的灯泡。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "如果 $1\\leq x\\leq n,y=0$，表示 Kitty 将反转所有坐标为 $(x,z)$（$1\\leq z\\leq n$） 的灯泡。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "如果有多个答案，输出其中任意一个。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2 0\n0 1\n1 0",
+    "output": "2\n0 2\n2 0",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2 0\n0 1\n1 0",
+      "output": "2\n0 2\n2 0",
+      "mode": "columns"
+    },
+    {
+      "input": "3 1\n1 0 0\n0 1 0\n0 0 1",
+      "output": "-1",
+      "mode": "columns"
+    }
+  ],
+  "images": []
+}

@@ -2,7 +2,8 @@ import { browserApiUrl } from "./browser-api";
 
 export type ArchiveStatementBlock =
   | { kind: "paragraph"; text: string }
-  | { kind: "bullets"; items: string[] };
+  | { kind: "bullets"; items: string[] }
+  | { kind: "code"; code: string; language?: string };
 
 export type ArchiveStatementSection = {
   key: string;
@@ -30,14 +31,17 @@ export type ArchiveExtractedStatement = {
   timeLimitText: string;
   memoryLimitText: string;
   source: {
-    kind: "official-pdf-extract";
-    englishPdfUrl: string;
+    kind: "official-pdf-extract" | "mirror-structured";
+    englishPdfUrl?: string | null;
     chinesePdfUrl: string | null;
     chinesePages: [number, number] | null;
+    sourceUrl?: string | null;
+    sourceLabel?: string | null;
   };
   english: { sections: ArchiveStatementSection[] };
   chinese: { sections: ArchiveStatementSection[] };
   sample: { input: string; output: string; mode: "columns" | "transcript" } | null;
+  samples?: Array<{ input: string; output: string; mode: "columns" | "transcript" }>;
   images: ArchiveStatementImage[];
   status?: "queued" | "importing" | "translating" | "ready_original" | "ready" | "source_required";
   message?: string | null;
@@ -46,7 +50,7 @@ export type ArchiveExtractedStatement = {
 };
 
 export type ArchiveStatementRequest = {
-  qojContestId: number;
+  qojContestId?: number;
   problemId: number;
   contestName: string;
   title: string;
@@ -123,7 +127,7 @@ function isArchiveStatement(value: unknown): value is ArchiveExtractedStatement 
     && typeof statement.slot === "string"
     && typeof statement.titleEn === "string"
     && Boolean(statement.english?.sections && statement.chinese?.sections)
-    && Boolean(statement.source?.englishPdfUrl);
+    && Boolean(statement.source?.englishPdfUrl || statement.source?.sourceUrl);
 }
 
 export async function loadArchiveStatement(contestId: string, slot: string, request: ArchiveStatementRequest) {
@@ -134,6 +138,8 @@ export async function loadArchiveStatement(contestId: string, slot: string, requ
     if (!isArchiveStatement(value)) throw new Error("结构化题面数据格式错误");
     return value;
   }
+
+  if (!request.qojContestId) throw new Error("本站结构化题面暂时不可用，请稍后重试");
 
   const query = new URLSearchParams({
     contest: contestId,

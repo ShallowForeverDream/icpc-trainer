@@ -35,7 +35,7 @@ window.addEventListener("message", async (event) => {
   if (!message || message.source !== "icpc-trainer") return;
 
   if (message.type === "ICPC_TRAINER_PING") {
-    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.3.0" }, window.location.origin);
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.4.0" }, window.location.origin);
     await replayStoredResults();
     return;
   }
@@ -43,21 +43,25 @@ window.addEventListener("message", async (event) => {
   if (message.type === "ICPC_TRAINER_HEALTH_CHECK") {
     try {
       const result = await chrome.runtime.sendMessage({ type: "CHECK_JUDGE_SESSIONS" });
-      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.3.0", sessions: result?.sessions || {} }, window.location.origin);
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.0", sessions: result?.sessions || {} }, window.location.origin);
     } catch {
-      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.3.0", sessions: {} }, window.location.origin);
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.0", sessions: {} }, window.location.origin);
     }
     return;
   }
 
   if (message.type === "ICPC_TRAINER_ARCHIVE_SUBMIT") {
     const payload = message.payload;
-    const expectedUrl = payload && Number.isInteger(payload.qojContestId) && Number.isInteger(payload.problemId)
-      ? `https://contest.ucup.ac/contest/${payload.qojContestId}/problem/${payload.problemId}`
-      : "";
-    if (!payload || payload.judge !== "ucup" || !validRequestId(payload.requestId)
-      || payload.qojContestId < 1 || payload.qojContestId > 10_000_000
-      || payload.problemId < 1 || payload.problemId > 100_000_000
+    const isLuogu = payload?.judge === "luogu";
+    const expectedUrl = isLuogu && /^P\d{4,8}$/.test(payload?.luoguProblemId || "")
+      ? `https://www.luogu.com.cn/problem/${payload.luoguProblemId}`
+      : payload && Number.isInteger(payload.qojContestId) && Number.isInteger(payload.problemId)
+        ? `https://contest.ucup.ac/contest/${payload.qojContestId}/problem/${payload.problemId}`
+        : "";
+    if (!payload || !["ucup", "luogu"].includes(payload.judge) || !validRequestId(payload.requestId)
+      || (isLuogu && (!/^P\d{4,8}$/.test(payload.luoguProblemId || "") || !Number.isInteger(payload.luoguContestId)))
+      || (!isLuogu && (payload.qojContestId < 1 || payload.qojContestId > 10_000_000
+        || payload.problemId < 1 || payload.problemId > 100_000_000))
       || !/^[A-Z][0-9]?$/.test(payload.slot)
       || typeof payload.archiveContestId !== "string" || !/^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])$/.test(payload.archiveContestId)
       || typeof payload.submitUrl !== "string" || !payload.submitUrl.startsWith(expectedUrl)
@@ -65,9 +69,11 @@ window.addEventListener("message", async (event) => {
       || typeof payload.languageValue !== "string" || !/^[A-Za-z0-9+.]{1,24}$/.test(payload.languageValue)) return;
     const submission = {
       requestId: payload.requestId,
-      judge: "ucup",
+      judge: payload.judge,
       qojContestId: payload.qojContestId,
       problemId: payload.problemId,
+      luoguContestId: payload.luoguContestId,
+      luoguProblemId: payload.luoguProblemId,
       slot: payload.slot,
       archiveContestId: payload.archiveContestId,
       sourceCode: payload.sourceCode,
@@ -76,8 +82,8 @@ window.addEventListener("message", async (event) => {
       autoSubmit: payload.autoSubmit === true,
     };
     try {
-      const result = await chrome.runtime.sendMessage({ type: "OPEN_UCUP_SUBMIT", url: `${expectedUrl}?v=1#tab-submit-answer`, submission });
-      postSubmitResult({ requestId: payload.requestId, ok: Boolean(result?.ok), stage: result?.ok ? "queued" : "failed", message: result?.ok ? "已在后台连接 Universal Cup，正在代理提交" : result?.error || "无法连接评测站" });
+      const result = await chrome.runtime.sendMessage({ type: isLuogu ? "OPEN_LUOGU_SUBMIT" : "OPEN_UCUP_SUBMIT", url: isLuogu ? expectedUrl : `${expectedUrl}?v=1#tab-submit-answer`, submission });
+      postSubmitResult({ requestId: payload.requestId, ok: Boolean(result?.ok), stage: result?.ok ? "queued" : "failed", message: result?.ok ? `已在后台连接${isLuogu ? "洛谷" : " Universal Cup"}，正在代理提交` : result?.error || "无法连接评测站" });
     } catch {
       postSubmitResult({ requestId: payload.requestId, ok: false, stage: "failed", message: "扩展无法连接评测站" });
     }

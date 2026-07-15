@@ -40,7 +40,7 @@ db.exec(`
   CREATE TABLE IF NOT EXISTS platform_submissions (
     owner_key TEXT NOT NULL,
     request_id TEXT NOT NULL,
-    judge TEXT NOT NULL CHECK (judge IN ('codeforces', 'ucup')),
+    judge TEXT NOT NULL CHECK (judge IN ('codeforces', 'ucup', 'luogu')),
     problem_code TEXT NOT NULL,
     problem_title TEXT NOT NULL,
     problem_href TEXT NOT NULL,
@@ -86,6 +86,43 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS vp_standing_snapshots_session_idx ON vp_standing_snapshots(session_id, updated_at DESC);
 `);
+
+const platformSubmissionSchema = String(db.prepare("SELECT sql FROM sqlite_master WHERE type = 'table' AND name = 'platform_submissions'").get()?.sql || "");
+if (platformSubmissionSchema && !platformSubmissionSchema.includes("'luogu'")) {
+  db.exec(`
+    BEGIN IMMEDIATE;
+    DROP INDEX IF EXISTS platform_submissions_owner_updated_idx;
+    DROP INDEX IF EXISTS platform_submissions_problem_idx;
+    ALTER TABLE platform_submissions RENAME TO platform_submissions_legacy;
+    CREATE TABLE platform_submissions (
+      owner_key TEXT NOT NULL,
+      request_id TEXT NOT NULL,
+      judge TEXT NOT NULL CHECK (judge IN ('codeforces', 'ucup', 'luogu')),
+      problem_code TEXT NOT NULL,
+      problem_title TEXT NOT NULL,
+      problem_href TEXT NOT NULL,
+      contest_id INTEGER NOT NULL,
+      problem_index TEXT NOT NULL,
+      language TEXT NOT NULL,
+      source_payload BLOB,
+      source_bytes INTEGER NOT NULL DEFAULT 0,
+      status TEXT NOT NULL CHECK (status IN ('queued', 'submitted', 'accepted', 'rejected', 'failed', 'needs_login')),
+      verdict TEXT,
+      message TEXT NOT NULL,
+      judge_submission_id INTEGER,
+      archive_contest_id TEXT,
+      slot TEXT,
+      created_at INTEGER NOT NULL,
+      updated_at INTEGER NOT NULL,
+      PRIMARY KEY (owner_key, request_id)
+    );
+    INSERT INTO platform_submissions SELECT * FROM platform_submissions_legacy;
+    DROP TABLE platform_submissions_legacy;
+    CREATE INDEX platform_submissions_owner_updated_idx ON platform_submissions(owner_key, updated_at DESC);
+    CREATE INDEX platform_submissions_problem_idx ON platform_submissions(owner_key, problem_code, updated_at DESC);
+    COMMIT;
+  `);
+}
 
 function encode(value, maxBytes = 64 * 1024 * 1024) {
   const source = JSON.stringify(value);

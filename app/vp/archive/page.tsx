@@ -226,6 +226,25 @@ export default function ArchiveVpPage() {
     let cancelled = false;
     let timer = 0;
     const contest = prewarmContestId ? findArchiveContest(prewarmContestId) : undefined;
+    if (contest && contest.luoguProblemIds?.length === contest.problemCount) {
+      setPrewarm({
+        contestId: contest.id,
+        total: contest.problemCount,
+        readyOriginal: contest.problemCount,
+        readyChinese: contest.problemCount,
+        officialChinese: 0,
+        failed: 0,
+        status: "ready",
+        progress: 100,
+        items: contest.luoguProblemIds.map((_, index) => ({
+          slot: String.fromCharCode(65 + index), originalReady: true, chineseReady: true,
+          officialChinese: false, status: "ready", message: null,
+        })),
+        updatedAt: null,
+      });
+      setPrewarmError("");
+      return;
+    }
     const problemIds = contest?.qojProblemIds?.slice(0, contest.problemCount) || [];
     if (!contest?.qojContestId || problemIds.length !== contest.problemCount) {
       setPrewarm(null);

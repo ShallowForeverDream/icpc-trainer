@@ -2,7 +2,7 @@ import { authFetch } from "./auth-client";
 import { getDeviceId } from "./device-id";
 import { readStoredJson, writeStoredJson } from "./storage";
 
-export type PlatformJudge = "codeforces" | "ucup";
+export type PlatformJudge = "codeforces" | "ucup" | "luogu";
 export type PlatformSubmissionStatus = "queued" | "submitted" | "accepted" | "rejected" | "failed" | "needs_login";
 export type PlatformVerdict = "AC" | "WA";
 
@@ -39,7 +39,7 @@ function isSubmission(value: unknown): value is PlatformSubmission {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<PlatformSubmission>;
   return typeof item.requestId === "string"
-    && ["codeforces", "ucup"].includes(item.judge || "")
+    && ["codeforces", "ucup", "luogu"].includes(item.judge || "")
     && typeof item.problemCode === "string"
     && typeof item.problemTitle === "string"
     && typeof item.problemHref === "string"

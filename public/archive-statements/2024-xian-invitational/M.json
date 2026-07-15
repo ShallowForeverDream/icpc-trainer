@@ -1,0 +1,158 @@
+{
+  "schemaVersion": 1,
+  "contestId": "2024-xian-invitational",
+  "contestName": "ICPC 西安全国邀请赛",
+  "slot": "M",
+  "problemId": 10565,
+  "titleEn": "Chained Lights",
+  "titleZh": "连锁灯",
+  "timeLimitText": "1 second",
+  "memoryLimitText": "1024 megabytes",
+  "source": {
+    "kind": "mirror-structured",
+    "englishPdfUrl": null,
+    "chinesePdfUrl": null,
+    "chinesePages": null,
+    "sourceUrl": "https://www.luogu.com.cn/problem/P10565",
+    "sourceLabel": "ICPC 2024 西安邀请赛原题原数据镜像"
+  },
+  "english": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "Statement",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "You have $n$ lights in a row. Initially, they are all off."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You are going to press these $n$ lights one by one. When you press light $i$, light $i$ will switch its state, which means it will turn on if it's off and turn off if it's on, and then for every $j$ satisfied $i|j,i< j\\le n$, press light $j$ once."
+          },
+          {
+            "kind": "paragraph",
+            "text": "For example, if $n=4$, when you press light $1$, light $1$ will turn on, and then you will press light $2,3,4$. Since you pressed light $2$, light $2$ will turn on and you will press light $4$, which will cause light 4 to turn on. After all the operations, lights $1,2,3$ will be turned on and light $4$ is still off."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You will press these $n$ lights and do the operations as mentioned above one by one. After all the operations, you want to know whether light $k$ is on or off."
+          },
+          {
+            "kind": "paragraph",
+            "text": "You can also use the following code to understand the meaning of the problem:"
+          },
+          {
+            "kind": "code",
+            "code": "void press(int x)\n{\n    light[x]^=1;\n    for (int y=x+x;y<=n;y+=x) press(y);\n}\nfor (int i=1;i<=n;i++) press(i);",
+            "language": "cpp"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "Input",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "There are multiple testcases."
+          },
+          {
+            "kind": "paragraph",
+            "text": "The first line contains an integer $T(1\\le T\\le10^5)$, which represents the number of testcases."
+          },
+          {
+            "kind": "paragraph",
+            "text": "Each of the testcases contains two integers $n,k(1\\le k\\le n\\le10^6)$ in a single line."
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "Output",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "For each testcase, if light $k$ is turned on in the end, output $\\text{YES}$, otherwise output $\\text{NO}$."
+          }
+        ]
+      }
+    ]
+  },
+  "chinese": {
+    "sections": [
+      {
+        "key": "statement",
+        "title": "题目描述",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "你有 $n$ 盏灯排成一行。最初，它们都是关闭的。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "你将逐个按下这 $n$ 盏灯。当你按下灯 $i$ 时，灯 $i$ 将切换其状态，这意味着如果它是关闭的，它将打开；如果它是打开的，它将关闭。然后对于每个满足 $i\\mid j$ 且 $i<j\\le n$ 的 $j$，按下灯 $j$ 一次。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "例如，如果 $n=4$，当你按下灯 $1$ 时，灯 $1$ 将打开，然后你将按下灯 $2,3,4$。由于你按下了灯 $2$，灯 $2$ 将打开，你将按下灯 $4$，这将导致灯 $4$ 打开。经过所有操作后，灯 $1,2,3$ 将打开，而灯 $4$ 仍然关闭。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "你将逐个按下这 $n$ 盏灯并进行上述操作。经过所有操作后，你想知道灯 $k$ 是开着还是关着的。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "你也可以使用以下代码来理解问题的含义："
+          },
+          {
+            "kind": "code",
+            "code": "void press(int x) {\n    light[x]^=1;\n    for (int y=x+x; y<=n; y+=x) press(y);\n}\nfor (int i=1; i<=n; i++) press(i);",
+            "language": "cpp"
+          }
+        ]
+      },
+      {
+        "key": "input",
+        "title": "输入格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "有多个测试用例。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "第一行包含一个整数 $T(1 \\le T \\le 10^5)$，表示测试用例的数量。"
+          },
+          {
+            "kind": "paragraph",
+            "text": "每个测试用例包含两个整数 $n, k(1 \\le k \\le n \\le 10^6)$，在一行中。"
+          }
+        ]
+      },
+      {
+        "key": "output",
+        "title": "输出格式",
+        "blocks": [
+          {
+            "kind": "paragraph",
+            "text": "对于每个测试用例，如果灯 $k$ 最终是打开的，输出 `YES`，否则输出 `NO`。"
+          }
+        ]
+      }
+    ]
+  },
+  "sample": {
+    "input": "2\n1 1\n3 2",
+    "output": "YES\nNO",
+    "mode": "columns"
+  },
+  "samples": [
+    {
+      "input": "2\n1 1\n3 2",
+      "output": "YES\nNO",
+      "mode": "columns"
+    }
+  ],
+  "images": []
+}

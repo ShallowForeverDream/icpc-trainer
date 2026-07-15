@@ -32,6 +32,9 @@ test("keeps concurrent judge submissions isolated by their background tab", asyn
     if (String(url).includes("codeforces.com")) {
       return new Response('<a href="/logout">Logout</a>', { status: 200 });
     }
+    if (String(url).includes("luogu.com.cn")) {
+      return new Response('<script id="lentille-context" type="application/json">{"user":{"uid":7}}</script>', { status: 200 });
+    }
     return new Response('<a href="/login">Login</a>', { status: 200 });
   };
   vm.runInNewContext(source, { chrome, URL, fetch: healthFetch, setTimeout, clearTimeout, console }, { filename: "background.js" });
@@ -46,6 +49,7 @@ test("keeps concurrent judge submissions isolated by their background tab", asyn
   const health = await dispatch({ type: "CHECK_JUDGE_SESSIONS" }, trainerSender(9));
   assert.equal(health.sessions.codeforces.status, "ready");
   assert.equal(health.sessions.ucup.status, "signed_out");
+  assert.equal(health.sessions.luogu.status, "ready");
 
   const first = await dispatch({ type: "OPEN_CODEFORCES_SUBMIT", url: "https://codeforces.com/problemset/submit?contestId=1904&submittedProblemIndex=A", submission: submission("submit-concurrent-a", "A") }, trainerSender(10));
   const second = await dispatch({ type: "OPEN_CODEFORCES_SUBMIT", url: "https://codeforces.com/problemset/submit?contestId=1904&submittedProblemIndex=B", submission: submission("submit-concurrent-b", "B") }, trainerSender(11));
@@ -76,4 +80,22 @@ test("keeps concurrent judge submissions isolated by their background tab", asyn
   assert.equal(storage.pendingJudgeSubmissions.some((item) => item.requestId === secondJob.requestId), true);
   assert.equal(storage.trainerSubmissionResults.at(-1).verdict, "AC");
   assert.equal(sentMessages.at(-1).id, 10);
+
+  const luogu = await dispatch({
+    type: "OPEN_LUOGU_SUBMIT",
+    url: "https://www.luogu.com.cn/problem/P10553",
+    submission: {
+      requestId: "submit-luogu-xian-a",
+      judge: "luogu",
+      luoguProblemId: "P10553",
+      sourceCode: "int main(){}",
+      languageValue: "C++20",
+      autoSubmit: true,
+    },
+  }, trainerSender(12));
+  assert.equal(luogu.ok, true);
+  const luoguJob = storage.pendingJudgeSubmissions.find((item) => item.requestId === "submit-luogu-xian-a");
+  assert.equal(luoguJob.judge, "luogu");
+  const luoguPending = await dispatch({ type: "GET_PENDING_SUBMISSION", judge: "luogu" }, { url: "https://www.luogu.com.cn/problem/P10553", tab: { id: luoguJob.judgeTabId } });
+  assert.equal(luoguPending.submission.luoguProblemId, "P10553");
 });

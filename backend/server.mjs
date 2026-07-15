@@ -478,7 +478,7 @@ function submissionText(value, maxLength, label) {
 
 function normalizePlatformSubmission(body) {
   const judge = String(body.judge || "");
-  if (!["codeforces", "ucup"].includes(judge)) throw new HttpError(400, "评测站无效");
+  if (!["codeforces", "ucup", "luogu"].includes(judge)) throw new HttpError(400, "评测站无效");
   const contestId = Number(body.contestId);
   if (!Number.isInteger(contestId) || contestId < 1 || contestId > 100_000_000) throw new HttpError(400, "比赛编号无效");
   const problemIndex = String(body.problemIndex || "").trim().toUpperCase();

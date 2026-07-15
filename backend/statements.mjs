@@ -1177,8 +1177,7 @@ async function reviewTranslationBatch(texts, drafts) {
   });
 }
 
-async function translateReviewedTexts(texts) {
-  const drafts = await translateTexts(texts);
+async function reviewDraftTexts(texts, drafts) {
   if (!TRANSLATOR_BASE_URL) return drafts;
   const reviewed = [];
   for (let start = 0; start < texts.length; start += 4) {
@@ -1194,7 +1193,12 @@ async function translateReviewedTexts(texts) {
   return reviewed;
 }
 
-async function translateHtml(originalHtml, sourceUrl) {
+async function translateReviewedTexts(texts) {
+  const drafts = await translateTexts(texts);
+  return reviewDraftTexts(texts, drafts);
+}
+
+async function translateHtml(originalHtml, sourceUrl, onDraft = null) {
   const $ = load(`<div id="translation-root">${originalHtml}</div>`, { xmlMode: false }, false);
   const fixedHeadings = new Map([["input", "输入"], ["output", "输出"], ["example", "样例"], ["examples", "样例"], ["note", "说明"], ["interaction", "交互说明"]]);
   $("#translation-root .section-title").each((_, element) => {
@@ -1249,37 +1253,46 @@ async function translateHtml(originalHtml, sourceUrl) {
     records.push({ kind: "text", node, raw, trimmed: masked.trim(), formulas });
   });
   const unique = [...new Set(records.map((record) => record.trimmed))];
-  const translations = await translateTexts(unique);
-  const map = new Map(unique.map((item, index) => [item, translations[index]]));
-  for (const record of records) {
-    if (record.kind === "block") {
-      let html = escapeHtml(map.get(record.trimmed) || record.trimmed);
-      for (const { placeholder, html: formulaHtml } of record.formulas) {
-        const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
-        if (!flexiblePlaceholder.test(html)) throw new Error(`翻译模型未保留公式占位符 ${placeholder}`);
-        html = html.replace(flexiblePlaceholder, () => formulaHtml);
-      }
-      $(record.element).html(html);
-      continue;
-    }
-    let translated = map.get(record.trimmed) || record.trimmed;
-    for (const { placeholder, formula } of record.formulas) {
-      const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
-      if (!flexiblePlaceholder.test(translated)) throw new Error(`翻译模型未保留公式占位符 ${placeholder}`);
-      translated = translated.replace(flexiblePlaceholder, () => formula);
-    }
-    const prefix = record.raw.match(/^\s*/)?.[0] || "";
-    const suffix = record.raw.match(/\s*$/)?.[0] || "";
-    record.node.data = `${prefix}${translated.trim()}${suffix}`;
-  }
-  const translatedHtml = sanitizeStatementHtml($("#translation-root").html() || "", sourceUrl).html;
   const sourceFormulas = [...originalHtml.matchAll(/\${3}[\s\S]*?\${3}/g)].map((match) => match[0]);
-  const translatedFormulas = [...translatedHtml.matchAll(/\${3}[\s\S]*?\${3}/g)].map((match) => match[0]);
   const formulaCounts = (formulas) => formulas.reduce((counts, formula) => counts.set(formula, (counts.get(formula) || 0) + 1), new Map());
   const sourceCounts = formulaCounts(sourceFormulas);
-  const translatedCounts = formulaCounts(translatedFormulas);
-  if (sourceFormulas.length !== translatedFormulas.length || sourceCounts.size !== translatedCounts.size || [...sourceCounts].some(([formula, count]) => translatedCounts.get(formula) !== count)) throw new Error("翻译过程改变了数学公式，已拒绝缓存该译文");
-  return translatedHtml;
+
+  function renderTranslations(translations) {
+    const map = new Map(unique.map((item, index) => [item, translations[index]]));
+    for (const record of records) {
+      if (record.kind === "block") {
+        let html = escapeHtml(map.get(record.trimmed) || record.trimmed);
+        for (const { placeholder, html: formulaHtml } of record.formulas) {
+          const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
+          if (!flexiblePlaceholder.test(html)) throw new Error(`翻译模型未保留公式占位符 ${placeholder}`);
+          html = html.replace(flexiblePlaceholder, () => formulaHtml);
+        }
+        $(record.element).html(html);
+        continue;
+      }
+      let translated = map.get(record.trimmed) || record.trimmed;
+      for (const { placeholder, formula } of record.formulas) {
+        const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
+        if (!flexiblePlaceholder.test(translated)) throw new Error(`翻译模型未保留公式占位符 ${placeholder}`);
+        translated = translated.replace(flexiblePlaceholder, () => formula);
+      }
+      const prefix = record.raw.match(/^\s*/)?.[0] || "";
+      const suffix = record.raw.match(/\s*$/)?.[0] || "";
+      record.node.data = `${prefix}${translated.trim()}${suffix}`;
+    }
+    const translatedHtml = sanitizeStatementHtml($("#translation-root").html() || "", sourceUrl).html;
+    const translatedFormulas = [...translatedHtml.matchAll(/\${3}[\s\S]*?\${3}/g)].map((match) => match[0]);
+    const translatedCounts = formulaCounts(translatedFormulas);
+    if (sourceFormulas.length !== translatedFormulas.length || sourceCounts.size !== translatedCounts.size || [...sourceCounts].some(([formula, count]) => translatedCounts.get(formula) !== count)) throw new Error("翻译过程改变了数学公式，已拒绝缓存该译文");
+    return translatedHtml;
+  }
+
+  const drafts = await translateTexts(unique);
+  const draftHtml = renderTranslations(drafts);
+  if (!TRANSLATOR_BASE_URL) return draftHtml;
+  if (onDraft) await onDraft(draftHtml);
+  const reviewed = await reviewDraftTexts(unique, drafts);
+  return renderTranslations(reviewed);
 }
 
 async function downloadImage(image, code, referer) {
@@ -1322,8 +1335,11 @@ async function translateStatement(code) {
   recentTranslationAttempts.set(code, now());
   let translationSaved = false;
   try {
-    setStatus(code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在快速生成并校对中文题面");
-    const chineseHtml = await translateHtml(row.original_html, row.source_url);
+    setStatus(code, "translating", row.chinese_html ? "已有中文缓存可立即阅读，正在后台校对新版术语" : "正在快速生成中文题面");
+    const chineseHtml = await translateHtml(row.original_html, row.source_url, async (draftHtml) => {
+      db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, translation_reviewed = 0, reviewed_at = NULL, reviewed_by = NULL, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(draftHtml, Math.max(0, TRANSLATION_VERSION - 1), now(), code);
+      translationSaved = true;
+    });
     db.prepare("UPDATE problem_statements SET chinese_html = ?, translation_version = ?, translation_reviewed = 0, reviewed_at = NULL, reviewed_by = NULL, status = 'ready', error = NULL, updated_at = ? WHERE code = ?").run(chineseHtml, TRANSLATION_VERSION, now(), code);
     translationSaved = true;
 
@@ -1338,7 +1354,7 @@ async function translateStatement(code) {
     db.prepare("UPDATE problem_statements SET images_json = ?, updated_at = ? WHERE code = ?").run(JSON.stringify(images), now(), code);
     const ocrTexts = images.filter((item) => item.ocrEn).map((item) => item.ocrEn);
     if (ocrTexts.length) {
-      const ocrTranslations = await translateTexts(ocrTexts);
+      const ocrTranslations = await translateReviewedTexts(ocrTexts);
       let index = 0;
       for (const image of images) if (image.ocrEn) image.ocrZh = ocrTranslations[index++];
     }

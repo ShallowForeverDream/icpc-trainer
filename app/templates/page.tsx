@@ -27,8 +27,15 @@ export default function TemplatesPage() {
 
   return <AppShell active="模板库">
     <section className="template-library-head">
-      <div><span className="eyebrow">GNU C++20 · 0 下标 · 半开区间</span><h1>竞赛模板</h1><p>按比赛使用频率筛选，打开后在独立大屏页面阅读、复制。</p></div>
+      <div><span className="eyebrow">GNU C++20 / C++23 · 独立模块 · 编译验证</span><h1>竞赛模板</h1><p>代码保持短，中文说明保持完整；按需复制，不背巨型模板。</p></div>
       <div className="template-library-stats"><strong>{contestTemplates.length}</strong><span>份精选模板</span><i /> <b>{contestTemplates.filter((template) => template.priority === "高频").length}</b><span>份高频</span></div>
+    </section>
+
+    <section className="template-principles" aria-label="模板设计原则">
+      <span><b>短起手</b><small>只保留每场都会用的设置</small></span>
+      <span><b>独立模块</b><small>需要哪个算法就复制哪个</small></span>
+      <span><b>边界明确</b><small>下标、区间与前置条件写清楚</small></span>
+      <span><b>可直接编译</b><small>所有代码经过语法验证</small></span>
     </section>
 
     <section className="template-library-toolbar">

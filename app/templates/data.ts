@@ -1,3 +1,5 @@
+import { expandedContestTemplates } from "./expanded-data";
+
 export type TemplateApi = { signature: string; description: string };
 
 export type ContestTemplate = {
@@ -5,7 +7,7 @@ export type ContestTemplate = {
   name: string;
   cn: string;
   shortCode: string;
-  category: "数据结构" | "图论" | "字符串" | "数学";
+  category: "基础" | "数据结构" | "图论" | "字符串" | "数学" | "技巧";
   priority: "高频" | "常用" | "进阶";
   complexity: string;
   summary: string;
@@ -15,9 +17,9 @@ export type ContestTemplate = {
   code: string;
 };
 
-export const templateCategories = ["全部", "数据结构", "图论", "字符串", "数学"] as const;
+export const templateCategories = ["全部", "基础", "数据结构", "图论", "字符串", "数学", "技巧"] as const;
 
-export const contestTemplates: ContestTemplate[] = [
+const coreContestTemplates: ContestTemplate[] = [
   {
     slug: "dsu",
     name: "DSU",
@@ -726,6 +728,11 @@ struct Combinations {
 
 // 示例：Combinations<1000000007> comb(maxN);`,
   },
+];
+
+export const contestTemplates: ContestTemplate[] = [
+  ...expandedContestTemplates,
+  ...coreContestTemplates,
 ];
 
 export function findContestTemplate(slug: string) {

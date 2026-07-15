@@ -46,7 +46,7 @@ export default function TemplateDetailPage() {
       </aside>
 
       <article className="template-code-panel">
-        <div className="template-code-toolbar"><div><span>C++20</span><b>{template.code.split("\n").length} 行</b><small>可横向滚动</small></div><button type="button" onClick={() => void copyCode()}>{copied ? "已复制 ✓" : "复制代码"}</button></div>
+        <div className="template-code-toolbar"><div><span>C++20 / C++23</span><b>{template.code.split("\n").length} 行</b><small>可横向滚动</small></div><button type="button" onClick={() => void copyCode()}>{copied ? "已复制 ✓" : "复制代码"}</button></div>
         <div className="template-code-block" role="region" aria-label={`${template.cn} C++ 代码`} tabIndex={0}><pre>{template.code.split("\n").map((line, index) => <CodeLine key={`${index}-${line}`} line={line} number={index + 1} />)}</pre></div>
       </article>
     </section>

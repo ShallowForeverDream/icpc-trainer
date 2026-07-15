@@ -42,18 +42,27 @@ test("uses a concise white, pink, and violet visual system across the product", 
 });
 
 test("ships a readable contest template catalog and dedicated code reader", async () => {
-  const [catalog, page, detail, styles] = await Promise.all([
+  const [catalog, expandedCatalog, page, detail, styles] = await Promise.all([
     readFile(new URL("app/templates/data.ts", root), "utf8"),
+    readFile(new URL("app/templates/expanded-data.ts", root), "utf8"),
     readFile(new URL("app/templates/page.tsx", root), "utf8"),
     readFile(new URL("app/templates/[slug]/page.tsx", root), "utf8"),
     readFile(new URL("app/globals.css", root), "utf8"),
   ]);
-  assert.equal((catalog.match(/^    slug: "/gm) ?? []).length, 12);
+  const templateCount = (catalog.match(/^    slug: "/gm) ?? []).length
+    + (expandedCatalog.match(/^    slug: "/gm) ?? []).length;
+  assert.equal(templateCount, 32);
   assert.match(catalog, /BinaryLiftingLCA/);
   assert.match(catalog, /TarjanSCC/);
   assert.match(catalog, /ModInt/);
   assert.match(catalog, /\/\/ BFS 建树/);
+  assert.match(expandedCatalog, /ContestStarter/);
+  assert.match(expandedCatalog, /Manacher/);
+  assert.match(expandedCatalog, /SuffixArray/);
+  assert.match(expandedCatalog, /BFPRTSelection/);
+  assert.match(expandedCatalog, /MorrisInorder/);
   assert.match(page, /打开模板/);
+  assert.match(page, /独立模块/);
   assert.doesNotMatch(page, /template-code-preview/);
   assert.match(detail, /接口速查/);
   assert.match(detail, /template-code-line/);

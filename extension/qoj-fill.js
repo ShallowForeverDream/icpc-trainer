@@ -59,6 +59,8 @@
       }
       await new Promise((resolve) => setTimeout(resolve, 500));
     }
+    await chrome.storage.local.remove("pendingArchiveSubmission");
+    await report("judged", "判题时间较长，可在平台提交记录中继续查看");
     return;
   }
 

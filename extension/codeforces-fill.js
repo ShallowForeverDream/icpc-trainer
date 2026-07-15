@@ -2,18 +2,62 @@
   const { pendingSubmission } = await chrome.storage.local.get("pendingSubmission");
   if (!pendingSubmission || Date.now() - pendingSubmission.createdAt > 30 * 60 * 1000) return;
 
-  const report = (stage, message) => chrome.runtime.sendMessage({
+  const report = (stage, message, extra = {}) => chrome.runtime.sendMessage({
     type: "JUDGE_SUBMIT_STATUS",
     judge: "codeforces",
     requestId: pendingSubmission.requestId,
     originTabId: pendingSubmission.originTabId,
     stage,
     message,
+    ...extra,
   });
   const finishWithError = async (stage, message) => {
     await chrome.storage.local.remove("pendingSubmission");
     await report(stage, message);
   };
+
+  if (pendingSubmission.phase === "tracking") {
+    const problemPaths = pendingSubmission.isGym
+      ? [`/gym/${pendingSubmission.contestId}/problem/${pendingSubmission.index}`]
+      : [`/problemset/problem/${pendingSubmission.contestId}/${pendingSubmission.index}`, `/contest/${pendingSubmission.contestId}/problem/${pendingSubmission.index}`];
+    for (let attempt = 0; attempt < 360; attempt += 1) {
+      const rows = [...document.querySelectorAll("tr[data-submission-id], .status-frame-datatable tbody tr")];
+      let row = null;
+      if (Number.isInteger(pendingSubmission.submissionId)) {
+        row = rows.find((item) => Number(item.getAttribute("data-submission-id")) === pendingSubmission.submissionId
+          || Boolean(item.querySelector(`a[href$='/submission/${pendingSubmission.submissionId}']`)));
+      } else {
+        row = rows.find((item) => [...item.querySelectorAll("a[href]")].some((link) => {
+          try { return problemPaths.includes(new URL(link.href, location.href).pathname); } catch { return false; }
+        }));
+        const rawId = row?.getAttribute("data-submission-id")
+          || row?.querySelector("a[href*='/submission/']")?.getAttribute("href")?.match(/\/submission\/(\d+)/)?.[1];
+        if (rawId && Number.isInteger(Number(rawId))) {
+          pendingSubmission.submissionId = Number(rawId);
+          await chrome.storage.local.set({ pendingSubmission });
+        }
+      }
+
+      if (row) {
+        const verdictCell = row.querySelector(".status-verdict-cell, .verdict-accepted, .verdict-rejected");
+        const verdictText = verdictCell?.textContent?.replace(/\s+/g, " ").trim() || "";
+        if (/Accepted/i.test(verdictText)) {
+          await chrome.storage.local.remove("pendingSubmission");
+          await report("judged", "Accepted · 判题结果已同步到平台", { verdict: "AC", submissionId: pendingSubmission.submissionId });
+          return;
+        }
+        if (verdictText && !/In queue|Running|Judging|Testing|Compiling|Submitted|Queued/i.test(verdictText)) {
+          await chrome.storage.local.remove("pendingSubmission");
+          await report("judged", `${verdictText} · 判题结果已同步到平台`, { verdict: "WA", submissionId: pendingSubmission.submissionId });
+          return;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    await chrome.storage.local.remove("pendingSubmission");
+    await report("judged", "判题时间较长，可在平台提交记录中继续查看");
+    return;
+  }
 
   if (!Number.isInteger(pendingSubmission.contestId) || !/^[A-Z][0-9]?$/.test(pendingSubmission.index)
     || typeof pendingSubmission.sourceCode !== "string" || !pendingSubmission.sourceCode.trim()
@@ -68,8 +112,10 @@
       await finishWithError("failed", "已填入代码，但没有找到 Codeforces 的提交按钮");
       return;
     }
-    await chrome.storage.local.remove("pendingSubmission");
-    await report("submitted", "代码已提交到 Codeforces，平台将自动同步判题结果");
+    pendingSubmission.phase = "tracking";
+    delete pendingSubmission.sourceCode;
+    await chrome.storage.local.set({ pendingSubmission });
+    await report("submitted", "代码已送达 Codeforces，正在等待判题");
     submitButton.click();
     return;
   }

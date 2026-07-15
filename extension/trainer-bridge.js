@@ -26,7 +26,7 @@ window.addEventListener("message", async (event) => {
   if (!message || message.source !== "icpc-trainer") return;
 
   if (message.type === "ICPC_TRAINER_PING") {
-    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "0.8.0" }, window.location.origin);
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "0.9.0" }, window.location.origin);
     return;
   }
 

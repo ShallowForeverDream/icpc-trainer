@@ -136,7 +136,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "0.8.0");
+  assert.equal(manifest.version, "0.9.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -153,6 +153,9 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(background, /JUDGE_SUBMIT_STATUS/);
   assert.match(qojFill, /phase === "tracking"/);
   assert.match(qojFill, /"judged"/);
+  assert.match(fill, /phase === "tracking"/);
+  assert.match(fill, /status-verdict-cell/);
+  assert.match(fill, /"judged"/);
 });
 
 test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {

@@ -23,7 +23,9 @@ type ScoreboardPayload = {
   error?: string;
 };
 type MyAttempt = { wrong: number; solvedAt?: number };
-type Session = { contestId: string; startedAt?: number; reveal: boolean; group: string; myTeam: string; attempts: Record<string, MyAttempt> };
+type ArchiveSubmission = { id: string; slot: string; verdict: "WA" | "AC"; atSeconds: number };
+type ArchiveRoomTab = "problems" | "standings" | "submissions";
+type Session = { contestId: string; startedAt?: number; reveal: boolean; group: string; myTeam: string; attempts: Record<string, MyAttempt>; submissions?: ArchiveSubmission[] };
 
 const STORAGE_KEY = "icpc-trainer-archive-vp";
 
@@ -32,6 +34,7 @@ function isSession(value: unknown): value is Session {
   const item = value as Partial<Session>;
   if (typeof item.contestId !== "string" || !findArchiveContest(item.contestId) || typeof item.reveal !== "boolean" || typeof item.group !== "string" || item.group.length > 100 || typeof item.myTeam !== "string" || item.myTeam.length > 80 || !item.attempts || typeof item.attempts !== "object") return false;
   if (item.startedAt !== undefined && (!Number.isFinite(item.startedAt) || Number(item.startedAt) <= 0)) return false;
+  if (item.submissions !== undefined && (!Array.isArray(item.submissions) || item.submissions.length > 500 || !item.submissions.every((submission) => typeof submission?.id === "string" && /^[A-Z]$/.test(submission.slot) && ["WA", "AC"].includes(submission.verdict) && Number.isFinite(submission.atSeconds) && submission.atSeconds >= 0))) return false;
   return Object.entries(item.attempts).length <= 26 && Object.entries(item.attempts).every(([slot, attempt]) => /^[A-Z]$/.test(slot) && Number.isInteger(attempt?.wrong) && attempt.wrong >= 0 && attempt.wrong <= 100 && (attempt.solvedAt === undefined || Number.isFinite(attempt.solvedAt)));
 }
 
@@ -50,6 +53,7 @@ export default function ArchiveVpPage() {
   const [message, setMessage] = useState("");
   const [now, setNow] = useState(0);
   const [teamQuery, setTeamQuery] = useState("");
+  const [roomTab, setRoomTab] = useState<ArchiveRoomTab>("problems");
   const scoreboardRequest = useRef<AbortController | null>(null);
 
   useEffect(() => {
@@ -58,7 +62,7 @@ export default function ArchiveVpPage() {
     const requestedId = new URLSearchParams(window.location.search).get("contest");
     const requestedContest = requestedId ? findArchiveContest(requestedId) : undefined;
     if (requestedContest) {
-      const next: Session = { contestId: requestedContest.id, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {} };
+      const next: Session = { contestId: requestedContest.id, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {}, submissions: [] };
       setSession(next);
       void savePersistentJson("archive-vp", STORAGE_KEY, next).then((savedOk) => { if (!savedOk) setMessage("本场补题进度未能持久保存"); });
       window.history.replaceState({}, "", window.location.pathname);
@@ -161,8 +165,18 @@ export default function ArchiveVpPage() {
     return [...indices].sort((a, b) => a - b).map((index) => combinedRows[index]).filter(Boolean);
   }, [combinedRows, teamQuery]);
 
+  const submissionRows = useMemo(() => {
+    const wrongBySlot: Record<string, number> = {};
+    return [...(session?.submissions ?? [])].sort((left, right) => left.atSeconds - right.atSeconds).map((submission) => {
+      const wrongBefore = wrongBySlot[submission.slot] ?? 0;
+      if (submission.verdict === "WA") wrongBySlot[submission.slot] = wrongBefore + 1;
+      return { ...submission, wrongBefore };
+    }).reverse();
+  }, [session?.submissions]);
+
   function chooseContest(contestId: string) {
-    saveSession({ contestId, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {} });
+    saveSession({ contestId, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {}, submissions: [] });
+    setRoomTab("problems");
     setScoreboard(null);
   }
 
@@ -170,10 +184,18 @@ export default function ArchiveVpPage() {
     if (!session?.startedAt || finished) return;
     const current = session.attempts[slot] || { wrong: 0 };
     const next = { ...session.attempts };
-    if (action === "reset") delete next[slot];
-    else if (action === "wrong" && current.solvedAt === undefined) next[slot] = { ...current, wrong: current.wrong + 1 };
-    else if (action === "solve" && current.solvedAt === undefined) next[slot] = { ...current, solvedAt: elapsed };
-    saveSession({ ...session, attempts: next });
+    let submissions = [...(session.submissions ?? [])];
+    if (action === "reset") {
+      delete next[slot];
+      submissions = submissions.filter((submission) => submission.slot !== slot);
+    } else if (action === "wrong" && current.solvedAt === undefined) {
+      next[slot] = { ...current, wrong: current.wrong + 1 };
+      submissions.push({ id: `${Date.now()}-${slot}-WA`, slot, verdict: "WA", atSeconds: elapsed });
+    } else if (action === "solve" && current.solvedAt === undefined) {
+      next[slot] = { ...current, solvedAt: elapsed };
+      submissions.push({ id: `${Date.now()}-${slot}-AC`, slot, verdict: "AC", atSeconds: elapsed });
+    }
+    saveSession({ ...session, attempts: next, submissions: submissions.slice(-500) });
   }
 
   if (!session) return <AppShell active="模拟赛">
@@ -198,6 +220,7 @@ export default function ArchiveVpPage() {
   const remaining = Math.max(0, duration - elapsed);
   const groupOptions = Object.entries(scoreboard?.contest.groups || {});
   const progress = Math.min(100, elapsed / Math.max(1, duration) * 100);
+  const slots = scoreboard?.slots || Array.from({ length: contest?.problemCount || 13 }, (_, index) => String.fromCharCode(65 + index));
 
   return <AppShell active="模拟赛">
     <section className="archive-room-head">
@@ -214,29 +237,47 @@ export default function ArchiveVpPage() {
     </section>
     <section className={`archive-freeze-state ${scoreboard?.frozen ? "active" : ""}`}><b>{scoreboard?.frozen ? "榜单已进入原场封榜时段" : "榜单按原场时间推进"}</b><span>{scoreboard?.frozen ? "封榜后的提交显示为待定，不提前泄露结果；比赛结束后可手动揭榜。" : `当前重放至 ${clock(elapsed)}，下一次自动同步不超过 10 秒。`}</span></section>
 
-    <div className="archive-problems-head"><div><b>选择题目开始作答</b><span>点击任意题卡，直接进入本站题面</span></div><small>题面 · 翻译 · 提交</small></div>
-    <section className="archive-problems">{(scoreboard?.slots || Array.from({ length: contest?.problemCount || 13 }, (_, index) => String.fromCharCode(65 + index))).map((slot) => {
-      const attempt = session.attempts[slot] || { wrong: 0 };
-      const solved = attempt.solvedAt !== undefined;
-      const href = contest ? archiveProblemHref(contest, slot) : "#";
-      const practice = contest ? archivePracticeProblem(contest, slot) : null;
-      return <article className={solved ? "solved" : attempt.wrong ? "attempted" : ""} key={slot}>
-        <Link className="archive-problem-open" href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined}>
-          <span className="archive-problem-letter">{slot}</span>
-          <span className="archive-problem-copy"><b>{practice?.title || `Problem ${slot}`}</b><small>{solved ? `${Math.floor((attempt.solvedAt || 0) / 60)} min · 已通过` : attempt.wrong ? `${attempt.wrong} 次错误尝试` : "题面与提交"}</small></span>
-          <strong>开始做题 →</strong>
-        </Link>
-        <div><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "wrong")}>+ WA</button><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "solve")}>标记 AC</button>{attempt.wrong || solved ? <button onClick={() => updateAttempt(slot, "reset")}>重置</button> : null}</div>
-      </article>;
-    })}</section>
+    <nav className="vp-room-tabs archive-room-tabs" aria-label="历届补题模拟赛内容" role="tablist">
+      <button type="button" role="tab" aria-selected={roomTab === "problems"} className={roomTab === "problems" ? "active" : ""} onClick={() => setRoomTab("problems")}><span>题目</span><b>{mine?.solved ?? 0}/{slots.length}</b></button>
+      <button type="button" role="tab" aria-selected={roomTab === "standings"} className={roomTab === "standings" ? "active" : ""} onClick={() => setRoomTab("standings")}><span>实时榜单</span><b>{mine?.rank ? `#${mine.rank}` : "LIVE"}</b></button>
+      <button type="button" role="tab" aria-selected={roomTab === "submissions"} className={roomTab === "submissions" ? "active" : ""} onClick={() => setRoomTab("submissions")}><span>队伍提交</span><b>{submissionRows.length}</b></button>
+    </nav>
 
-    <article className="panel archive-standings">
-      <div className="panel-head"><div><h2>同时间轴真实榜单</h2><p>原场队伍的提交按当前 VP 用时逐条重放；蓝色行是你的实时相对名次。</p></div><div className="archive-board-tools">{groupOptions.length ? <select value={session.group} onChange={(event) => saveSession({ ...session, group: event.target.value })}><option value="all">全部组别</option>{groupOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : null}<input value={teamQuery} onChange={(event) => setTeamQuery(event.target.value)} placeholder="搜索队伍 / 学校" /></div></div>
-      <div className="archive-table" style={{ "--archive-problem-count": scoreboard?.slots.length || 13 } as CSSProperties}>
-        <div className="archive-row archive-header"><span>#</span><span>队伍</span><span>AC</span><span>罚时</span>{scoreboard?.slots.map((slot) => <span key={slot}>{slot}</span>)}</div>
-        {visibleRows.map((row) => <div className={`archive-row${row.mine ? " mine" : ""}`} key={row.teamId}><strong>{row.rank}</strong><span className="archive-team"><b>{row.name}</b><small>{row.organization || row.teamId}</small></span><strong>{row.solved}</strong><span>{row.penalty}</span>{scoreboard?.slots.map((slot) => { const problem = row.problems[slot]; return <span key={slot} className={problem?.solved ? "solved" : problem?.pendingAttempts ? "pending" : problem?.wrongAttempts ? "attempted" : ""}>{problem?.solved ? `+${problem.wrongAttempts || ""}` : problem?.pendingAttempts ? `?${problem.pendingAttempts}` : problem?.wrongAttempts ? `-${problem.wrongAttempts}` : "·"}</span>; })}</div>)}
+    {roomTab === "problems" ? <section className="panel vp-room-panel archive-vp-problem-panel" role="tabpanel">
+      <header className="vp-tab-heading"><div><h2>题目列表</h2><p>点击题目进入本站题面；WA 与 AC 会自动写入队伍提交记录</p></div><div><span>题面 · 翻译 · 提交</span></div></header>
+      <div className="archive-vp-problem-list"><div className="archive-vp-problem-list-head"><span>题号</span><span>题目</span><span>状态</span><span>操作</span></div>{slots.map((slot) => {
+        const attempt = session.attempts[slot] || { wrong: 0 };
+        const solved = attempt.solvedAt !== undefined;
+        const href = contest ? archiveProblemHref(contest, slot) : "#";
+        const practice = contest ? archivePracticeProblem(contest, slot) : null;
+        const title = practice?.title || contest?.problemTitles?.[slot.charCodeAt(0) - 65] || `Problem ${slot}`;
+        return <article className={`archive-vp-problem-row${solved ? " solved" : attempt.wrong ? " attempted" : ""}`} key={slot}>
+          <Link href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined}><span className="archive-problem-letter">{slot}</span><span><b>{title}</b><small>题面、中文翻译与提交</small></span></Link>
+          <span className={`archive-vp-problem-state${solved ? " solved" : attempt.wrong ? " attempted" : ""}`}>{solved ? `AC · ${clock(attempt.solvedAt || 0)}` : attempt.wrong ? `${attempt.wrong} 次 WA` : "未尝试"}</span>
+          <div><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "wrong")}>+ WA</button><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "solve")}>标记 AC</button>{attempt.wrong || solved ? <button onClick={() => updateAttempt(slot, "reset")}>重置</button> : null}</div>
+        </article>;
+      })}</div>
+    </section> : null}
+
+    {roomTab === "standings" ? <article className="panel archive-standings vp-room-panel" role="tabpanel">
+      <div className="panel-head"><div><h2>同时间轴真实榜单</h2><p>原场提交按当前 VP 用时重放；紫色行是你的实时相对名次。</p></div><div className="archive-board-tools">{groupOptions.length ? <select value={session.group} onChange={(event) => saveSession({ ...session, group: event.target.value })}><option value="all">全部组别</option>{groupOptions.map(([value, label]) => <option key={value} value={value}>{label}</option>)}</select> : null}<input value={teamQuery} onChange={(event) => setTeamQuery(event.target.value)} placeholder="搜索队伍 / 学校" /><button type="button" onClick={() => void refresh()} disabled={status === "loading"}>{status === "loading" ? "同步中…" : "刷新"}</button></div></div>
+      <div className="archive-table" style={{ "--archive-problem-count": slots.length } as CSSProperties}>
+        <div className="archive-row archive-header"><span>#</span><span>队伍</span><span>AC</span><span>罚时</span>{slots.map((slot) => <span key={slot}>{slot}</span>)}</div>
+        {visibleRows.map((row) => <div className={`archive-row${row.mine ? " mine" : ""}`} key={row.teamId}><strong>{row.rank}</strong><span className="archive-team"><b>{row.name}</b><small>{row.organization || row.teamId}</small></span><strong>{row.solved}</strong><span>{row.penalty}</span>{slots.map((slot) => { const problem = row.problems[slot]; return <span key={slot} className={problem?.solved ? "solved" : problem?.pendingAttempts ? "pending" : problem?.wrongAttempts ? "attempted" : ""}>{problem?.solved ? `+${problem.wrongAttempts || ""}` : problem?.pendingAttempts ? `?${problem.pendingAttempts}` : problem?.wrongAttempts ? `-${problem.wrongAttempts}` : "·"}</span>; })}</div>)}
       </div>
       {!teamQuery && combinedRows.length > visibleRows.length ? <p className="archive-table-note">默认显示前 60 名及你的名次附近；可搜索任意真实队伍。</p> : null}
-    </article>
+    </article> : null}
+
+    {roomTab === "submissions" ? <section className="panel vp-room-panel archive-submission-panel" role="tabpanel">
+      <header className="vp-tab-heading"><div><h2>队伍提交记录</h2><p>由本场的“+ WA”和“标记 AC”实时生成并持久保存</p></div><div><span>{session.myTeam || "我的队伍"}</span><span>{submissionRows.length} 条</span></div></header>
+      <div className="archive-submission-list"><div className="archive-submission-head"><span>比赛时间</span><span>队伍</span><span>题目</span><span>结果</span><span>罚时影响</span></div>{submissionRows.map((submission) => {
+        const href = contest ? archiveProblemHref(contest, submission.slot) : "#";
+        const practice = contest ? archivePracticeProblem(contest, submission.slot) : null;
+        const title = practice?.title || contest?.problemTitles?.[submission.slot.charCodeAt(0) - 65] || `Problem ${submission.slot}`;
+        const penalty = submission.verdict === "AC" ? Math.floor(submission.atSeconds / 60) + submission.wrongBefore * 20 : null;
+        return <Link className="archive-submission-row" href={href} key={submission.id}><time>+{clock(submission.atSeconds)}</time><b>{session.myTeam || "我的队伍"}</b><span><strong>{submission.slot}</strong>{title}</span><em className={submission.verdict === "AC" ? "accepted" : "rejected"}>{submission.verdict === "AC" ? "Accepted" : "Wrong Answer"}</em><small>{penalty === null ? "通过后计入 +20" : `${penalty} 分钟`}</small></Link>;
+      })}</div>
+      {!submissionRows.length ? <div className="vp-tab-empty"><b>还没有提交记录</b><span>从“题目”标签记录 WA 或 AC 后会立即显示</span><button type="button" onClick={() => setRoomTab("problems")}>去做题 →</button></div> : null}
+    </section> : null}
   </AppShell>;
 }

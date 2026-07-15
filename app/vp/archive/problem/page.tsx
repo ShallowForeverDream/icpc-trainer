@@ -16,6 +16,7 @@ import { savePersistentJson } from "../../../lib/persistent-state";
 import { readStoredJson, writeStoredJson } from "../../../lib/storage";
 
 type Attempt = { wrong: number; solvedAt?: number };
+type ArchiveSubmission = { id: string; slot: string; verdict: "WA" | "AC"; atSeconds: number };
 type ArchiveSession = {
   contestId: string;
   startedAt?: number;
@@ -23,6 +24,7 @@ type ArchiveSession = {
   group: string;
   myTeam: string;
   attempts: Record<string, Attempt>;
+  submissions?: ArchiveSubmission[];
 };
 
 type SubmitLanguage = { value: string; label: string; extensions: string[] };
@@ -298,10 +300,19 @@ export default function ArchiveProblemPage() {
     if (!session?.startedAt || session.contestId !== contestId) return;
     const current = session.attempts[slot] || { wrong: 0 };
     const attempts = { ...session.attempts };
-    if (action === "reset") delete attempts[slot];
-    else if (action === "wrong" && current.solvedAt === undefined) attempts[slot] = { ...current, wrong: current.wrong + 1 };
-    else if (action === "solve" && current.solvedAt === undefined) attempts[slot] = { ...current, solvedAt: Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000)) };
-    const updated = { ...session, attempts };
+    const atSeconds = Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000));
+    let submissions = [...(session.submissions ?? [])];
+    if (action === "reset") {
+      delete attempts[slot];
+      submissions = submissions.filter((submission) => submission.slot !== slot);
+    } else if (action === "wrong" && current.solvedAt === undefined) {
+      attempts[slot] = { ...current, wrong: current.wrong + 1 };
+      submissions.push({ id: `${Date.now()}-${slot}-WA`, slot, verdict: "WA", atSeconds });
+    } else if (action === "solve" && current.solvedAt === undefined) {
+      attempts[slot] = { ...current, solvedAt: atSeconds };
+      submissions.push({ id: `${Date.now()}-${slot}-AC`, slot, verdict: "AC", atSeconds });
+    }
+    const updated = { ...session, attempts, submissions: submissions.slice(-500) };
     writeStoredJson(SESSION_KEY, updated);
     void savePersistentJson("archive-vp", SESSION_KEY, updated);
     setAttempt(attempts[slot] || { wrong: 0 });

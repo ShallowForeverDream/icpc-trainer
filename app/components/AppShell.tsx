@@ -34,7 +34,7 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
       if (data.stage === "judged" && ["AC", "WA"].includes(data.verdict)) {
         const status = data.verdict === "AC" ? "accepted" : "rejected";
         void updatePlatformSubmission(data.requestId, status, typeof data.message === "string" ? data.message : data.verdict);
-        if (data.judge === "ucup" && typeof data.archiveContestId === "string" && typeof data.slot === "string") {
+        if (["ucup", "codeforces"].includes(data.judge) && typeof data.archiveContestId === "string" && typeof data.slot === "string") {
           void applyArchiveJudgeVerdict({ contestId: data.archiveContestId, slot: data.slot, verdict: data.verdict, requestId: data.requestId });
         }
       }

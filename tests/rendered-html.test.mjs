@@ -136,7 +136,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "0.9.0");
+  assert.equal(manifest.version, "1.0.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -156,6 +156,9 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(fill, /phase === "tracking"/);
   assert.match(fill, /status-verdict-cell/);
   assert.match(fill, /"judged"/);
+  assert.match(bridge, /archiveContestId/);
+  assert.match(fill, /archiveContestId/);
+  assert.match(background, /archiveContestId/);
 });
 
 test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {
@@ -230,7 +233,7 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
 });
 
 test("ships historical ICPC upsolving with timestamp-replayed real standings", async () => {
-  const [catalog, page, problemPage, statementClient, statementManifest, statementA, statementM, importer, route, scoreboard] = await Promise.all([
+  const [catalog, page, problemPage, statementClient, statementManifest, statementA, statementM, importer, route, scoreboard, backendScoreboard] = await Promise.all([
     readFile(new URL("app/data/archive-contests.ts", root), "utf8"),
     readFile(new URL("app/vp/archive/page.tsx", root), "utf8"),
     readFile(new URL("app/vp/archive/problem/page.tsx", root), "utf8"),
@@ -241,6 +244,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
     readFile(new URL("scripts/import_shenzhen_statements.py", root), "utf8"),
     readFile(new URL("app/api/archive/scoreboard/route.ts", root), "utf8"),
     readFile(new URL("app/lib/archive-scoreboard.ts", root), "utf8"),
+    readFile(new URL("backend/archive-scoreboards.mjs", root), "utf8"),
   ]);
   assert.equal((catalog.match(/boardPath: "icpc\//g) ?? []).length, 23);
   assert.equal((catalog.match(/boardPath: "ccpc\//g) ?? []).length, 1);
@@ -249,6 +253,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /qojContestId: 3588/);
   assert.match(catalog, /17753, 17754, 17755/);
   assert.match(catalog, /archiveProblemHref/);
+  assert.match(catalog, /archiveContestIntegrated/);
   assert.match(catalog, /qojProblemIds: \[18307, 18308, 18309/);
   assert.match(catalog, /qojProblemIds: \[10486, 10487, 10488/);
   assert.match(catalog, /qojContestId: 3169/);
@@ -269,7 +274,9 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(page, /archive-room-tabs/);
   assert.match(page, /队伍提交记录/);
   assert.match(page, /ArchiveSubmission/);
-  assert.match(page, /submissions\.slice\(-500\)/);
+  assert.match(page, /题面与提交已接入/);
+  assert.doesNotMatch(page, />\+ WA</);
+  assert.doesNotMatch(page, />标记 AC</);
   assert.match(page, /同时间轴真实榜单/);
   assert.match(problemPage, /正文、样例与图片已从官方 PDF 提取/);
   assert.match(problemPage, /复制输入/);
@@ -278,10 +285,12 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(problemPage, /请选择代码文件或直接粘贴代码/);
   assert.match(problemPage, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
   assert.match(problemPage, /ArchiveSubmission/);
-  assert.match(problemPage, /submissions\.slice\(-500\)/);
+  assert.match(problemPage, /提交后自动更新/);
+  assert.doesNotMatch(problemPage, />\+ WA</);
+  assert.doesNotMatch(problemPage, />标记 AC</);
   assert.doesNotMatch(problemPage, /className="code-editor"/);
   assert.match(problemPage, /返回实时榜单/);
-  assert.match(problemPage, /savePersistentJson\("archive-vp"/);
+  assert.match(problemPage, /ARCHIVE_SESSION_EVENT/);
   assert.match(problemPage, /ArchiveStatementView/);
   assert.match(problemPage, /下载原始 PDF/);
   assert.doesNotMatch(problemPage, /<iframe/);
@@ -296,11 +305,14 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(importer, /pdfplumber/);
   assert.match(importer, /official-pdf-extract/);
   assert.match(route, /archiveScoreboard/);
-  assert.match(scoreboard, /run\.json/);
-  assert.match(scoreboard, /freezeAtSeconds/);
-  assert.match(scoreboard, /pendingAttempts/);
-  assert.match(scoreboard, /inFlight/);
-  assert.match(scoreboard, /staleUntil/);
+  assert.match(scoreboard, /\/archive\/scoreboards/);
+  assert.doesNotMatch(scoreboard, /new Map/);
+  assert.match(backendScoreboard, /run\.json/);
+  assert.match(backendScoreboard, /freezeAtSeconds/);
+  assert.match(backendScoreboard, /pendingAttempts/);
+  assert.match(backendScoreboard, /archive-scoreboard-source/);
+  assert.match(backendScoreboard, /archive-scoreboard-view/);
+  assert.match(backendScoreboard, /persistent: "sqlite"/);
   const response = await render("/vp/archive");
   assert.equal(response.status, 200);
   const html = await response.text();

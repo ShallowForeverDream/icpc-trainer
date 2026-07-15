@@ -89,6 +89,10 @@ export function findArchiveContest(id: string) {
   return archiveContests.find((contest) => contest.id === id);
 }
 
+export function archiveContestIntegrated(contest: ArchiveContest) {
+  return Boolean(contest.gymId || (contest.qojContestId && contest.qojProblemIds?.length && contest.qojProblemIds.length >= contest.problemCount));
+}
+
 export function archiveProblemUrl(contest: ArchiveContest, slot: string) {
   if (contest.gymId) return `https://codeforces.com/gym/${contest.gymId}/problem/${slot}`;
   const problemId = contest.qojProblemIds?.[slot.charCodeAt(0) - 65];

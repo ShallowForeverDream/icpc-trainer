@@ -7,6 +7,8 @@
     judge: "codeforces",
     requestId: pendingSubmission.requestId,
     originTabId: pendingSubmission.originTabId,
+    archiveContestId: pendingSubmission.archiveContestId,
+    slot: pendingSubmission.slot,
     stage,
     message,
     ...extra,

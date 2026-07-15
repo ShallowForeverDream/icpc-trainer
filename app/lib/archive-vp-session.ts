@@ -1,4 +1,4 @@
-import { findArchiveContest } from "../data/archive-contests";
+import { archiveContestIntegrated, findArchiveContest } from "../data/archive-contests";
 import { savePersistentJson } from "./persistent-state";
 import { readStoredJson, writeStoredJson } from "./storage";
 
@@ -20,7 +20,8 @@ export const ARCHIVE_SESSION_EVENT = "icpc-trainer-archive-session-changed";
 export function isArchiveVpSession(value: unknown): value is ArchiveVpSession {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<ArchiveVpSession>;
-  return typeof item.contestId === "string" && Boolean(findArchiveContest(item.contestId))
+  const contest = typeof item.contestId === "string" ? findArchiveContest(item.contestId) : undefined;
+  return Boolean(contest && archiveContestIntegrated(contest))
     && typeof item.reveal === "boolean" && typeof item.group === "string" && typeof item.myTeam === "string"
     && Boolean(item.attempts) && typeof item.attempts === "object";
 }

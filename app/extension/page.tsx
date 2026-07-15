@@ -3,7 +3,7 @@ import { AppShell, Icon, Pill } from "../components/AppShell";
 export default function ExtensionPage() {
   return <AppShell active="提交扩展">
     <section className="extension-hero">
-      <div><span className="eyebrow"><span className="live-dot" /> CHROME / EDGE · MANIFEST V3</span><h1>留在平台，<br /><em>直接完成提交。</em></h1><p>支持 Codeforces、Codeforces Gym 与 Universal Cup / QOJ。点击站内“直接提交”后，扩展使用你浏览器已有的登录会话在后台完成提交。</p><div className="hero-actions"><a className="button button-primary" href="/icpc-trainer-extension.zip" download><Icon name="spark" /> 下载扩展包 v0.9</a></div></div>
+      <div><span className="eyebrow"><span className="live-dot" /> CHROME / EDGE · MANIFEST V3</span><h1>留在平台，<br /><em>直接完成提交。</em></h1><p>支持 Codeforces、Codeforces Gym 与 Universal Cup / QOJ。点击站内“直接提交”后，扩展使用你浏览器已有的登录会话在后台完成提交。</p><div className="hero-actions"><a className="button button-primary" href="/icpc-trainer-extension.zip" download><Icon name="spark" /> 下载扩展包 v1.0</a></div></div>
       <div className="extension-flow"><div><b>01</b><span>选择文件或粘贴代码</span><Pill>站内完成</Pill></div><i>→</i><div><b>02</b><span>后台代理提交</span><Pill>无需跳转</Pill></div><i>→</i><div><b>03</b><span>平台同步判题</span><Pill>统一记录</Pill></div></div>
     </section>
     <section className="install-grid">

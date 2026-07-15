@@ -4,7 +4,7 @@
 import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
-import { archiveContests, archivePracticeProblem, archiveProblemHref, findArchiveContest } from "../../data/archive-contests";
+import { archiveContestIntegrated, archiveContests, archivePracticeProblem, archiveProblemHref, findArchiveContest } from "../../data/archive-contests";
 import { ARCHIVE_SESSION_EVENT } from "../../lib/archive-vp-session";
 import { clearPersistentJson, loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
 import { readTrainerPreferences } from "../../lib/preferences";
@@ -33,7 +33,8 @@ const STORAGE_KEY = "icpc-trainer-archive-vp";
 function isSession(value: unknown): value is Session {
   if (!value || typeof value !== "object") return false;
   const item = value as Partial<Session>;
-  if (typeof item.contestId !== "string" || !findArchiveContest(item.contestId) || typeof item.reveal !== "boolean" || typeof item.group !== "string" || item.group.length > 100 || typeof item.myTeam !== "string" || item.myTeam.length > 80 || !item.attempts || typeof item.attempts !== "object") return false;
+  const contest = typeof item.contestId === "string" ? findArchiveContest(item.contestId) : undefined;
+  if (!contest || !archiveContestIntegrated(contest) || typeof item.reveal !== "boolean" || typeof item.group !== "string" || item.group.length > 100 || typeof item.myTeam !== "string" || item.myTeam.length > 80 || !item.attempts || typeof item.attempts !== "object") return false;
   if (item.startedAt !== undefined && (!Number.isFinite(item.startedAt) || Number(item.startedAt) <= 0)) return false;
   if (item.submissions !== undefined && (!Array.isArray(item.submissions) || item.submissions.length > 500 || !item.submissions.every((submission) => typeof submission?.id === "string" && /^[A-Z]$/.test(submission.slot) && ["WA", "AC"].includes(submission.verdict) && Number.isFinite(submission.atSeconds) && submission.atSeconds >= 0))) return false;
   return Object.entries(item.attempts).length <= 26 && Object.entries(item.attempts).every(([slot, attempt]) => /^[A-Z]$/.test(slot) && Number.isInteger(attempt?.wrong) && attempt.wrong >= 0 && attempt.wrong <= 100 && (attempt.solvedAt === undefined || Number.isFinite(attempt.solvedAt)));
@@ -62,7 +63,7 @@ export default function ArchiveVpPage() {
     const saved = readStoredJson<Session | null>(STORAGE_KEY, null, (value): value is Session | null => value === null || isSession(value));
     const requestedId = new URLSearchParams(window.location.search).get("contest");
     const requestedContest = requestedId ? findArchiveContest(requestedId) : undefined;
-    if (requestedContest) {
+    if (requestedContest && archiveContestIntegrated(requestedContest)) {
       const next: Session = { contestId: requestedContest.id, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {}, submissions: [] };
       setSession(next);
       void savePersistentJson("archive-vp", STORAGE_KEY, next).then((savedOk) => { if (!savedOk) setMessage("本场补题进度未能持久保存"); });
@@ -185,27 +186,11 @@ export default function ArchiveVpPage() {
   }, [session?.submissions]);
 
   function chooseContest(contestId: string) {
+    const selected = findArchiveContest(contestId);
+    if (!selected || !archiveContestIntegrated(selected)) return;
     saveSession({ contestId, reveal: false, group: "all", myTeam: readTrainerPreferences().codeforcesHandle, attempts: {}, submissions: [] });
     setRoomTab("problems");
     setScoreboard(null);
-  }
-
-  function updateAttempt(slot: string, action: "wrong" | "solve" | "reset") {
-    if (!session?.startedAt || finished) return;
-    const current = session.attempts[slot] || { wrong: 0 };
-    const next = { ...session.attempts };
-    let submissions = [...(session.submissions ?? [])];
-    if (action === "reset") {
-      delete next[slot];
-      submissions = submissions.filter((submission) => submission.slot !== slot);
-    } else if (action === "wrong" && current.solvedAt === undefined) {
-      next[slot] = { ...current, wrong: current.wrong + 1 };
-      submissions.push({ id: `${Date.now()}-${slot}-WA`, slot, verdict: "WA", atSeconds: elapsed });
-    } else if (action === "solve" && current.solvedAt === undefined) {
-      next[slot] = { ...current, solvedAt: elapsed };
-      submissions.push({ id: `${Date.now()}-${slot}-AC`, slot, verdict: "AC", atSeconds: elapsed });
-    }
-    saveSession({ ...session, attempts: next, submissions: submissions.slice(-500) });
   }
 
   if (!session) return <AppShell active="模拟赛">
@@ -218,10 +203,13 @@ export default function ArchiveVpPage() {
       <div className="segmented">{["全部", "邀请赛", "省赛", "区域赛", "东亚决赛"].map((value) => <button key={value} className={type === value ? "active" : ""} onClick={() => setType(value)}>{value}</button>)}</div>
       <input aria-label="搜索赛事" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索城市或赛事" />
     </section>
-    <section className="archive-grid">{filteredContests.map((contest) => <article key={contest.id} className="archive-card">
-      <div><span>{contest.year}</span><i>{contest.type}</i></div><h2>{contest.name}</h2><p>{contest.city} · {contest.problemCount} 题 · ICPC 赛制</p>
-      <button className="button button-primary" onClick={() => chooseContest(contest.id)}>开始准备</button>
-    </article>)}</section>
+    <section className="archive-grid">{filteredContests.map((contest) => {
+      const integrated = archiveContestIntegrated(contest);
+      return <article key={contest.id} className={`archive-card${integrated ? "" : " pending"}`}>
+        <div><span>{contest.year}</span><i>{contest.type}</i></div><h2>{contest.name}</h2><p>{contest.city} · {contest.problemCount} 题 · {integrated ? "题面与提交已接入" : "题面接入中"}</p>
+        <button className="button button-primary" disabled={!integrated} onClick={() => chooseContest(contest.id)}>{integrated ? "开始准备" : "即将开放"}</button>
+      </article>;
+    })}</section>
     {!filteredContests.length ? <p className="archive-empty">当前筛选下没有赛事，请更换年份、类型或搜索词。</p> : null}
   </AppShell>;
 
@@ -242,7 +230,6 @@ export default function ArchiveVpPage() {
       {!session.startedAt ? <button className="button button-primary" onClick={() => { const startedAt = Date.now(); saveSession({ ...session, startedAt }); setNow(startedAt); }}>开始 VP</button> : <button className="button button-primary" onClick={() => void refresh()} disabled={status === "loading"}>{status === "loading" ? "同步中…" : "立即同步原场榜"}</button>}
       {finished && !session.reveal ? <button className="button button-primary reveal-button" onClick={() => saveSession({ ...session, reveal: true })}>比赛结束 · 揭榜</button> : null}
       {session.reveal ? <button className="button button-ghost" onClick={() => saveSession({ ...session, reveal: false })}>恢复封榜视图</button> : null}
-      <a className="button button-ghost" href={scoreboard?.contest.boardUrl} target="_blank" rel="noreferrer">核对 XCPCIO 原榜 ↗</a>
       <span className={status === "error" ? "form-error" : ""}>{message}</span>
     </section>
     <section className={`archive-freeze-state ${scoreboard?.frozen ? "active" : ""}`}><b>{scoreboard?.frozen ? "榜单已进入原场封榜时段" : "榜单按原场时间推进"}</b><span>{scoreboard?.frozen ? "封榜后的提交显示为待定，不提前泄露结果；比赛结束后可手动揭榜。" : `当前重放至 ${clock(elapsed)}，下一次自动同步不超过 10 秒。`}</span></section>
@@ -262,9 +249,9 @@ export default function ArchiveVpPage() {
         const practice = contest ? archivePracticeProblem(contest, slot) : null;
         const title = practice?.title || contest?.problemTitles?.[slot.charCodeAt(0) - 65] || `Problem ${slot}`;
         return <article className={`archive-vp-problem-row${solved ? " solved" : attempt.wrong ? " attempted" : ""}`} key={slot}>
-          <Link href={href} target={href.startsWith("http") ? "_blank" : undefined} rel={href.startsWith("http") ? "noreferrer" : undefined}><span className="archive-problem-letter">{slot}</span><span><b>{title}</b><small>题面、中文翻译与提交</small></span></Link>
+          <Link href={href}><span className="archive-problem-letter">{slot}</span><span><b>{title}</b><small>题面、中文翻译与提交</small></span></Link>
           <span className={`archive-vp-problem-state${solved ? " solved" : attempt.wrong ? " attempted" : ""}`}>{solved ? `AC · ${clock(attempt.solvedAt || 0)}` : attempt.wrong ? `${attempt.wrong} 次 WA` : "未尝试"}</span>
-          <div><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "wrong")}>+ WA</button><button disabled={!session.startedAt || solved || finished} onClick={() => updateAttempt(slot, "solve")}>标记 AC</button>{attempt.wrong || solved ? <button onClick={() => updateAttempt(slot, "reset")}>重置</button> : null}</div>
+          <div><Link href={href}>{session.startedAt ? "开始做题 →" : "查看题面 →"}</Link></div>
         </article>;
       })}</div>
     </section> : null}
@@ -279,7 +266,7 @@ export default function ArchiveVpPage() {
     </article> : null}
 
     {roomTab === "submissions" ? <section className="panel vp-room-panel archive-submission-panel" role="tabpanel">
-      <header className="vp-tab-heading"><div><h2>队伍提交记录</h2><p>由本场的“+ WA”和“标记 AC”实时生成并持久保存</p></div><div><span>{session.myTeam || "我的队伍"}</span><span>{submissionRows.length} 条</span></div></header>
+      <header className="vp-tab-heading"><div><h2>队伍提交记录</h2><p>站内提交后自动同步判题结果、比赛用时与罚时</p></div><div><span>{session.myTeam || "我的队伍"}</span><span>{submissionRows.length} 条</span></div></header>
       <div className="archive-submission-list"><div className="archive-submission-head"><span>比赛时间</span><span>队伍</span><span>题目</span><span>结果</span><span>罚时影响</span></div>{submissionRows.map((submission) => {
         const href = contest ? archiveProblemHref(contest, submission.slot) : "#";
         const practice = contest ? archivePracticeProblem(contest, submission.slot) : null;
@@ -287,7 +274,7 @@ export default function ArchiveVpPage() {
         const penalty = submission.verdict === "AC" ? Math.floor(submission.atSeconds / 60) + submission.wrongBefore * 20 : null;
         return <Link className="archive-submission-row" href={href} key={submission.id}><time>+{clock(submission.atSeconds)}</time><b>{session.myTeam || "我的队伍"}</b><span><strong>{submission.slot}</strong>{title}</span><em className={submission.verdict === "AC" ? "accepted" : "rejected"}>{submission.verdict === "AC" ? "Accepted" : "Wrong Answer"}</em><small>{penalty === null ? "通过后计入 +20" : `${penalty} 分钟`}</small></Link>;
       })}</div>
-      {!submissionRows.length ? <div className="vp-tab-empty"><b>还没有提交记录</b><span>从“题目”标签记录 WA 或 AC 后会立即显示</span><button type="button" onClick={() => setRoomTab("problems")}>去做题 →</button></div> : null}
+      {!submissionRows.length ? <div className="vp-tab-empty"><b>还没有提交记录</b><span>从“题目”标签进入题面并直接提交，判题完成后会自动显示</span><button type="button" onClick={() => setRoomTab("problems")}>去做题 →</button></div> : null}
     </section> : null}
   </AppShell>;
 }

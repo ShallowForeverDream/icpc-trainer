@@ -13,9 +13,8 @@ import {
   loadArchiveStatement,
 } from "../../../lib/archive-statement-client";
 import { ARCHIVE_SESSION_EVENT } from "../../../lib/archive-vp-session";
-import { savePersistentJson } from "../../../lib/persistent-state";
 import { createSubmissionRequestId, recordPlatformSubmission, updatePlatformSubmission } from "../../../lib/platform-submissions";
-import { readStoredJson, writeStoredJson } from "../../../lib/storage";
+import { readStoredJson } from "../../../lib/storage";
 
 type Attempt = { wrong: number; solvedAt?: number };
 type ArchiveSubmission = { id: string; slot: string; verdict: "WA" | "AC"; atSeconds: number };
@@ -152,15 +151,15 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       if (event.source !== window || event.origin !== window.location.origin) return;
       if (event.data?.source !== "icpc-trainer-extension") return;
       if (event.data.type === "ICPC_TRAINER_PONG") {
-        const current = event.data.version === "0.9.0";
+        const current = event.data.version === "1.0.0";
         setExtensionReady(current);
-        if (!current) setStatus("检测到旧版扩展，请下载 v0.9 并在扩展管理页重新加载");
+        if (!current) setStatus("检测到旧版扩展，请下载 v1.0 并在扩展管理页重新加载");
       }
       if (event.data.type === "ICPC_TRAINER_SUBMIT_RESULT" && event.data.requestId === requestIdRef.current) {
-        const stage = event.data.stage as "queued" | "submitted" | "failed" | "needs_login";
+        const stage = event.data.stage as "queued" | "submitted" | "judged" | "failed" | "needs_login";
         const message = typeof event.data.message === "string" ? event.data.message : "提交状态已更新";
         setStatus(message);
-        if (["queued", "submitted", "failed", "needs_login"].includes(stage)) void updatePlatformSubmission(event.data.requestId, stage, message);
+        if (stage === "queued" || stage === "submitted" || stage === "failed" || stage === "needs_login") void updatePlatformSubmission(event.data.requestId, stage, message);
       }
     };
     window.addEventListener("message", listener);
@@ -232,7 +231,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       setStatus("正在后台连接 Universal Cup / QOJ 并提交…");
       return;
     }
-    setStatus("需要安装并重新加载 v0.9 提交扩展；代码已复制，不会丢失。");
+    setStatus("需要安装并重新加载 v1.0 提交扩展；代码已复制，不会丢失。");
   }
 
   return <div className="archive-submit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -254,7 +253,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
-      <footer><span>{extensionReady ? "v0.9 扩展已连接 · 凭据只留在浏览器" : "未检测到 v0.9 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
+      <footer><span>{extensionReady ? "v1.0 扩展已连接 · 凭据只留在浏览器" : "未检测到 v1.0 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
     </section>
   </div>;
 }
@@ -329,29 +328,6 @@ export default function ArchiveProblemPage() {
     };
   }, [contestId, contestName, problemId, problemTitle, qojContestId, slot]);
 
-  function updateAttempt(action: "wrong" | "solve" | "reset") {
-    const session = readStoredJson<ArchiveSession | null>(SESSION_KEY, null, (value): value is ArchiveSession | null => value === null || isArchiveSession(value));
-    if (!session?.startedAt || session.contestId !== contestId) return;
-    const current = session.attempts[slot] || { wrong: 0 };
-    const attempts = { ...session.attempts };
-    const atSeconds = Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000));
-    let submissions = [...(session.submissions ?? [])];
-    if (action === "reset") {
-      delete attempts[slot];
-      submissions = submissions.filter((submission) => submission.slot !== slot);
-    } else if (action === "wrong" && current.solvedAt === undefined) {
-      attempts[slot] = { ...current, wrong: current.wrong + 1 };
-      submissions.push({ id: `${Date.now()}-${slot}-WA`, slot, verdict: "WA", atSeconds });
-    } else if (action === "solve" && current.solvedAt === undefined) {
-      attempts[slot] = { ...current, solvedAt: atSeconds };
-      submissions.push({ id: `${Date.now()}-${slot}-AC`, slot, verdict: "AC", atSeconds });
-    }
-    const updated = { ...session, attempts, submissions: submissions.slice(-500) };
-    writeStoredJson(SESSION_KEY, updated);
-    void savePersistentJson("archive-vp", SESSION_KEY, updated);
-    setAttempt(attempts[slot] || { wrong: 0 });
-  }
-
   if (!contest || !problem) return <AppShell active="模拟赛"><section className="template-not-found"><h1>暂未找到这道题</h1><Link className="button button-primary" href="/vp/archive">返回历届补题</Link></section></AppShell>;
 
   const solved = attempt.solvedAt !== undefined;
@@ -376,7 +352,7 @@ export default function ArchiveProblemPage() {
         <button className={language === "chinese" ? "active" : ""} disabled={!chineseReady} onClick={() => setLanguage("chinese")}>{statement?.source.chinesePdfUrl ? "官方中文" : "中文题面"} <small>{chineseReady ? "ZH" : "生成中"}</small></button>
       </div>
       {statementMessage ? <span className="archive-statement-status"><i />{statementMessage}</span> : null}
-      <div className={`archive-attempt-state${solved ? " solved" : attempt.wrong ? " attempted" : ""}`}><span>{solved ? "已 AC" : attempt.wrong ? `${attempt.wrong} 次 WA` : "未尝试"}</span><button disabled={!started || solved} onClick={() => updateAttempt("wrong")}>+ WA</button><button disabled={!started || solved} onClick={() => updateAttempt("solve")}>标记 AC</button>{solved || attempt.wrong ? <button onClick={() => updateAttempt("reset")}>重置</button> : null}</div>
+      <div className={`archive-attempt-state${solved ? " solved" : attempt.wrong ? " attempted" : ""}`}><span>{solved ? "已 AC" : attempt.wrong ? `${attempt.wrong} 次 WA` : "未尝试"}</span><small>{started ? "提交后自动更新" : "VP 开始后计入排名"}</small></div>
     </section>
 
     {!started ? <div className="archive-start-notice"><Icon name="clock" /><span>开始 VP 后，本题结果会计入实时排名。</span><Link href="/vp/archive">返回开始 VP →</Link></div> : null}

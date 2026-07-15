@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } from "./auth.mjs";
+import { createArchiveScoreboardHandler } from "./archive-scoreboards.mjs";
 import { createStatementHandler } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
 import { buildParticipantVpRows, rankVpRows, summarizeVpStates } from "./vp-scoring.mjs";
@@ -442,6 +443,7 @@ function pickCombined(pool, desiredCount, target, random) {
 
 const readBody = (request) => readJsonBody(request, { maxBytes: 64 * 1024 });
 const handleAuth = createAuthHandler({ json, readBody, clientIp });
+const handleArchiveScoreboards = createArchiveScoreboardHandler({ json });
 const handleStatements = createStatementHandler({ json, clientIp });
 
 function requestOwners(request, clientIdValue, { allowGuest = false } = {}) {
@@ -640,6 +642,8 @@ const server = http.createServer(async (request, response) => {
         problemsets: caches.problemset || 0,
         submissions: caches.submissions || 0,
         contestStandings: caches["contest-standings"] || 0,
+        archiveScoreboardSources: caches["archive-scoreboard-source"] || 0,
+        archiveScoreboardViews: caches["archive-scoreboard-view"] || 0,
         codeforcesInFlight: inFlightCodeforces.size,
       },
       persistence: persistenceStats(),
@@ -652,6 +656,7 @@ const server = http.createServer(async (request, response) => {
   try {
     if (await handleAuth(request, response, url)) return;
     if (await handleStatements(request, response, url)) return;
+    if (await handleArchiveScoreboards(request, response, url)) return;
     if (request.method === "GET" && url.pathname === "/state") {
       const key = personalStateKey(url.searchParams.get("key"));
       const owners = requestOwners(request, url.searchParams.get("clientId"));

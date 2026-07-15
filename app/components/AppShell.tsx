@@ -44,8 +44,8 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
     return () => { document.body.style.overflow = previousOverflow; };
   }, [feedbackOpen]);
   const nav = [
-    ["训练台", "/", "grid"], ["题库", "/problem", "search"], ["模拟赛", "/vp", "trophy"],
-    ["模板库", "/templates", "code"], ["提交记录", "/submissions", "history"], ["提交扩展", "/extension", "spark"], ["收藏", "/favorites", "star"],
+    ["训练台", "/", "grid"], ["沈阳冲刺", "/sprint", "fire"], ["题库", "/problem", "search"], ["模拟赛", "/vp", "trophy"],
+    ["模板库", "/templates", "code"], ["提交记录", "/submissions", "history"], ["收藏", "/favorites", "star"],
   ];
   if (user?.role === "admin") nav.push(["管理", "/admin", "team"]);
 

@@ -169,6 +169,15 @@ export default function Home() {
       <div><Link className="button button-primary" href="/problem?recommended=1&mode=balanced&training=0"><Icon name="play" /> 开始训练</Link><Link className="button button-ghost" href="/vp"><Icon name="trophy" /> 创建 VP</Link></div>
     </section>
 
+    <section className="sprint-home-banner">
+      <div><span>7 月底目标</span><h2>沈阳邀请赛冲刺</h2><p>优先完成 2025、2024 沈阳站真题 VP，再穿插近年区域赛。</p></div>
+      <div className="sprint-home-problems">{["A", "B", "C", "D"].map((slot) => {
+        const contest = archiveContests.find((item) => item.id === "2025-shenyang");
+        return contest ? <Link href={archiveProblemHref(contest, slot)} key={slot}><b>{slot}</b><small>做题</small></Link> : null;
+      })}</div>
+      <div className="sprint-home-actions"><Link href="/sprint">查看冲刺计划</Link><Link className="button button-primary" href="/vp/archive?contest=2025-shenyang"><Icon name="play" /> 开始沈阳站 VP</Link></div>
+    </section>
+
     <section className="training-overview-grid today-training-layout">
       <article className="panel today-archive-card">
         <div className="panel-head"><div><h2>历届补题</h2><p>邀请赛、区域赛与省赛</p></div><Link href="/vp/archive">全部赛事 →</Link></div>

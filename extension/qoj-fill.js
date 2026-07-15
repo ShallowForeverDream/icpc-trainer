@@ -1,13 +1,28 @@
 (async () => {
   const { pendingArchiveSubmission } = await chrome.storage.local.get("pendingArchiveSubmission");
   if (!pendingArchiveSubmission || Date.now() - pendingArchiveSubmission.createdAt > 30 * 60 * 1000) return;
+
+  const report = (stage, message) => chrome.runtime.sendMessage({
+    type: "JUDGE_SUBMIT_STATUS",
+    judge: "ucup",
+    requestId: pendingArchiveSubmission.requestId,
+    originTabId: pendingArchiveSubmission.originTabId,
+    stage,
+    message,
+  });
+  const finishWithError = async (stage, message) => {
+    await chrome.storage.local.remove("pendingArchiveSubmission");
+    await report(stage, message);
+  };
+
   const match = location.pathname.match(/^\/contest\/(\d+)\/problem\/(\d+)\/?$/);
-  if (!match
-    || Number(match[1]) !== pendingArchiveSubmission.qojContestId
+  if (!match || Number(match[1]) !== pendingArchiveSubmission.qojContestId
     || Number(match[2]) !== pendingArchiveSubmission.problemId
-    || typeof pendingArchiveSubmission.sourceCode !== "string"
-    || !pendingArchiveSubmission.sourceCode.trim()
-    || pendingArchiveSubmission.sourceCode.length > 500_000) return;
+    || typeof pendingArchiveSubmission.sourceCode !== "string" || !pendingArchiveSubmission.sourceCode.trim()
+    || pendingArchiveSubmission.sourceCode.length > 500_000 || !Number.isInteger(pendingArchiveSubmission.originTabId)) {
+    await finishWithError("failed", "评测页与目标题目不匹配，请返回平台重试");
+    return;
+  }
 
   const waitForSubmitForm = async () => {
     for (let attempt = 0; attempt < 80; attempt += 1) {
@@ -22,7 +37,10 @@
   const submitTab = document.querySelector("a[href='#tab-submit-answer']");
   if (submitTab instanceof HTMLElement) submitTab.click();
   const fields = await waitForSubmitForm();
-  if (!fields) return;
+  if (!fields) {
+    await finishWithError("needs_login", "Universal Cup / QOJ 未登录或提交表单不可用，请完成登录后重试");
+    return;
+  }
 
   const editorMode = document.querySelector("input[name='answer_answer_upload_type'][value='editor']");
   if (editorMode instanceof HTMLInputElement && !editorMode.checked) editorMode.click();
@@ -37,12 +55,22 @@
   fields.source.dispatchEvent(new Event("change", { bubbles: true }));
   const codeMirror = fields.source.nextElementSibling?.CodeMirror;
   if (codeMirror && typeof codeMirror.setValue === "function") codeMirror.setValue(pendingArchiveSubmission.sourceCode);
+
+  if (pendingArchiveSubmission.autoSubmit) {
+    const form = fields.source.closest("form");
+    const candidates = [...(form || document).querySelectorAll(".button-submit-answer, button[type='submit'], input[type='submit']")];
+    const submitButton = candidates.find((item) => /submit|提交/i.test(`${item.value || ""} ${item.textContent || ""} ${item.className || ""}`));
+    if (!(submitButton instanceof HTMLElement)) {
+      await finishWithError("failed", "已填入代码，但没有找到 Universal Cup / QOJ 的提交按钮");
+      return;
+    }
+    await chrome.storage.local.remove("pendingArchiveSubmission");
+    await report("submitted", "代码已提交到 Universal Cup / QOJ，平台已记录本次提交");
+    submitButton.click();
+    return;
+  }
+
   fields.source.scrollIntoView({ behavior: "smooth", block: "center" });
   fields.source.style.outline = "3px solid #c67ad8";
   await chrome.storage.local.remove("pendingArchiveSubmission");
-
-  const notice = document.createElement("div");
-  notice.textContent = "icpc-trainer 已填入题目、语言和代码。请检查后手动点击 Submit。";
-  notice.style.cssText = "margin:12px 0;padding:12px 14px;border:1px solid #c894d6;background:#fff5fc;color:#55365d;font-weight:600;border-radius:7px";
-  fields.source.closest(".form-group")?.insertAdjacentElement("afterbegin", notice);
 })();

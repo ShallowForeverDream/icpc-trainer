@@ -136,7 +136,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "0.6.0");
+  assert.equal(manifest.version, "0.7.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -146,9 +146,11 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(bridge, /ICPC_TRAINER_ARCHIVE_SUBMIT/);
   assert.match(qojFill, /input-answer_answer_editor/);
   assert.match(qojFill, /answer_answer_language/);
-  assert.doesNotMatch(`${background}\n${bridge}\n${fill}\n${qojFill}`, /autoSubmit/);
-  assert.doesNotMatch(fill, /submitButton|\.click\s*\(/);
-  assert.doesNotMatch(qojFill, /button-submit-answer.*click/);
+  assert.match(`${bridge}\n${fill}\n${qojFill}`, /autoSubmit/);
+  assert.match(fill, /submitButton\.click\(\)/);
+  assert.match(qojFill, /button-submit-answer/);
+  assert.match(background, /active: false/);
+  assert.match(background, /JUDGE_SUBMIT_STATUS/);
 });
 
 test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {
@@ -204,7 +206,8 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(page, /只看我的队伍/);
   assert.match(page, /relativeSubmissionTime/);
   assert.match(detail, /VP · Problem/);
-  assert.match(detail, /提交本题（打开 CF）/);
+  assert.match(detail, /直接提交/);
+  assert.match(detail, /autoSubmit: true/);
   assert.match(detail, /返回实时榜单/);
   assert.match(detail, /或直接粘贴代码/);
   assert.match(backendScoring, /teams \* 0\.1/);

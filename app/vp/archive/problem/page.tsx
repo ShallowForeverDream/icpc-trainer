@@ -3,7 +3,7 @@
 
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
-import { ChangeEvent, useEffect, useState } from "react";
+import { ChangeEvent, useEffect, useRef, useState } from "react";
 import { AppShell, Icon } from "../../../components/AppShell";
 import { ArchiveContest, archivePracticeProblem, findArchiveContest } from "../../../data/archive-contests";
 import {
@@ -13,6 +13,7 @@ import {
   loadArchiveStatement,
 } from "../../../lib/archive-statement-client";
 import { savePersistentJson } from "../../../lib/persistent-state";
+import { createSubmissionRequestId, recordPlatformSubmission, updatePlatformSubmission } from "../../../lib/platform-submissions";
 import { readStoredJson, writeStoredJson } from "../../../lib/storage";
 
 type Attempt = { wrong: number; solvedAt?: number };
@@ -143,13 +144,23 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
   const [error, setError] = useState("");
   const [status, setStatus] = useState("");
   const [extensionReady, setExtensionReady] = useState(false);
+  const requestIdRef = useRef("");
 
   useEffect(() => {
     const listener = (event: MessageEvent) => {
       if (event.source !== window || event.origin !== window.location.origin) return;
       if (event.data?.source !== "icpc-trainer-extension") return;
-      if (event.data.type === "ICPC_TRAINER_PONG") setExtensionReady(true);
-      if (event.data.type === "ICPC_TRAINER_SUBMIT_RESULT") setStatus(event.data.ok ? "提交页已打开，检查后在评测站确认提交。" : "扩展未能打开提交页，请重新加载扩展后再试。");
+      if (event.data.type === "ICPC_TRAINER_PONG") {
+        const current = event.data.version === "0.7.0";
+        setExtensionReady(current);
+        if (!current) setStatus("检测到旧版扩展，请下载 v0.7 并在扩展管理页重新加载");
+      }
+      if (event.data.type === "ICPC_TRAINER_SUBMIT_RESULT" && event.data.requestId === requestIdRef.current) {
+        const stage = event.data.stage as "queued" | "submitted" | "failed" | "needs_login";
+        const message = typeof event.data.message === "string" ? event.data.message : "提交状态已更新";
+        setStatus(message);
+        if (["queued", "submitted", "failed", "needs_login"].includes(stage)) void updatePlatformSubmission(event.data.requestId, stage, message);
+      }
     };
     window.addEventListener("message", listener);
     window.postMessage({ source: "icpc-trainer", type: "ICPC_TRAINER_PING" }, window.location.origin);
@@ -191,10 +202,20 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
     const selectedLanguage = SUBMIT_LANGUAGES.find((item) => item.value === languageValue) || SUBMIT_LANGUAGES[0];
     await copyText(sourceCode);
     if (extensionReady) {
+      const requestId = createSubmissionRequestId();
+      requestIdRef.current = requestId;
+      const title = contest.problemTitles?.[selectedSlot.charCodeAt(0) - 65] || `Problem ${selectedSlot}`;
+      void recordPlatformSubmission({
+        requestId, judge: "ucup", problemCode: `${contest.id}-${selectedSlot}`, problemTitle: title,
+        problemHref: `/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(selectedSlot)}`,
+        contestId: contest.qojContestId, problemIndex: selectedSlot, language: selectedLanguage.label,
+        status: "queued", message: "正在连接 Universal Cup / QOJ",
+      });
       window.postMessage({
         source: "icpc-trainer",
         type: "ICPC_TRAINER_ARCHIVE_SUBMIT",
         payload: {
+          requestId,
           judge: "ucup",
           qojContestId: contest.qojContestId,
           problemId: problem.id,
@@ -203,13 +224,13 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
           sourceCode,
           languageValue: selectedLanguage.value,
           languageLabel: selectedLanguage.label,
+          autoSubmit: true,
         },
       }, window.location.origin);
-      setStatus("正在通过浏览器扩展打开并填写提交页…");
+      setStatus("正在后台连接 Universal Cup / QOJ 并提交…");
       return;
     }
-    window.open(problem.submitUrl, "_blank", "noopener,noreferrer");
-    setStatus("代码已复制。安装扩展后可自动填写；当前请在新页面粘贴并提交。");
+    setStatus("需要安装并重新加载 v0.7 提交扩展；代码已复制，不会丢失。");
   }
 
   return <div className="archive-submit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -231,7 +252,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
-      <footer><span>{extensionReady ? "浏览器扩展已连接" : "未检测到扩展：提交时仍会复制代码并打开评测页"}</span><button type="button" onClick={() => void submit()}>打开并填写提交页 →</button></footer>
+      <footer><span>{extensionReady ? "v0.7 扩展已连接 · 凭据只留在浏览器" : "未检测到 v0.7 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
     </section>
   </div>;
 }
@@ -351,7 +372,7 @@ export default function ArchiveProblemPage() {
       {statement ? <ArchiveStatementView statement={statement} language={language} /> : <article className="archive-statement-panel archive-statement-loading"><div className="statement-loader" /><h2>正在整理题面</h2><p>{statementMessage || "首次打开会从官方 PDF 提取正文、样例和图片，完成后自动写入数据库。"}</p><div className="hero-actions"><a className="button button-ghost" href={problem.statementUrl} target="_blank" rel="noreferrer">下载原始 PDF ↓</a></div></article>}
     </section>
 
-    <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择代码文件或直接粘贴，自动打开评测页。</span></div><button type="button" onClick={() => setSubmitOpen(true)}>提交代码 →</button></section>
+    <section className="archive-submit-dock"><div><b>完成代码后直接提交</b><span>选择文件或粘贴代码，后台代理提交并写入平台记录。</span></div><button type="button" onClick={() => setSubmitOpen(true)}>提交代码 →</button></section>
     {submitOpen ? <ArchiveSubmitDialog contest={contest} currentSlot={slot} slots={slots} onClose={() => setSubmitOpen(false)} /> : null}
   </AppShell>;
 }

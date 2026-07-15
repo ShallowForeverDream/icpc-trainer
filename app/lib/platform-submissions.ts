@@ -1,7 +1,7 @@
 import { loadPersistentJson, savePersistentJson } from "./persistent-state";
 
 export type PlatformJudge = "codeforces" | "ucup";
-export type PlatformSubmissionStatus = "queued" | "submitted" | "failed" | "needs_login";
+export type PlatformSubmissionStatus = "queued" | "submitted" | "accepted" | "rejected" | "failed" | "needs_login";
 
 export type PlatformSubmission = {
   requestId: string;
@@ -33,7 +33,7 @@ function isSubmission(value: unknown): value is PlatformSubmission {
     && Number.isInteger(item.contestId)
     && typeof item.problemIndex === "string"
     && typeof item.language === "string"
-    && ["queued", "submitted", "failed", "needs_login"].includes(item.status || "")
+    && ["queued", "submitted", "accepted", "rejected", "failed", "needs_login"].includes(item.status || "")
     && typeof item.message === "string"
     && typeof item.createdAt === "string"
     && typeof item.updatedAt === "string";

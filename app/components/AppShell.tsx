@@ -3,6 +3,8 @@
 import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { authFetch, readAuth, type AuthUser } from "../lib/auth-client";
+import { applyArchiveJudgeVerdict } from "../lib/archive-vp-session";
+import { updatePlatformSubmission } from "../lib/platform-submissions";
 import { getTrainingClientId } from "../lib/training-client";
 
 export function Icon({ name }: { name: string }) {
@@ -24,6 +26,21 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
     const refresh = () => setUser(readAuth()?.user ?? null);
     refresh(); window.addEventListener("icpc-auth-change", refresh);
     return () => window.removeEventListener("icpc-auth-change", refresh);
+  }, []);
+  useEffect(() => {
+    const receiveJudgeStatus = (event: MessageEvent) => {
+      const data = event.data;
+      if (event.source !== window || event.origin !== window.location.origin || data?.source !== "icpc-trainer-extension" || data.type !== "ICPC_TRAINER_SUBMIT_RESULT" || typeof data.requestId !== "string") return;
+      if (data.stage === "judged" && ["AC", "WA"].includes(data.verdict)) {
+        const status = data.verdict === "AC" ? "accepted" : "rejected";
+        void updatePlatformSubmission(data.requestId, status, typeof data.message === "string" ? data.message : data.verdict);
+        if (data.judge === "ucup" && typeof data.archiveContestId === "string" && typeof data.slot === "string") {
+          void applyArchiveJudgeVerdict({ contestId: data.archiveContestId, slot: data.slot, verdict: data.verdict, requestId: data.requestId });
+        }
+      }
+    };
+    window.addEventListener("message", receiveJudgeStatus);
+    return () => window.removeEventListener("message", receiveJudgeStatus);
   }, []);
   useEffect(() => {
     const keydown = (event: KeyboardEvent) => {

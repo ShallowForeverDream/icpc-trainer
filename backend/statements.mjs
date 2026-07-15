@@ -23,6 +23,8 @@ const FAST_TRANSLATOR_URL = "https://api-edge.cognitive.microsofttranslator.com/
 const USER_AGENT = "icpc-trainer-statement-importer/0.4 (+https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site)";
 const importJobs = new Map();
 const archiveImportJobs = new Map();
+const archiveOfficialChineseJobs = new Map();
+const recentArchiveOfficialChineseAttempts = new Map();
 const recentTranslationAttempts = new Map();
 const recentArchiveTranslationAttempts = new Map();
 const queuedTranslations = new Set();
@@ -75,6 +77,7 @@ db.exec(`
     time_limit_text TEXT,
     memory_limit_text TEXT,
     source_url TEXT NOT NULL,
+    chinese_source_url TEXT,
     original_json TEXT,
     chinese_json TEXT,
     translation_version INTEGER NOT NULL DEFAULT 0,
@@ -95,6 +98,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS archive_statement_assets_statement_idx ON archive_statement_assets(statement_id);
 `);
 if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "translation_version")) db.exec("ALTER TABLE problem_statements ADD COLUMN translation_version INTEGER NOT NULL DEFAULT 0");
+if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "chinese_source_url")) db.exec("ALTER TABLE archive_statements ADD COLUMN chinese_source_url TEXT");
 
 const now = () => Date.now();
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -201,6 +205,7 @@ function normalizeArchiveMetadata(url) {
     || !Number.isInteger(qojContestId) || qojContestId < 1 || qojContestId > 10_000_000
     || !Number.isInteger(problemId) || problemId < 1 || problemId > 100_000_000
     || !contestName || !title) throw new HttpError(400, "历届题目参数无效");
+  const sourceUrl = `https://contest.ucup.ac/download.php?type=statement&id=${problemId}&contest_id=${qojContestId}`;
   return {
     id: `${contestId}:${slot}`,
     contestId,
@@ -209,7 +214,8 @@ function normalizeArchiveMetadata(url) {
     problemId,
     contestName,
     title,
-    sourceUrl: `https://contest.ucup.ac/download.php?type=statement&id=${problemId}&contest_id=${qojContestId}`,
+    sourceUrl,
+    chineseSourceUrl: `${sourceUrl}&ver=zh_cn`,
   };
 }
 
@@ -234,7 +240,7 @@ function publicArchiveStatement(row) {
     source: {
       kind: "official-pdf-extract",
       englishPdfUrl: row.source_url,
-      chinesePdfUrl: null,
+      chinesePdfUrl: row.chinese_source_url || null,
       chinesePages: null,
     },
     english: { sections: Array.isArray(original.sections) ? original.sections : [] },
@@ -251,8 +257,8 @@ function publicArchiveStatement(row) {
 function upsertArchivePending(metadata) {
   const timestamp = now();
   db.prepare(`
-    INSERT INTO archive_statements (id, contest_slug, slot, qoj_contest_id, problem_id, contest_name, title_en, source_url, status, created_at, updated_at)
-    VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'importing', ?, ?)
+    INSERT INTO archive_statements (id, contest_slug, slot, qoj_contest_id, problem_id, contest_name, title_en, source_url, chinese_source_url, status, created_at, updated_at)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, NULL, 'importing', ?, ?)
     ON CONFLICT(id) DO UPDATE SET
       qoj_contest_id=excluded.qoj_contest_id,
       problem_id=excluded.problem_id,
@@ -307,6 +313,21 @@ async function fetchArchivePdf(value, maxRedirects = 3) {
     }
   }
   throw new Error("PDF 重定向过多");
+}
+
+async function fetchArchiveOfficialChineseTitle(metadata) {
+  const url = `https://contest.ucup.ac/contest/${metadata.qojContestId}/problem/${metadata.problemId}/statement/zh_cn`;
+  const controller = new AbortController();
+  const timeout = setTimeout(() => controller.abort(), 20_000);
+  try {
+    const response = await fetch(url, { headers: { "User-Agent": USER_AGENT, Accept: "text/html", "Accept-Language": "zh-CN,zh;q=0.9" }, signal: controller.signal });
+    if (!response.ok) return "";
+    const html = (await readLimitedBuffer(response, 2 * 1024 * 1024)).toString("utf8");
+    const $ = load(html);
+    return $(".page-header h1.col-md-7").first().text().replace(/^\s*[A-Z][0-9]?\.\s*/i, "").replace(/\s+/g, " ").trim().slice(0, 180);
+  } finally {
+    clearTimeout(timeout);
+  }
 }
 
 function formulaCounts(html) {
@@ -958,7 +979,7 @@ async function translateStatement(code) {
   }
 }
 
-async function extractArchivePdf(metadata, pdfBuffer) {
+async function extractArchivePdf(metadata, pdfBuffer, { extractImages = true } = {}) {
   const directory = await mkdtemp(join(tmpdir(), "icpc-archive-"));
   const pdfPath = join(directory, "statement.pdf");
   const imagePrefix = join(directory, "figure");
@@ -966,10 +987,12 @@ async function extractArchivePdf(metadata, pdfBuffer) {
     writeFileSync(pdfPath, pdfBuffer);
     const { stdout } = await execFileAsync("pdftotext", ["-layout", pdfPath, "-"], { timeout: 60_000, maxBuffer: 10 * 1024 * 1024 });
     const parsed = parseArchivePdfText(String(stdout || ""), metadata.title);
-    try {
-      await execFileAsync("pdfimages", ["-png", pdfPath, imagePrefix], { timeout: 90_000, maxBuffer: 2 * 1024 * 1024 });
-    } catch (error) {
-      console.error("archive PDF image extraction", metadata.id, error instanceof Error ? error.message : error);
+    if (extractImages) {
+      try {
+        await execFileAsync("pdfimages", ["-png", pdfPath, imagePrefix], { timeout: 90_000, maxBuffer: 2 * 1024 * 1024 });
+      } catch (error) {
+        console.error("archive PDF image extraction", metadata.id, error instanceof Error ? error.message : error);
+      }
     }
     const files = (await readdir(directory)).filter((name) => /^figure-\d+\.png$/i.test(name)).sort().slice(0, 16);
     const images = [];
@@ -994,6 +1017,36 @@ async function extractArchivePdf(metadata, pdfBuffer) {
   }
 }
 
+function archiveHasChineseText(parsed) {
+  const text = JSON.stringify(parsed?.sections || []);
+  return (text.match(/[\u3400-\u9fff]/g) || []).length >= 24;
+}
+
+async function importArchiveOfficialChinese(metadata) {
+  if (archiveOfficialChineseJobs.has(metadata.id)) return archiveOfficialChineseJobs.get(metadata.id);
+  const lastAttempt = recentArchiveOfficialChineseAttempts.get(metadata.id) || 0;
+  if (now() - lastAttempt < 10 * 60_000) return false;
+  recentArchiveOfficialChineseAttempts.set(metadata.id, now());
+  const job = (async () => {
+    try {
+      const pdf = await fetchArchivePdf(metadata.chineseSourceUrl);
+      const { parsed } = await extractArchivePdf(metadata, pdf, { extractImages: false });
+      if (!archiveHasChineseText(parsed)) return false;
+      const officialTitle = await fetchArchiveOfficialChineseTitle(metadata).catch(() => "");
+      db.prepare(`UPDATE archive_statements SET
+        title_zh=?, chinese_json=?, chinese_source_url=?, translation_version=?, status='ready', error=NULL, updated_at=?
+        WHERE id=? AND original_json IS NOT NULL`)
+        .run(officialTitle || parsed.title || metadata.title, JSON.stringify({ sections: parsed.sections || [] }), metadata.chineseSourceUrl, ARCHIVE_TRANSLATION_VERSION, now(), metadata.id);
+      return true;
+    } catch (error) {
+      console.error("official archive Chinese statement unavailable", metadata.id, error instanceof Error ? error.message : error);
+      return false;
+    }
+  })().finally(() => archiveOfficialChineseJobs.delete(metadata.id));
+  archiveOfficialChineseJobs.set(metadata.id, job);
+  return job;
+}
+
 async function importArchiveOriginal(metadata) {
   if (archiveImportJobs.has(metadata.id)) return archiveImportJobs.get(metadata.id);
   if (archiveImportJobs.size >= 12) {
@@ -1011,7 +1064,8 @@ async function importArchiveOriginal(metadata) {
           translation_version=0, status='translating', error='原题面已就绪，正在生成中文题面', updated_at=?
         WHERE id=?
       `).run(parsed.title || metadata.title, parsed.timeLimitText, parsed.memoryLimitText, JSON.stringify({ sections: parsed.sections, sample: parsed.sample }), JSON.stringify(images), now(), metadata.id);
-      queueArchiveTranslation(metadata.id);
+      const officialChinese = await importArchiveOfficialChinese(metadata);
+      if (!officialChinese) queueArchiveTranslation(metadata.id);
     } catch (error) {
       const message = error instanceof Error ? error.message : "PDF 导入失败";
       console.error("archive PDF import failed", metadata.id, message);
@@ -1139,6 +1193,10 @@ export function createStatementHandler({ json, clientIp }) {
           && (["queued", "source_required"].includes(row.status) || now() - row.updated_at > 2 * 60_000)) {
           void importArchiveOriginal(metadata);
           row = archiveStatementRow(metadata.id);
+        } else if (row.original_json && !row.chinese_source_url
+          && !archiveOfficialChineseJobs.has(metadata.id)
+          && now() - (recentArchiveOfficialChineseAttempts.get(metadata.id) || 0) >= 10 * 60_000) {
+          void importArchiveOfficialChinese(metadata);
         } else if (row.original_json && (!row.chinese_json || Number(row.translation_version || 0) < ARCHIVE_TRANSLATION_VERSION)) {
           const queued = queueArchiveTranslation(metadata.id);
           if (queued && row.status !== "translating") {

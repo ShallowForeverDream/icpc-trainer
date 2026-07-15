@@ -2,18 +2,65 @@
   const { pendingArchiveSubmission } = await chrome.storage.local.get("pendingArchiveSubmission");
   if (!pendingArchiveSubmission || Date.now() - pendingArchiveSubmission.createdAt > 30 * 60 * 1000) return;
 
-  const report = (stage, message) => chrome.runtime.sendMessage({
+  const report = (stage, message, extra = {}) => chrome.runtime.sendMessage({
     type: "JUDGE_SUBMIT_STATUS",
     judge: "ucup",
     requestId: pendingArchiveSubmission.requestId,
     originTabId: pendingArchiveSubmission.originTabId,
+    archiveContestId: pendingArchiveSubmission.archiveContestId,
+    qojContestId: pendingArchiveSubmission.qojContestId,
+    slot: pendingArchiveSubmission.slot,
     stage,
     message,
+    ...extra,
   });
   const finishWithError = async (stage, message) => {
     await chrome.storage.local.remove("pendingArchiveSubmission");
     await report(stage, message);
   };
+
+  if (pendingArchiveSubmission.phase === "tracking") {
+    const submissionsPath = new RegExp(`^/contest/${pendingArchiveSubmission.qojContestId}/submissions/?$`);
+    if (!submissionsPath.test(location.pathname)) return;
+    for (let attempt = 0; attempt < 240; attempt += 1) {
+      const rows = [...document.querySelectorAll("table tbody tr")];
+      let row = null;
+      if (Number.isInteger(pendingArchiveSubmission.submissionId)) {
+        row = rows.find((item) => item.querySelector(`a[href='/submission/${pendingArchiveSubmission.submissionId}']`));
+      } else {
+        row = rows.find((item) => {
+          const problemLink = item.querySelector(`a[href^='/contest/${pendingArchiveSubmission.qojContestId}/problem/${pendingArchiveSubmission.problemId}']`);
+          return Boolean(problemLink);
+        });
+        const idLink = row?.querySelector("a[href^='/submission/']");
+        const idMatch = idLink?.getAttribute("href")?.match(/^\/submission\/(\d+)$/);
+        if (idMatch) {
+          pendingArchiveSubmission.submissionId = Number(idMatch[1]);
+          await chrome.storage.local.set({ pendingArchiveSubmission });
+        }
+      }
+
+      if (row) {
+        const scoreLink = row.querySelector("a.uoj-score[href^='/submission/']");
+        if (scoreLink) {
+          const score = Number(scoreLink.textContent?.trim());
+          const verdict = Number.isFinite(score) && score >= 99.999 ? "AC" : "WA";
+          await chrome.storage.local.remove("pendingArchiveSubmission");
+          await report("judged", verdict === "AC" ? "Accepted · 已自动计入 VP 排名" : `未通过（${Number.isFinite(score) ? score : 0} 分）· 已自动计入罚时`, { verdict, submissionId: pendingArchiveSubmission.submissionId });
+          return;
+        }
+        const resultLink = [...row.querySelectorAll("a.small[href^='/submission/']")].find((item) => item.getAttribute("href") === `/submission/${pendingArchiveSubmission.submissionId}`);
+        const resultText = resultLink?.textContent?.trim() || "";
+        if (resultText && !/Waiting|Judging|Rejudge|Queued/i.test(resultText)) {
+          await chrome.storage.local.remove("pendingArchiveSubmission");
+          await report("judged", `${resultText} · 已自动计入罚时`, { verdict: "WA", submissionId: pendingArchiveSubmission.submissionId });
+          return;
+        }
+      }
+      await new Promise((resolve) => setTimeout(resolve, 500));
+    }
+    return;
+  }
 
   const match = location.pathname.match(/^\/contest\/(\d+)\/problem\/(\d+)\/?$/);
   if (!match || Number(match[1]) !== pendingArchiveSubmission.qojContestId
@@ -58,14 +105,16 @@
 
   if (pendingArchiveSubmission.autoSubmit) {
     const form = fields.source.closest("form");
-    const candidates = [...(form || document).querySelectorAll(".button-submit-answer, button[type='submit'], input[type='submit']")];
+    const candidates = [...(form || document).querySelectorAll(".button-submit-answer, #button-submit-answer, button[type='submit'], input[type='submit']")];
     const submitButton = candidates.find((item) => /submit|提交/i.test(`${item.value || ""} ${item.textContent || ""} ${item.className || ""}`));
     if (!(submitButton instanceof HTMLElement)) {
       await finishWithError("failed", "已填入代码，但没有找到 Universal Cup / QOJ 的提交按钮");
       return;
     }
-    await chrome.storage.local.remove("pendingArchiveSubmission");
-    await report("submitted", "代码已提交到 Universal Cup / QOJ，平台已记录本次提交");
+    pendingArchiveSubmission.phase = "tracking";
+    delete pendingArchiveSubmission.sourceCode;
+    await chrome.storage.local.set({ pendingArchiveSubmission });
+    await report("submitted", "代码已送达 Universal Cup / QOJ，正在等待判题");
     submitButton.click();
     return;
   }

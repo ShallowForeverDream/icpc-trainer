@@ -136,7 +136,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://contest.ucup.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "0.7.0");
+  assert.equal(manifest.version, "0.8.0");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -151,6 +151,8 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(qojFill, /button-submit-answer/);
   assert.match(background, /active: false/);
   assert.match(background, /JUDGE_SUBMIT_STATUS/);
+  assert.match(qojFill, /phase === "tracking"/);
+  assert.match(qojFill, /"judged"/);
 });
 
 test("ships live multiplayer VP generation, in-platform solving, frozen standings, and medals", async () => {
@@ -354,6 +356,9 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /statement_assets/);
   assert.match(statements, /archive_statements/);
   assert.match(statements, /archive_statement_assets/);
+  assert.match(statements, /chinese_source_url/);
+  assert.match(statements, /ver=zh_cn/);
+  assert.match(statements, /importArchiveOfficialChinese/);
   assert.match(statements, /pdftotext/);
   assert.match(statements, /pdfimages/);
   assert.match(statements, /tesseract/);

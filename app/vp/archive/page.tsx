@@ -5,6 +5,7 @@ import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import { archiveContests, archivePracticeProblem, archiveProblemHref, findArchiveContest } from "../../data/archive-contests";
+import { ARCHIVE_SESSION_EVENT } from "../../lib/archive-vp-session";
 import { clearPersistentJson, loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
 import { readTrainerPreferences } from "../../lib/preferences";
 import { readStoredJson } from "../../lib/storage";
@@ -71,6 +72,15 @@ export default function ArchiveVpPage() {
       void loadPersistentJson<Session | null>("archive-vp", STORAGE_KEY, saved, (value): value is Session | null => value === null || isSession(value)).then((remote) => { if (remote) setSession(remote); });
     }
     return () => scoreboardRequest.current?.abort();
+  }, []);
+
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const next = (event as CustomEvent<Session>).detail;
+      if (isSession(next)) setSession(next);
+    };
+    window.addEventListener(ARCHIVE_SESSION_EVENT, receive);
+    return () => window.removeEventListener(ARCHIVE_SESSION_EVENT, receive);
   }, []);
 
   const saveSession = useCallback((next: Session | null) => {

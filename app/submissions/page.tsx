@@ -10,7 +10,7 @@ import { readTrainerPreferences, saveTrainerPreferences, validCodeforcesHandle }
 
 type Submission = { id: number; createdAt: string; code: string; contestId?: number; index: string; title: string; verdict: string; language: string; timeMs: number };
 const verdictLabel: Record<string, string> = { OK: "Accepted", WRONG_ANSWER: "Wrong answer", TIME_LIMIT_EXCEEDED: "Time limit", MEMORY_LIMIT_EXCEEDED: "Memory limit", RUNTIME_ERROR: "Runtime error", TESTING: "Testing" };
-const proxyStatus: Record<PlatformSubmission["status"], string> = { queued: "连接中", submitted: "已送达评测站", failed: "提交失败", needs_login: "需要登录" };
+const proxyStatus: Record<PlatformSubmission["status"], string> = { queued: "连接中", submitted: "评测中", accepted: "Accepted", rejected: "未通过", failed: "提交失败", needs_login: "需要登录" };
 
 export default function SubmissionsPage() {
   const [tab, setTab] = useState<"platform" | "codeforces">("platform");

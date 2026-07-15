@@ -45,18 +45,24 @@ async function openJudgeTab(message, sender, sendResponse) {
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message?.type === "JUDGE_SUBMIT_STATUS") {
     if (!trustedJudgeSender(sender, message.judge) || !validRequestId(message.requestId)
-      || !Number.isInteger(message.originTabId) || !["submitted", "failed", "needs_login"].includes(message.stage)) return;
+      || !Number.isInteger(message.originTabId) || !["submitted", "judged", "failed", "needs_login"].includes(message.stage)) return;
     chrome.tabs.sendMessage(message.originTabId, {
       type: "ICPC_TRAINER_SUBMIT_STATUS",
       requestId: message.requestId,
-      ok: message.stage === "submitted",
+      ok: ["submitted", "judged"].includes(message.stage),
       stage: message.stage,
       message: typeof message.message === "string" ? message.message.slice(0, 240) : "",
+      judge: message.judge,
+      archiveContestId: typeof message.archiveContestId === "string" ? message.archiveContestId.slice(0, 80) : undefined,
+      qojContestId: Number.isInteger(message.qojContestId) ? message.qojContestId : undefined,
+      slot: typeof message.slot === "string" && /^[A-Z][0-9]?$/.test(message.slot) ? message.slot : undefined,
+      verdict: ["AC", "WA"].includes(message.verdict) ? message.verdict : undefined,
+      submissionId: Number.isInteger(message.submissionId) ? message.submissionId : undefined,
     }).catch(() => undefined);
-    if (message.stage === "submitted" && sender.tab?.id !== undefined) {
+    if (message.stage === "judged" && sender.tab?.id !== undefined) {
       const judgeTabId = sender.tab.id;
-      setTimeout(() => chrome.tabs.remove(judgeTabId).catch(() => undefined), 6000);
-    } else if (sender.tab?.id !== undefined) {
+      setTimeout(() => chrome.tabs.remove(judgeTabId).catch(() => undefined), 1200);
+    } else if (["failed", "needs_login"].includes(message.stage) && sender.tab?.id !== undefined) {
       chrome.tabs.update(sender.tab.id, { active: true }).catch(() => undefined);
     }
     return;

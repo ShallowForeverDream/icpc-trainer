@@ -12,6 +12,7 @@ import {
   ArchiveStatementPendingError,
   loadArchiveStatement,
 } from "../../../lib/archive-statement-client";
+import { ARCHIVE_SESSION_EVENT } from "../../../lib/archive-vp-session";
 import { savePersistentJson } from "../../../lib/persistent-state";
 import { createSubmissionRequestId, recordPlatformSubmission, updatePlatformSubmission } from "../../../lib/platform-submissions";
 import { readStoredJson, writeStoredJson } from "../../../lib/storage";
@@ -151,9 +152,9 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       if (event.source !== window || event.origin !== window.location.origin) return;
       if (event.data?.source !== "icpc-trainer-extension") return;
       if (event.data.type === "ICPC_TRAINER_PONG") {
-        const current = event.data.version === "0.7.0";
+        const current = event.data.version === "0.8.0";
         setExtensionReady(current);
-        if (!current) setStatus("检测到旧版扩展，请下载 v0.7 并在扩展管理页重新加载");
+        if (!current) setStatus("检测到旧版扩展，请下载 v0.8 并在扩展管理页重新加载");
       }
       if (event.data.type === "ICPC_TRAINER_SUBMIT_RESULT" && event.data.requestId === requestIdRef.current) {
         const stage = event.data.stage as "queued" | "submitted" | "failed" | "needs_login";
@@ -217,6 +218,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
         payload: {
           requestId,
           judge: "ucup",
+          archiveContestId: contest.id,
           qojContestId: contest.qojContestId,
           problemId: problem.id,
           slot: selectedSlot,
@@ -230,7 +232,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       setStatus("正在后台连接 Universal Cup / QOJ 并提交…");
       return;
     }
-    setStatus("需要安装并重新加载 v0.7 提交扩展；代码已复制，不会丢失。");
+    setStatus("需要安装并重新加载 v0.8 提交扩展；代码已复制，不会丢失。");
   }
 
   return <div className="archive-submit-backdrop" role="presentation" onMouseDown={(event) => { if (event.target === event.currentTarget) onClose(); }}>
@@ -252,7 +254,7 @@ function ArchiveSubmitDialog({ contest, currentSlot, slots, onClose }: { contest
       </label>
       {error ? <p className="archive-submit-error">{error}</p> : null}
       {status ? <p className="archive-submit-status">{status}</p> : null}
-      <footer><span>{extensionReady ? "v0.7 扩展已连接 · 凭据只留在浏览器" : "未检测到 v0.7 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
+      <footer><span>{extensionReady ? "v0.8 扩展已连接 · 凭据只留在浏览器" : "未检测到 v0.8 扩展"}</span><button type="button" onClick={() => void submit()}>直接提交 →</button></footer>
     </section>
   </div>;
 }
@@ -282,6 +284,17 @@ export default function ArchiveProblemPage() {
     const session = readStoredJson<ArchiveSession | null>(SESSION_KEY, null, (value): value is ArchiveSession | null => value === null || isArchiveSession(value));
     setStarted(Boolean(session?.contestId === contestId && session.startedAt));
     setAttempt(session?.contestId === contestId ? session.attempts[slot] || { wrong: 0 } : { wrong: 0 });
+  }, [contestId, slot]);
+
+  useEffect(() => {
+    const receive = (event: Event) => {
+      const session = (event as CustomEvent<ArchiveSession>).detail;
+      if (!isArchiveSession(session) || session.contestId !== contestId) return;
+      setStarted(Boolean(session.startedAt));
+      setAttempt(session.attempts[slot] || { wrong: 0 });
+    };
+    window.addEventListener(ARCHIVE_SESSION_EVENT, receive);
+    return () => window.removeEventListener(ARCHIVE_SESSION_EVENT, receive);
   }, [contestId, slot]);
 
   useEffect(() => {

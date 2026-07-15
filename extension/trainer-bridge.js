@@ -26,7 +26,7 @@ window.addEventListener("message", async (event) => {
   if (!message || message.source !== "icpc-trainer") return;
 
   if (message.type === "ICPC_TRAINER_PING") {
-    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "0.7.0" }, window.location.origin);
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "0.8.0" }, window.location.origin);
     return;
   }
 
@@ -39,6 +39,7 @@ window.addEventListener("message", async (event) => {
       || payload.qojContestId < 1 || payload.qojContestId > 10_000_000
       || payload.problemId < 1 || payload.problemId > 100_000_000
       || !/^[A-Z][0-9]?$/.test(payload.slot)
+      || typeof payload.archiveContestId !== "string" || !/^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])$/.test(payload.archiveContestId)
       || typeof payload.submitUrl !== "string" || !payload.submitUrl.startsWith(expectedUrl)
       || typeof payload.sourceCode !== "string" || !payload.sourceCode.trim() || payload.sourceCode.length > 500_000
       || typeof payload.languageValue !== "string" || !/^[A-Za-z0-9+.]{1,24}$/.test(payload.languageValue)) return;
@@ -48,6 +49,7 @@ window.addEventListener("message", async (event) => {
       qojContestId: payload.qojContestId,
       problemId: payload.problemId,
       slot: payload.slot,
+      archiveContestId: payload.archiveContestId,
       sourceCode: payload.sourceCode,
       languageValue: payload.languageValue,
       languageLabel: typeof payload.languageLabel === "string" ? payload.languageLabel.slice(0, 80) : "GNU C++20",

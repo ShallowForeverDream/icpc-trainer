@@ -6,6 +6,7 @@ import Link from "next/link";
 import { AppShell, Icon, ProblemRow } from "./components/AppShell";
 import { archiveContests, archiveProblemHref, type ArchiveContest } from "./data/archive-contests";
 import { apiJson } from "./lib/api-client";
+import { authJson } from "./lib/auth-client";
 import { loadPlatformSubmissions, subscribePlatformSubmissions, type PlatformSubmission } from "./lib/platform-submissions";
 import { readTrainerPreferences, saveTrainerPreferences, syncTrainerPreferences } from "./lib/preferences";
 import { loadPersistentJson } from "./lib/persistent-state";
@@ -102,7 +103,7 @@ export default function Home() {
     });
     Promise.allSettled([
       apiJson<{ submissions?: Submission[] }>(`/codeforces/submissions?handle=${encodeURIComponent(preferences.codeforcesHandle)}&count=1000`, { cache: "no-store", signal: controller.signal }),
-      apiJson<{ problems?: Recommendation[] }>(`/codeforces/recommendations?${recommendationParams}`, { cache: "no-store", signal: controller.signal }),
+      authJson<{ problems?: Recommendation[] }>(`/codeforces/recommendations?${recommendationParams}`, { cache: "no-store", signal: controller.signal }),
       loadTrainingSummary(preferences.codeforcesHandle, controller.signal),
     ]).then(([submissionResult, recommendationResult, summaryResult]) => {
       if (controller.signal.aborted) return;

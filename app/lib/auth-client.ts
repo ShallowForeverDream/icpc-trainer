@@ -47,3 +47,10 @@ export async function authFetch(path: string, init: RequestInit = {}, timeoutMs 
   if (response.status === 401) clearAuth();
   return response;
 }
+
+export async function authJson<T>(path: string, init: RequestInit = {}, timeoutMs = 15_000) {
+  const response = await authFetch(path, init, timeoutMs);
+  const data = await response.json().catch(() => ({})) as T & { error?: string };
+  if (!response.ok) throw new Error(data.error || `请求失败（${response.status}）`);
+  return data;
+}

@@ -46,6 +46,7 @@ db.exec(`
   CREATE INDEX IF NOT EXISTS sessions_user_idx ON sessions(user_id);
   CREATE TABLE IF NOT EXISTS training_events (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
     client_id TEXT NOT NULL,
     handle TEXT NOT NULL,
     code TEXT NOT NULL,
@@ -71,6 +72,10 @@ db.exec(`
   );
   CREATE INDEX IF NOT EXISTS feedback_created_idx ON feedback(created_at DESC);
 `);
+
+const trainingEventColumns = new Set(db.prepare("PRAGMA table_info(training_events)").all().map((column) => column.name));
+if (!trainingEventColumns.has("user_id")) db.exec("ALTER TABLE training_events ADD COLUMN user_id INTEGER REFERENCES users(id) ON DELETE SET NULL");
+db.exec("CREATE INDEX IF NOT EXISTS training_events_user_idx ON training_events(user_id, handle, created_at DESC)");
 
 class AuthError extends HttpError {}
 
@@ -175,8 +180,22 @@ function publicTrainingEvent(item) {
   };
 }
 
-function latestTrainingRows(clientId, handle, limit = 500) {
-  const rows = db.prepare("SELECT * FROM training_events WHERE client_id = ? AND lower(handle) = lower(?) ORDER BY created_at DESC LIMIT ?").all(clientId, handle, limit);
+function normalizeUserId(value) {
+  const userId = Number(value);
+  return Number.isInteger(userId) && userId > 0 ? userId : 0;
+}
+
+function claimDeviceTrainingEvents(userId, clientId) {
+  if (!userId || !clientId) return;
+  db.prepare("UPDATE training_events SET user_id = ? WHERE client_id = ? AND user_id IS NULL").run(userId, clientId);
+}
+
+function latestTrainingRows(clientId, handle, limit = 500, userIdValue = 0) {
+  const userId = normalizeUserId(userIdValue);
+  if (userId) claimDeviceTrainingEvents(userId, clientId);
+  const rows = userId
+    ? db.prepare("SELECT * FROM training_events WHERE user_id = ? AND lower(handle) = lower(?) ORDER BY created_at DESC LIMIT ?").all(userId, handle, limit)
+    : db.prepare("SELECT * FROM training_events WHERE user_id IS NULL AND client_id = ? AND lower(handle) = lower(?) ORDER BY created_at DESC LIMIT ?").all(clientId, handle, limit);
   const seen = new Set();
   return rows.filter((item) => {
     if (seen.has(item.code)) return false;
@@ -192,13 +211,14 @@ function reviewDelay(outcome, difficulty) {
   return difficulty === "hard" ? 14 * 24 * 60 * 60 * 1000 : 30 * 24 * 60 * 60 * 1000;
 }
 
-export function getTrainingSignals(clientIdValue, handleValue) {
-  if (!clientIdValue) return { completedCodes: new Set(), unsolvedCodes: new Set(), dueCodes: new Set(), latestByCode: new Map(), stats: { total: 0, independent: 0, hinted: 0, editorial: 0, unsolved: 0 } };
-  let clientId;
+export function getTrainingSignals(clientIdValue, handleValue, userIdValue = 0) {
+  const userId = normalizeUserId(userIdValue);
+  if (!clientIdValue && !userId) return { completedCodes: new Set(), unsolvedCodes: new Set(), dueCodes: new Set(), latestByCode: new Map(), stats: { total: 0, independent: 0, hinted: 0, editorial: 0, unsolved: 0 } };
+  let clientId = "";
   let handle;
-  try { clientId = normalizeClientId(clientIdValue); handle = normalizeHandle(handleValue); }
+  try { if (clientIdValue) clientId = normalizeClientId(clientIdValue); handle = normalizeHandle(handleValue); }
   catch { return { completedCodes: new Set(), unsolvedCodes: new Set(), dueCodes: new Set(), latestByCode: new Map(), stats: { total: 0, independent: 0, hinted: 0, editorial: 0, unsolved: 0 } }; }
-  const rows = latestTrainingRows(clientId, handle);
+  const rows = latestTrainingRows(clientId, handle, 500, userId);
   const completedCodes = new Set();
   const unsolvedCodes = new Set();
   const dueCodes = new Set();
@@ -211,6 +231,13 @@ export function getTrainingSignals(clientIdValue, handleValue) {
     if (item.created_at + reviewDelay(item.outcome, item.difficulty) <= now()) dueCodes.add(item.code);
   }
   return { completedCodes, unsolvedCodes, dueCodes, latestByCode, stats };
+}
+
+export function trainingPersistenceStats() {
+  const row = db.prepare(`SELECT COUNT(*) AS total,
+    SUM(CASE WHEN user_id IS NOT NULL THEN 1 ELSE 0 END) AS account_owned
+    FROM training_events`).get();
+  return { trainingEvents: Number(row.total), accountTrainingEvents: Number(row.account_owned || 0) };
 }
 
 function checkLoginLimit(ip, email) {
@@ -321,6 +348,7 @@ export function createAuthHandler({ json, readBody, clientIp }) {
 
       if (request.method === "POST" && url.pathname === "/training/events") {
         const body = await readBody(request);
+        const user = optionalAuthenticateRequest(request);
         const clientId = normalizeClientId(body.clientId);
         const handle = normalizeHandle(body.handle);
         const code = normalizeProblemCode(body.code);
@@ -331,17 +359,19 @@ export function createAuthHandler({ json, readBody, clientIp }) {
         const hintLevel = Math.max(0, Math.min(4, Math.round(Number(body.hintLevel) || 0)));
         const reflection = String(body.reflection || "").trim().slice(0, 1000);
         const createdAt = now();
-        const result = db.prepare("INSERT INTO training_events (client_id, handle, code, outcome, duration_minutes, hint_level, difficulty, reflection, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)").run(clientId, handle, code, outcome, durationMinutes, hintLevel, difficulty, reflection, createdAt);
+        if (user) claimDeviceTrainingEvents(user.id, clientId);
+        const result = db.prepare("INSERT INTO training_events (user_id, client_id, handle, code, outcome, duration_minutes, hint_level, difficulty, reflection, created_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)").run(user?.id || null, clientId, handle, code, outcome, durationMinutes, hintLevel, difficulty, reflection, createdAt);
         const event = db.prepare("SELECT * FROM training_events WHERE id = ?").get(result.lastInsertRowid);
         json(response, 201, { event: publicTrainingEvent(event) });
         return true;
       }
 
       if (request.method === "GET" && url.pathname === "/training/summary") {
+        const user = optionalAuthenticateRequest(request);
         const clientId = normalizeClientId(url.searchParams.get("clientId"));
         const handle = normalizeHandle(url.searchParams.get("handle"));
-        const rows = latestTrainingRows(clientId, handle);
-        const signals = getTrainingSignals(clientId, handle);
+        const rows = latestTrainingRows(clientId, handle, 500, user?.id);
+        const signals = getTrainingSignals(clientId, handle, user?.id);
         const dueReviews = rows.filter((item) => signals.dueCodes.has(item.code)).slice(0, 20).map(publicTrainingEvent);
         json(response, 200, { stats: signals.stats, dueReviews, recent: rows.slice(0, 12).map(publicTrainingEvent) });
         return true;

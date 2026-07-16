@@ -807,6 +807,7 @@ test("uses one validated training profile across dashboard, catalog, submissions
   assert.match(preferences, /normalizeTeamHandles/);
   assert.match(account, /ICPC 队伍成员/);
   assert.match(account, /创建 VP 时直接带入全部队员/);
+  assert.match(account, /跨设备同步/);
   for (const source of [home, catalog, submissions, vp]) assert.match(source, /readTrainerPreferences/);
 });
 

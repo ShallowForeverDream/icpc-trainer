@@ -1,5 +1,4 @@
 import { authFetch } from "./auth-client";
-import { apiFetch } from "./api-client";
 import { getDeviceId } from "./device-id";
 
 export type TrainingOutcome = "independent" | "hinted" | "editorial" | "unsolved";
@@ -46,7 +45,7 @@ export async function saveTrainingEvent(input: {
 
 export async function loadTrainingSummary(handle = "ShallowDream2", signal?: AbortSignal) {
   const query = new URLSearchParams({ clientId: getTrainingClientId(), handle });
-  const response = await apiFetch(`/training/summary?${query}`, { cache: "no-store", signal });
+  const response = await authFetch(`/training/summary?${query}`, { cache: "no-store", signal });
   const data = await response.json() as TrainingSummary & { error?: string };
   if (!response.ok) throw new Error(data.error || "训练复盘加载失败");
   return data;

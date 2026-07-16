@@ -2,7 +2,7 @@ import http from "node:http";
 import { randomUUID } from "node:crypto";
 import { readFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
-import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } from "./auth.mjs";
+import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest, trainingPersistenceStats } from "./auth.mjs";
 import { createArchiveScoreboardHandler } from "./archive-scoreboards.mjs";
 import { codeforcesRequestParams } from "./codeforces-auth.mjs";
 import { ARCHIVE_TRANSLATION_VERSION, TRANSLATION_VERSION, createStatementHandler, statementRuntimeStats } from "./statements.mjs";
@@ -237,7 +237,7 @@ function percentile(values, ratio) {
   return sorted[Math.min(sorted.length - 1, Math.max(0, Math.floor((sorted.length - 1) * ratio)))];
 }
 
-async function recommendProblems(url) {
+async function recommendProblems(url, user = null) {
   const handle = (url.searchParams.get("handle") || "ShallowDream2").trim();
   if (!validHandle(handle)) throw new HttpError(400, "Codeforces Handle 无效");
   const min = boundedInteger(url.searchParams.get("min"), { min: 800, max: 3500, fallback: 1200 });
@@ -248,7 +248,7 @@ async function recommendProblems(url) {
   const clientId = (url.searchParams.get("clientId") || "").trim().slice(0, 80);
   const requestedTags = [...new Set((url.searchParams.get("tags") || "").split(",").map((item) => item.trim().toLowerCase()).filter(Boolean))].slice(0, 8);
   const [problemset, submissions] = await Promise.all([getProblemset(), getSubmissions(handle, 1000)]);
-  const training = getTrainingSignals(clientId, handle);
+  const training = getTrainingSignals(clientId, handle, user?.id);
   const attempted = new Map();
   for (const item of submissions) {
     if (!item.problem?.contestId) continue;
@@ -665,12 +665,12 @@ const server = http.createServer(async (request, response) => {
         codeforcesInFlight: inFlightCodeforces.size,
         statementJobs: statementRuntimeStats(),
       },
-      persistence: persistenceStats(),
+      persistence: { ...persistenceStats(), ...trainingPersistenceStats() },
       integrations: {
         codeforcesAuthenticated: Boolean(CF_API_KEY && CF_API_SECRET),
       },
       versions: {
-        api: 13,
+        api: 14,
         revision: process.env.SOURCE_REVISION || "local",
         statementTranslation: TRANSLATION_VERSION,
         archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,
@@ -770,7 +770,7 @@ const server = http.createServer(async (request, response) => {
       const offset = (page - 1) * limit;
       return json(response, 200, { source: "codeforces", page, total: filtered.length, problems: filtered.slice(offset, offset + limit).map(publicProblem) }, { "Cache-Control": "public, max-age=600" });
     }
-    if (request.method === "GET" && url.pathname === "/codeforces/recommendations") return json(response, 200, await recommendProblems(url), { "Cache-Control": "private, max-age=60" });
+    if (request.method === "GET" && url.pathname === "/codeforces/recommendations") return json(response, 200, await recommendProblems(url, optionalAuthenticateRequest(request)), { "Cache-Control": "private, max-age=60" });
     if (request.method === "GET" && url.pathname === "/submissions/raw") {
       const handle = (url.searchParams.get("handle") || "").trim();
       const count = boundedInteger(url.searchParams.get("count"), { min: 1, max: 1000, fallback: 100 });

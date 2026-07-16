@@ -4,6 +4,7 @@
 import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell, Icon, ProblemRow } from "../components/AppShell";
 import { apiJson } from "../lib/api-client";
+import { authJson } from "../lib/auth-client";
 import { readTrainerPreferences } from "../lib/preferences";
 import { getTrainingClientId } from "../lib/training-client";
 
@@ -61,7 +62,8 @@ export default function ProblemLibraryPage() {
     }
     try {
       const endpoint = nextMode === "recommended" ? "/codeforces/recommendations" : "/codeforces/problems";
-      const data = await apiJson<{ problems?: CatalogProblem[]; profile?: Profile; page?: number; total?: number }>(`${endpoint}?${params}`, { cache: "no-store", signal: controller.signal });
+      const request = nextMode === "recommended" ? authJson : apiJson;
+      const data = await request<{ problems?: CatalogProblem[]; profile?: Profile; page?: number; total?: number }>(`${endpoint}?${params}`, { cache: "no-store", signal: controller.signal });
       setProblems(data.problems ?? []);
       setProfile(nextMode === "recommended" ? data.profile ?? null : null);
       setPage(data.page ?? 1);

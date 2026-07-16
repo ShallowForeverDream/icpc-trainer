@@ -145,6 +145,14 @@ export const archiveContests: ArchiveContest[] = [
     problemTitles: ["The Bento Box Adventure", "Bowling Frame", "Cube", "Drunken Maze", "Beautiful Array", "Segmentation Folds", "Grid Game", "Sheet Music", "Auto Complete", "Bottle Arrangement", "Trophic Balance Species", "Building Castle", "Selection Sort", "Railway Construction"],
   },
   {
+    id: "2024-apac-championship", year: 2024, name: "ICPC 亚洲太平洋锦标赛", city: "亚太赛区", type: "国际区域赛", boardSource: "codeforces", problemCount: 13, codeforcesContestId: 1938,
+    problemTitles: ["Antiparticle Antiphysics", "Attraction Score", "Bit Counting Sequence", "Bánh Bò", "Duplicates", "Forming Groups", "Personality Test", "Pho Restaurant", "Symmetric Boundary", "There and Back Again", "Tree Quiz", "XOR Operations", "Zig-zag"],
+  },
+  {
+    id: "2024-nerc-finals", year: 2024, name: "ICPC 北方欧亚赛区决赛（NERC）", city: "北方欧亚赛区", type: "国际区域赛", boardSource: "codeforces", problemCount: 13, codeforcesContestId: 2052,
+    problemTitles: ["Adrenaline Rush", "BitBitJump", "Cactus without Bridges", "DAG Serialization", "Expression Correction", "Fix Flooded Floor", "Geometric Balance", "Hunting Hoglins in Hogwarts", "Incompetent Delivery Guy", "Judicious Watching", "Knowns and Unknowns", "Legacy Screensaver", "Managing Cluster"],
+  },
+  {
     id: "2024-jakarta", year: 2024, name: "ICPC 亚洲雅加达区域赛", city: "印度尼西亚 · 雅加达", type: "国际区域赛", boardSource: "codeforces", problemCount: 13, codeforcesContestId: 2045,
     problemTitles: ["Scrambled Scrabble", "ICPC Square", "Saraga", "Aquatic Dragon", "Narrower Passageway", "Grid Game 3-angle", "X Aura", "Missing Separators", "Microwavable Subsequence", "Xorderable Array", "GCDDCG", "Buggy DFS", "Mirror Maze"],
   },

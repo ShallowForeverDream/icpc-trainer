@@ -390,6 +390,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /id: "2025-nerc-finals"[\s\S]*codeforcesContestId: 2181/);
   assert.match(catalog, /id: "2024-jakarta"[\s\S]*codeforcesContestId: 2045/);
   assert.match(catalog, /id: "2024-european-championship"[\s\S]*codeforcesContestId: 1949/);
+  assert.match(catalog, /id: "2024-apac-championship"[\s\S]*codeforcesContestId: 1938/);
+  assert.match(catalog, /id: "2024-nerc-finals"[\s\S]*codeforcesContestId: 2052/);
   assert.match(catalog, /No Distance is Too Far Apart/);
   assert.match(catalog, /Railway Construction/);
   assert.match(catalog, /Deformed Balance/);

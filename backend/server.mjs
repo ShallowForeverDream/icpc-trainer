@@ -5,7 +5,7 @@ import { dirname, join } from "node:path";
 import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } from "./auth.mjs";
 import { createArchiveScoreboardHandler } from "./archive-scoreboards.mjs";
 import { codeforcesRequestParams } from "./codeforces-auth.mjs";
-import { ARCHIVE_TRANSLATION_VERSION, TRANSLATION_VERSION, createStatementHandler } from "./statements.mjs";
+import { ARCHIVE_TRANSLATION_VERSION, TRANSLATION_VERSION, createStatementHandler, statementRuntimeStats } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
 import { buildOriginalVpRows, buildTeamVpRow, rankVpRows } from "./vp-scoring.mjs";
 import {
@@ -661,13 +661,14 @@ const server = http.createServer(async (request, response) => {
         archiveScoreboardSources: caches["archive-scoreboard-source"] || 0,
         archiveScoreboardViews: caches["archive-scoreboard-view"] || 0,
         codeforcesInFlight: inFlightCodeforces.size,
+        statementJobs: statementRuntimeStats(),
       },
       persistence: persistenceStats(),
       integrations: {
         codeforcesAuthenticated: Boolean(CF_API_KEY && CF_API_SECRET),
       },
       versions: {
-        api: 11,
+        api: 12,
         revision: process.env.SOURCE_REVISION || "local",
         statementTranslation: TRANSLATION_VERSION,
         archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,

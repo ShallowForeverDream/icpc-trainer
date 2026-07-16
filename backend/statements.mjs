@@ -38,6 +38,17 @@ let archivePrewarmTimer = null;
 let fastTranslatorToken = "";
 let fastTranslatorTokenExpiresAt = 0;
 
+export function statementRuntimeStats() {
+  return {
+    imports: importJobs.size,
+    archiveImports: archiveImportJobs.size,
+    archiveOfficialChinese: archiveOfficialChineseJobs.size,
+    translations: queuedTranslations.size,
+    archiveTranslations: queuedArchiveTranslations.size,
+    retryWindows: recentTranslationAttempts.size + recentArchiveTranslationAttempts.size + recentArchiveOfficialChineseAttempts.size,
+  };
+}
+
 mkdirSync(dirname(DB_PATH), { recursive: true });
 const db = new DatabaseSync(DB_PATH);
 db.exec(`
@@ -1485,6 +1496,7 @@ async function importArchiveOfficialChinese(metadata, { force = false } = {}) {
   const lastAttempt = recentArchiveOfficialChineseAttempts.get(metadata.id) || 0;
   if (!force && now() - lastAttempt < 10 * 60_000) return false;
   recentArchiveOfficialChineseAttempts.set(metadata.id, now());
+  if (recentArchiveOfficialChineseAttempts.size > 512) pruneMap(recentArchiveOfficialChineseAttempts, (timestamp) => now() - timestamp > 24 * 60 * 60_000, 512);
   const job = (async () => {
     try {
       const pdf = await fetchArchivePdf(metadata.chineseSourceUrl, 3, 75_000);

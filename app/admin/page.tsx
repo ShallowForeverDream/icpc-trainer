@@ -12,7 +12,16 @@ type SystemHealth = {
   status: "ok";
   uptime: number;
   memory: { rssMiB: number; heapUsedMiB: number; heapTotalMiB: number; limitMiB?: number };
-  caches: { storage: string; problemsets: number; submissions: number; contestStandings: number; archiveScoreboardSources: number; archiveScoreboardViews: number; codeforcesInFlight: number };
+  caches: {
+    storage: string;
+    problemsets: number;
+    submissions: number;
+    contestStandings: number;
+    archiveScoreboardSources: number;
+    archiveScoreboardViews: number;
+    codeforcesInFlight: number;
+    statementJobs?: { imports: number; archiveImports: number; archiveOfficialChinese: number; translations: number; archiveTranslations: number; retryWindows: number };
+  };
   persistence: { personalStates: number; platformSubmissions: number; activeVps: number; vpSnapshots: number };
   integrations?: { codeforcesAuthenticated: boolean };
   versions?: { api: number; statementTranslation: number; archiveStatementTranslation: number };
@@ -162,7 +171,7 @@ export default function AdminPage() {
           <article><span>持久化数据</span><b>{systemHealth.persistence.platformSubmissions} <small>次提交</small></b><em>{systemHealth.persistence.personalStates} 条个人状态 · {systemHealth.persistence.activeVps} 场 VP</em></article>
           <article><span>题面版本</span><b>{systemHealth.versions ? `API v${systemHealth.versions.api}` : "待升级"}</b><em>{systemHealth.versions ? `CF ${systemHealth.versions.statementTranslation} · 历届赛 ${systemHealth.versions.archiveStatementTranslation}` : "升级阿里云后显示版本"}</em></article>
         </div>
-        <div className="system-cache-row"><span>题库缓存 <b>{systemHealth.caches.problemsets}</b></span><span>提交缓存 <b>{systemHealth.caches.submissions}</b></span><span>CF 榜单 <b>{systemHealth.caches.contestStandings}</b></span><span>历届榜单 <b>{systemHealth.caches.archiveScoreboardViews}</b></span><span>VP 快照 <b>{systemHealth.persistence.vpSnapshots}</b></span><span>Codeforces 原榜 <b>{systemHealth.integrations?.codeforcesAuthenticated ? "已接入" : "待配置 API Key"}</b></span></div>
+        <div className="system-cache-row"><span>题库缓存 <b>{systemHealth.caches.problemsets}</b></span><span>提交缓存 <b>{systemHealth.caches.submissions}</b></span><span>CF 榜单 <b>{systemHealth.caches.contestStandings}</b></span><span>历届榜单 <b>{systemHealth.caches.archiveScoreboardViews}</b></span><span>VP 快照 <b>{systemHealth.persistence.vpSnapshots}</b></span><span>题面任务 <b>{systemHealth.caches.statementJobs ? systemHealth.caches.statementJobs.imports + systemHealth.caches.statementJobs.archiveImports + systemHealth.caches.statementJobs.archiveOfficialChinese + systemHealth.caches.statementJobs.translations + systemHealth.caches.statementJobs.archiveTranslations : 0}</b></span><span>重试窗口 <b>{systemHealth.caches.statementJobs?.retryWindows || 0}</b></span><span>Codeforces 原榜 <b>{systemHealth.integrations?.codeforcesAuthenticated ? "已接入" : "待配置 API Key"}</b></span></div>
       </> : <div className="system-health-offline"><b>国内 API 暂时不可达</b><span>点击“刷新”重试；若持续失败，再检查阿里云容器。</span></div>}
     </section> : null}
   </AppShell>;

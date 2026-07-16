@@ -677,6 +677,7 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(backend, /writeRuntimeCache\("contest-standings"/);
   assert.match(backend, /persistVpSession/);
   assert.match(backend, /writeVpSnapshot/);
+  assert.match(backend, /statementJobs: statementRuntimeStats\(\)/);
   assert.match(backend, /\/vp\/sessions\/active/);
   assert.match(backend, /\/state/);
   assert.match(persistence, /CREATE TABLE IF NOT EXISTS runtime_cache/);
@@ -696,6 +697,8 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /archive_statement_prewarm/);
   assert.match(statements, /\/archive\/statements\/prewarm/);
   assert.match(statements, /ARCHIVE_PREWARM_CONCURRENCY = 3/);
+  assert.match(statements, /recentArchiveOfficialChineseAttempts\.size > 512/);
+  assert.match(statements, /statementRuntimeStats/);
   assert.match(statements, /archive_statement_assets/);
   assert.match(statements, /chinese_source_url/);
   assert.match(statements, /ver=zh_cn/);
@@ -761,6 +764,8 @@ test("ships invite-only authentication and administration", async () => {
   assert.match(admin, /系统状态/);
   assert.match(admin, /API 内存/);
   assert.match(admin, /数据写入 SQLite/);
+  assert.match(admin, /题面任务/);
+  assert.match(admin, /重试窗口/);
   assert.match(admin, /versions\.archiveStatementTranslation/);
   assert.match(admin, /升级阿里云后显示版本/);
   assert.match(admin, /Codeforces 原榜/);

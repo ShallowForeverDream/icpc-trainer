@@ -783,8 +783,9 @@ test("ships invite-only authentication and administration", async () => {
 });
 
 test("uses one validated training profile across dashboard, catalog, submissions, and VP", async () => {
-  const [preferences, home, catalog, submissions, vp] = await Promise.all([
+  const [preferences, account, home, catalog, submissions, vp] = await Promise.all([
     readFile(new URL("app/lib/preferences.ts", root), "utf8"),
+    readFile(new URL("app/account/page.tsx", root), "utf8"),
     readFile(new URL("app/page.tsx", root), "utf8"),
     readFile(new URL("app/problem/page.tsx", root), "utf8"),
     readFile(new URL("app/submissions/page.tsx", root), "utf8"),
@@ -792,6 +793,10 @@ test("uses one validated training profile across dashboard, catalog, submissions
   ]);
   assert.match(preferences, /validCodeforcesHandle/);
   assert.match(preferences, /dailyGoal/);
+  assert.match(preferences, /teamHandles/);
+  assert.match(preferences, /normalizeTeamHandles/);
+  assert.match(account, /ICPC 队伍成员/);
+  assert.match(account, /创建 VP 时直接带入全部队员/);
   for (const source of [home, catalog, submissions, vp]) assert.match(source, /readTrainerPreferences/);
 });
 

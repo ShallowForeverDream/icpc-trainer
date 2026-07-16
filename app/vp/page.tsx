@@ -146,7 +146,7 @@ export default function VpPage() {
 
   useEffect(() => {
     const preferences = readTrainerPreferences();
-    setParticipantText(preferences.codeforcesHandle);
+    setParticipantText(preferences.teamHandles.join(", "));
     const saved = readStoredJson<Contest | null>(STORAGE_KEY, null, (value): value is Contest | null => value === null || isContest(value));
     if (saved) { setContest(saved); setParticipantText((saved.participants ?? [saved.handle]).join(", ")); }
     void vpJson<{ session: Contest | null }>(`/vp/sessions/active?clientId=${encodeURIComponent(getDeviceId())}`, { cache: "no-store" }).then(({ session }) => {
@@ -213,7 +213,7 @@ export default function VpPage() {
       finalSyncFor.current = "";
       setSeed(data.seed);
       const preferences = readTrainerPreferences();
-      saveTrainerPreferences({ ...preferences, codeforcesHandle: participants[0] });
+      saveTrainerPreferences({ ...preferences, codeforcesHandle: participants[0], teamHandles: participants });
       setStatus("idle");
     } catch (error) {
       if (controller.signal.aborted) return;

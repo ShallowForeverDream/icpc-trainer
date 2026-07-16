@@ -212,8 +212,8 @@ test("persists XCPCIO sources and generated scoreboard views in SQLite across re
     assert.equal(health.versions.api, 14);
     assert.equal(health.versions.revision, "local");
     assert.equal(health.integrations.codeforcesAuthenticated, false);
-    assert.equal(health.versions.statementTranslation, 22);
-    assert.equal(health.versions.archiveStatementTranslation, 4);
+    assert.equal(health.versions.statementTranslation, 23);
+    assert.equal(health.versions.archiveStatementTranslation, 5);
 
     await stopBackend(backend);
     await new Promise((resolve) => fixtureServer.close(resolve));

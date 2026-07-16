@@ -12,13 +12,14 @@ import { assessOfficialChineseArchive, chineseSectionTitle, parseArchivePdfText 
 import { authenticateRequest } from "./auth.mjs";
 import { HttpError, createWindowLimiter, pruneMap, publicError, readJsonBody } from "./http-utils.mjs";
 import { datasetRowToStatement, normalizeStatementCode, parseCodeforcesStatement, sanitizeStatementHtml } from "./statement-parser.mjs";
+import { translationQualityHint, translationQualityIssues } from "./translation-quality.mjs";
 
 const execFileAsync = promisify(execFile);
 const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
-export const TRANSLATION_VERSION = 22;
-export const ARCHIVE_TRANSLATION_VERSION = 4;
+export const TRANSLATION_VERSION = 23;
+export const ARCHIVE_TRANSLATION_VERSION = 5;
 const FAST_TRANSLATOR_AUTH_URL = "https://edge.microsoft.com/translate/auth";
 const FAST_TRANSLATOR_URL = "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=zh-Hans";
 const USER_AGENT = "icpc-trainer-statement-importer/0.4 (+https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site)";
@@ -920,7 +921,8 @@ async function translateFastBatch(texts, retry = true) {
       if ([...translated.matchAll(flexible)].length !== 1) return null;
       translated = translated.replace(flexible, () => literal);
     }
-    return polishChinese(translated);
+    const polished = polishChinese(translated);
+    return translationQualityIssues(source, polished).length ? null : polished;
   });
 }
 
@@ -1003,7 +1005,21 @@ async function translateChunk(texts) {
   }
   if (invalid.length) throw new Error(`公式保护回退异常：${invalid.join("、")}`);
   if (!translated) throw new Error("翻译模型返回了空译文");
-  return [polishChinese(translated)];
+
+  translated = polishChinese(translated);
+  let qualityIssues = translationQualityIssues(sourceText, translated);
+  if (qualityIssues.length) {
+    translated = polishChinese(await requestTranslation([
+      "请重新校对下面的算法竞赛题面译文。初译未通过语义完整性校验。",
+      `英文原文：\n${sourceText}`,
+      `错误初译：\n${translated}`,
+      `必须修复：${translationQualityHint(qualityIssues)}。`,
+      "不得改变变量、数字、YES/NO 等字面量和 ICPCMATH数字END 公式占位符。只返回修正后的中文译文正文。",
+    ].join("\n")));
+    qualityIssues = translationQualityIssues(sourceText, translated);
+  }
+  if (qualityIssues.length) throw new Error(`译文语义校验失败：${translationQualityHint(qualityIssues)}`);
+  return [translated];
 }
 
 function polishChinese(value) {
@@ -1149,7 +1165,8 @@ async function translateBatch(texts) {
       const flexible = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "gi");
       if ([...translated.matchAll(flexible)].length !== 1) return null;
     }
-    return polishChinese(translated);
+    const polished = polishChinese(translated);
+    return translationQualityIssues(source, polished).length ? null : polished;
   });
 }
 
@@ -1199,7 +1216,9 @@ async function reviewTranslationBatch(texts, drafts) {
       const flexible = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "gi");
       if ([...reviewed.matchAll(flexible)].length !== 1) return drafts[index];
     }
-    return polishChinese(reviewed);
+    const polished = polishChinese(reviewed);
+    if (!translationQualityIssues(source, polished).length) return polished;
+    return translationQualityIssues(source, drafts[index]).length ? null : drafts[index];
   });
 }
 
@@ -1209,11 +1228,23 @@ async function reviewDraftTexts(texts, drafts) {
   for (let start = 0; start < texts.length; start += 4) {
     const sourceBatch = texts.slice(start, start + 4);
     const draftBatch = drafts.slice(start, start + 4);
+    let candidates = draftBatch;
     try {
-      reviewed.push(...await reviewTranslationBatch(sourceBatch, draftBatch));
+      candidates = await reviewTranslationBatch(sourceBatch, draftBatch);
     } catch (error) {
       console.error("statement translation review fallback", error instanceof Error ? error.message : error);
-      reviewed.push(...draftBatch);
+    }
+    for (let index = 0; index < sourceBatch.length; index += 1) {
+      if (candidates[index]) {
+        reviewed.push(candidates[index]);
+        continue;
+      }
+      try {
+        reviewed.push(...await translateChunk([sourceBatch[index]]));
+      } catch (error) {
+        console.error("statement translation paragraph fallback", error instanceof Error ? error.message : error);
+        reviewed.push(draftBatch[index]);
+      }
     }
   }
   return reviewed;

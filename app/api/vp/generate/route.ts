@@ -141,8 +141,8 @@ export async function POST(request: NextRequest) {
         if (data) return NextResponse.json(data, { status: upstream.status });
       } catch { /* Cloudflare cannot always reach an HTTPS IP; fall back to Codeforces directly. */ }
     }
-    const participants = [...new Set((body.participants?.length ? body.participants : [body.handle ?? "ShallowDream2"]).map((item) => item.trim()).filter(Boolean))].slice(0, 12);
-    if (!participants.length || participants.some((item) => !/^[A-Za-z0-9_.-]{3,24}$/.test(item))) return NextResponse.json({ error: "参赛 Handle 列表无效" }, { status: 400 });
+    const participants = [...new Set((body.participants?.length ? body.participants : [body.handle ?? "ShallowDream2"]).map((item) => item.trim()).filter(Boolean))];
+    if (!participants.length || participants.length > 3 || participants.some((item) => !/^[A-Za-z0-9_.-]{3,24}$/.test(item))) return NextResponse.json({ error: "请输入 1–3 个有效的队员 Codeforces Handle" }, { status: 400 });
     const handle = participants[0];
     const count = Math.max(5, Math.min(13, Number(body.count) || 10));
     const targetRating = Math.max(800, Math.min(3000, Number(body.targetRating) || 1600));

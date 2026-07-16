@@ -419,7 +419,7 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /Deformed Balance/);
   assert.match(catalog, /Medical Parity/);
   assert.match(scoreboard, /contest\.codeforcesContestId/);
-  assert.match(backendScoreboard, /codeforces-v3/);
+  assert.match(backendScoreboard, /codeforces-v4/);
   assert.match(backendScoreboard, /expectedJudgedSubmissions/);
   assert.match(backendScoreboard, /Codeforces 原场逐提交时间轴/);
   assert.match(page, /国际区域赛/);
@@ -429,6 +429,9 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(page, /题目列表/);
   assert.match(page, /archiveProblemHref/);
   assert.match(page, /archive-room-tabs/);
+  assert.match(page, /apiJson<ScoreboardPayload>\(scoreboardPath/);
+  assert.match(page, /\/archive\/scoreboards/);
+  assert.doesNotMatch(page, /\/api\/archive\/scoreboard/);
   assert.match(page, /队伍提交记录/);
   assert.match(page, /ArchiveSubmission/);
   assert.match(page, /正在准备整场题面/);
@@ -487,7 +490,8 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(statementM, /M-1\.png/);
   assert.match(importer, /pdfplumber/);
   assert.match(importer, /official-pdf-extract/);
-  assert.match(route, /archiveScoreboard/);
+  assert.match(route, /archiveScoreboardUrl/);
+  assert.match(route, /NextResponse\.redirect/);
   assert.match(scoreboard, /\/archive\/scoreboards/);
   assert.doesNotMatch(scoreboard, /new Map/);
   assert.match(backendScoreboard, /run\.json/);
@@ -745,7 +749,7 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /edge\.microsoft\.com\/translate\/auth/);
   assert.match(statements, /json_schema/);
   assert.match(statements, /processedBlocks/);
-  assert.match(serviceHealth, /api: 14/);
+  assert.match(serviceHealth, /api: 15/);
   assert.match(serviceHealth, /statementTranslation: 23/);
   assert.match(serviceHealth, /archiveStatementTranslation: 5/);
   assert.match(adminPage, /后端版本未切换/);

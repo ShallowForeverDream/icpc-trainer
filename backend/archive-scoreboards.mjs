@@ -144,7 +144,14 @@ function codeforcesTeamName(party, index) {
 export function normalizeCodeforcesArchiveStandings(value, contestId, submissions = null, contestKind = "gym") {
   if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new Error("Codeforces 赛事榜单数据无效");
   const durationSeconds = Math.max(60, Number(value.contest.durationSeconds) || 5 * 60 * 60);
-  const startTimeSeconds = Number(value.contest.startTimeSeconds) || 0;
+  const inferredStartTimes = Array.isArray(submissions) ? submissions.map((submission) => {
+    const created = Number(submission?.creationTimeSeconds);
+    const relative = Number(submission?.relativeTimeSeconds);
+    return Number.isFinite(created) && Number.isFinite(relative) && created > relative ? Math.floor(created - relative) : 0;
+  }).filter((timestamp) => timestamp >= 1_000_000_000).sort((left, right) => left - right) : [];
+  const startTimeSeconds = Number(value.contest.startTimeSeconds)
+    || inferredStartTimes[Math.floor(inferredStartTimes.length / 2)]
+    || 0;
   const slots = value.problems.map((problem, index) => safeLabel(problem?.index, String.fromCharCode(65 + index), 8));
   const teams = [];
   const runs = [];
@@ -196,7 +203,8 @@ export function normalizeCodeforcesArchiveStandings(value, contestId, submission
     const status = String(run.status || "UNKNOWN").toUpperCase();
     return acceptedStatuses.has(status) || !ignoredStatuses.has(status) && !pendingStatuses.has(status);
   }).length;
-  const exactTimeline = Array.isArray(submissions) && (expectedJudgedSubmissions === 0 || matchedJudgedSubmissions >= expectedJudgedSubmissions);
+  const exactTimeline = Array.isArray(submissions) && matchedJudgedSubmissions > 0
+    && (expectedJudgedSubmissions === 0 || matchedJudgedSubmissions >= expectedJudgedSubmissions);
   if (!exactTimeline) {
     runs.length = 0;
     value.rows.forEach((row, rowIndex) => {
@@ -215,6 +223,8 @@ export function normalizeCodeforcesArchiveStandings(value, contestId, submission
       });
     });
   }
+
+  if (teams.length && runs.length === 0) throw new Error("Codeforces 赛事没有返回可重放的判题记录，请确认服务账号可以查看该比赛完整榜单");
 
   const submissionCount = runs.reduce((total, run) => total + Math.max(1, Math.floor(Number(run.attempts) || 1)), 0);
   const isGym = contestKind !== "contest";
@@ -252,7 +262,7 @@ async function loadCodeforcesSubmissions(contestId, codeforces, authenticated) {
 
 async function loadCodeforcesSource(contestId, contestKind, codeforces) {
   if (typeof codeforces !== "function") throw new Error("Codeforces 榜单服务未配置");
-  const cacheKey = `codeforces-v3:${contestKind}:${contestId}`;
+  const cacheKey = `codeforces-v4:${contestKind}:${contestId}`;
   const timestamp = Date.now();
   const cached = readRuntimeCache(SOURCE_NAMESPACE, cacheKey);
   if (cached && cached.expiresAt > timestamp) return { ...cached, cacheHit: true };
@@ -260,7 +270,10 @@ async function loadCodeforcesSource(contestId, contestKind, codeforces) {
   if (sourceJobs.size >= 8) throw new HttpError(503, "真实榜单同步队列繁忙，请稍后重试", { expose: true });
   const job = (async () => {
     try {
-      const authenticated = contestKind === "gym";
+      // Signed requests are also more reliable for public contests from cloud
+      // hosts. Without configured credentials the signer leaves the request
+      // unchanged, so local development keeps using the public API.
+      const authenticated = true;
       const standingsParams = authenticated
         ? new URLSearchParams({ contestId: String(contestId), from: "1", count: "5000", showUnofficial: "true" })
         : new URLSearchParams({ contestId: String(contestId) });
@@ -378,7 +391,7 @@ async function scoreboard(url, codeforces) {
   const requestedElapsed = boundedInteger(url.searchParams.get("elapsed"), { min: 0, max: 24 * 60 * 60, fallback: 0 });
   const elapsedBucket = Math.floor(requestedElapsed / 10);
   const elapsed = elapsedBucket * 10;
-  const sourceKey = sourceKind === "codeforces" ? `codeforces-v3:${contestKind}:${codeforcesContestId}` : `xcpcio:${boardPath}`;
+  const sourceKey = sourceKind === "codeforces" ? `codeforces-v4:${contestKind}:${codeforcesContestId}` : `xcpcio:${boardPath}`;
   const source = sourceKind === "codeforces" ? await loadCodeforcesSource(codeforcesContestId, contestKind, codeforces) : await loadSource(boardPath);
   const key = snapshotKey({ sourceKey, elapsedBucket, reveal, group, sourceFetchedAt: source.fetchedAt });
   const cached = readRuntimeCache(SNAPSHOT_NAMESPACE, key);

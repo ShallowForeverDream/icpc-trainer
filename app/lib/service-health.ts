@@ -1,5 +1,5 @@
 export const REQUIRED_BACKEND = {
-  api: 14,
+  api: 15,
   statementTranslation: 23,
   archiveStatementTranslation: 5,
 } as const;

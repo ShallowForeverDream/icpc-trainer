@@ -5,7 +5,8 @@ import Link from "next/link";
 import { type CSSProperties, useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { AppShell } from "../../components/AppShell";
 import { JudgeReadiness } from "../../components/JudgeReadiness";
-import { archiveContestIntegrated, archiveContests, archivePracticeProblem, archiveProblemHref, findArchiveContest } from "../../data/archive-contests";
+import { type ArchiveContest, archiveContestIntegrated, archiveContests, archivePracticeProblem, archiveProblemHref, findArchiveContest } from "../../data/archive-contests";
+import { apiJson } from "../../lib/api-client";
 import { type ArchivePrewarmProgress, loadArchivePrewarm, startArchivePrewarm } from "../../lib/archive-statement-client";
 import { ARCHIVE_SESSION_EVENT } from "../../lib/archive-vp-session";
 import { clearPersistentJson, loadPersistentJson, savePersistentJson } from "../../lib/persistent-state";
@@ -38,6 +39,22 @@ type ArchiveHistory = { sessions: ArchiveHistoryEntry[] };
 
 const STORAGE_KEY = "icpc-trainer-archive-vp";
 const HISTORY_KEY = "icpc-trainer-archive-vp-history";
+
+function scoreboardPath(contest: ArchiveContest, elapsedSeconds: number, reveal: boolean, group: string) {
+  const params = new URLSearchParams({
+    id: contest.id,
+    name: contest.name,
+    elapsed: String(elapsedSeconds),
+    reveal: reveal ? "1" : "0",
+    group,
+  });
+  if (contest.boardSource === "codeforces") {
+    params.set("source", "codeforces");
+    if (contest.codeforcesContestId) params.set("contestId", String(contest.codeforcesContestId));
+    else if (contest.gymId) params.set("gymId", String(contest.gymId));
+  } else if (contest.boardPath) params.set("boardPath", contest.boardPath);
+  return `/archive/scoreboards?${params}`;
+}
 
 function isSession(value: unknown): value is Session {
   if (!value || typeof value !== "object") return false;
@@ -211,6 +228,8 @@ export default function ArchiveVpPage() {
 
   const refresh = useCallback(async (silent = false) => {
     if (!session) return;
+    const selectedContest = findArchiveContest(session.contestId);
+    if (!selectedContest) return;
     scoreboardRequest.current?.abort();
     const controller = new AbortController();
     scoreboardRequest.current = controller;
@@ -218,11 +237,7 @@ export default function ArchiveVpPage() {
     try {
       const knownDuration = scoreboard?.durationSeconds ?? 5 * 60 * 60;
       const currentElapsed = session.startedAt ? Math.min(knownDuration, Math.max(0, Math.floor((Date.now() - session.startedAt) / 1000))) : 0;
-      const params = new URLSearchParams({ id: session.contestId, elapsed: String(currentElapsed), group: session.group, reveal: session.reveal ? "1" : "0" });
-      const timeout = window.setTimeout(() => controller.abort(new DOMException("Request timed out", "TimeoutError")), 25_000);
-      const response = await fetch(`/api/archive/scoreboard?${params}`, { cache: "no-store", signal: controller.signal }).finally(() => window.clearTimeout(timeout));
-      const data = await response.json() as ScoreboardPayload;
-      if (!response.ok) throw new Error(data.error || "真实榜单读取失败");
+      const data = await apiJson<ScoreboardPayload>(scoreboardPath(selectedContest, currentElapsed, session.reveal, session.group), { cache: "no-store", signal: controller.signal }, 25_000);
       setScoreboard(data);
       setStatus("idle");
       setMessage(`已同步 ${data.rows.length} 支队伍、${data.contest.runCount} 条原场提交`);

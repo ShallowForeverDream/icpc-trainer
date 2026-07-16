@@ -111,10 +111,11 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
       rows: [{ party: { participantType: "CONTESTANT", teamId: 7, teamName: "Official Team", members: [{ handle: "one" }] }, problemResults: [{ points: 1, rejectedAttemptCount: 1, bestSubmissionTimeSeconds: 1_200 }, {}] }],
     }, 106268, [
       { id: 10, relativeTimeSeconds: 300, author: { participantType: "CONTESTANT", teamId: 7 }, problem: { index: "A" }, verdict: "WRONG_ANSWER" },
-      { id: 11, relativeTimeSeconds: 1_200, author: { participantType: "CONTESTANT", teamId: 7 }, problem: { index: "A" }, verdict: "OK" },
+      { id: 11, creationTimeSeconds: 1_730_001_200, relativeTimeSeconds: 1_200, author: { participantType: "CONTESTANT", teamId: 7 }, problem: { index: "A" }, verdict: "OK" },
       { id: 12, relativeTimeSeconds: 200, author: { participantType: "PRACTICE", members: [{ handle: "practice" }] }, problem: { index: "A" }, verdict: "OK" },
     ]);
     assert.equal(exact.runs.length, 2);
+    assert.equal(exact.config.start_time, 1_730_000_000);
     assert.match(exact.sourceFidelity, /逐提交时间轴/);
     assert.equal(calculateArchiveStandings(exact, 500, false, "official").rows[0].problems.A.wrongAttempts, 1);
     assert.equal(calculateArchiveStandings(exact, 1_300, false, "official").rows[0].penalty, 40);
@@ -126,6 +127,12 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
     }, 106268, []);
     assert.equal(missingTimeline.submissionCount, 3);
     assert.match(missingTimeline.sourceFidelity, /解题时间与最终罚时/);
+
+    assert.throws(() => normalizeCodeforcesArchiveStandings({
+      contest: { name: "Inaccessible Gym", durationSeconds: 18_000 },
+      problems: [{ index: "A" }],
+      rows: [{ party: { participantType: "CONTESTANT", teamName: "Hidden Team" }, problemResults: [{}] }],
+    }, 106268, []), /没有返回可重放的判题记录/);
 
     const ghostTimeline = normalizeCodeforcesArchiveStandings({
       contest: { name: "Imported Regional", startTimeSeconds: 1_730_000_000, durationSeconds: 18_000 },
@@ -163,8 +170,8 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
 
     await handler({ method: "GET" }, {}, new URL("http://localhost/archive/scoreboards?source=codeforces&contestId=2172&id=2025-taichung&name=Taichung&elapsed=1300&reveal=1&group=official"));
     assert.deepEqual(requests.map((request) => request.method), ["contest.standings", "contest.status", "contest.standings", "contest.status"]);
-    assert.deepEqual(requests[2], { method: "contest.standings", params: "contestId=2172", authenticated: false });
-    assert.equal(requests[3].authenticated, false);
+    assert.deepEqual(requests[2], { method: "contest.standings", params: "contestId=2172&from=1&count=5000&showUnofficial=true", authenticated: true });
+    assert.equal(requests[3].authenticated, true);
     assert.match(requests[3].params, /^contestId=2172&from=1&count=10000$/);
     assert.equal(response.value.contest.boardUrl, "https://codeforces.com/contest/2172/standings");
   } finally {
@@ -209,7 +216,7 @@ test("persists XCPCIO sources and generated scoreboard views in SQLite across re
     assert.equal(health.caches.archiveScoreboardSources, 1);
     assert.equal(health.caches.archiveScoreboardViews, 1);
     assert.equal(health.memory.limitMiB, 512);
-    assert.equal(health.versions.api, 14);
+    assert.equal(health.versions.api, 15);
     assert.equal(health.versions.revision, "local");
     assert.equal(health.integrations.codeforcesAuthenticated, false);
     assert.equal(health.versions.statementTranslation, 23);

@@ -670,7 +670,7 @@ const server = http.createServer(async (request, response) => {
         codeforcesAuthenticated: Boolean(CF_API_KEY && CF_API_SECRET),
       },
       versions: {
-        api: 14,
+        api: 15,
         revision: process.env.SOURCE_REVISION || "local",
         statementTranslation: TRANSLATION_VERSION,
         archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,

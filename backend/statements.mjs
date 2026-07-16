@@ -8,7 +8,7 @@ import { promisify } from "node:util";
 import { DatabaseSync } from "node:sqlite";
 import { load } from "cheerio";
 import { parseArchiveStatementHtml } from "./archive-html-parser.mjs";
-import { chineseSectionTitle, parseArchivePdfText } from "./archive-pdf-parser.mjs";
+import { assessOfficialChineseArchive, chineseSectionTitle, parseArchivePdfText } from "./archive-pdf-parser.mjs";
 import { authenticateRequest } from "./auth.mjs";
 import { HttpError, createWindowLimiter, pruneMap, publicError, readJsonBody } from "./http-utils.mjs";
 import { datasetRowToStatement, normalizeStatementCode, parseCodeforcesStatement, sanitizeStatementHtml } from "./statement-parser.mjs";
@@ -18,7 +18,7 @@ const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
 const TRANSLATION_VERSION = 22;
-const ARCHIVE_TRANSLATION_VERSION = 2;
+const ARCHIVE_TRANSLATION_VERSION = 3;
 const FAST_TRANSLATOR_AUTH_URL = "https://edge.microsoft.com/translate/auth";
 const FAST_TRANSLATOR_URL = "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=zh-Hans";
 const USER_AGENT = "icpc-trainer-statement-importer/0.4 (+https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site)";
@@ -1475,6 +1475,14 @@ async function importArchiveOfficialChinese(metadata, { force = false } = {}) {
       const pdf = await fetchArchivePdf(metadata.chineseSourceUrl, 3, 75_000);
       const { parsed } = await extractArchivePdf(metadata, pdf, { extractImages: false });
       if (!archiveHasChineseText(parsed)) return false;
+      const row = archiveStatementRow(metadata.id);
+      const original = safeObject(row?.original_json, { sections: [] });
+      const quality = assessOfficialChineseArchive(parsed, original);
+      if (!quality.usable) {
+        console.warn("official archive Chinese statement rejected", metadata.id, quality.reason);
+        return false;
+      }
+      for (const section of parsed.sections || []) section.title = chineseSectionTitle(section.key);
       const officialTitle = await fetchArchiveOfficialChineseTitle(metadata).catch(() => "");
       db.prepare(`UPDATE archive_statements SET
         title_zh=?, chinese_json=?, chinese_source_url=?, translation_version=?, translation_reviewed=1, reviewed_at=?, reviewed_by='official-pdf', status='ready', error=NULL, updated_at=?
@@ -1565,7 +1573,8 @@ function restoreArchiveRecord(translated, source, formulas) {
 
 async function translateArchiveStatement(id) {
   const row = archiveStatementRow(id);
-  if (!row?.original_json || (row.chinese_json && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION)) return;
+  const humanReviewed = Boolean(row?.translation_reviewed && row.reviewed_by && row.reviewed_by !== "official-pdf");
+  if (!row?.original_json || humanReviewed || (row.chinese_json && Number(row.translation_version || 0) >= ARCHIVE_TRANSLATION_VERSION)) return;
   recentArchiveTranslationAttempts.set(id, now());
   try {
     setArchiveStatus(id, "translating", "原题面可直接阅读，中文题面正在后台生成");
@@ -1587,7 +1596,7 @@ async function translateArchiveStatement(id) {
       for (let index = 0; index < ocrImages.length; index += 1) ocrImages[index].imageTextZh = imageTranslations[index] || null;
     }
     db.prepare(`
-      UPDATE archive_statements SET title_zh=?, chinese_json=?, images_json=?, translation_version=?, translation_reviewed=0, reviewed_at=NULL, reviewed_by=NULL, status='ready', error=NULL, updated_at=? WHERE id=?
+      UPDATE archive_statements SET title_zh=?, chinese_json=?, chinese_source_url=NULL, images_json=?, translation_version=?, translation_reviewed=0, reviewed_at=NULL, reviewed_by=NULL, status='ready', error=NULL, updated_at=? WHERE id=?
     `).run(titleZh, JSON.stringify({ sections: chinese.sections || [] }), JSON.stringify(images), ARCHIVE_TRANSLATION_VERSION, now(), id);
   } catch (error) {
     const message = error instanceof Error ? error.message : "中文翻译失败";
@@ -1730,10 +1739,13 @@ export function createStatementHandler({ json, clientIp }) {
           void importArchiveOriginal(metadata);
           row = archiveStatementRow(metadata.id);
         } else if (row.original_json && !row.chinese_source_url
+          && !(row.translation_reviewed && row.reviewed_by && row.reviewed_by !== "official-pdf")
           && !archiveOfficialChineseJobs.has(metadata.id)
           && now() - (recentArchiveOfficialChineseAttempts.get(metadata.id) || 0) >= 10 * 60_000) {
           void importArchiveOfficialChinese(metadata);
-        } else if (row.original_json && (!row.chinese_json || Number(row.translation_version || 0) < ARCHIVE_TRANSLATION_VERSION)) {
+        } else if (row.original_json && (!row.chinese_json
+          || (Number(row.translation_version || 0) < ARCHIVE_TRANSLATION_VERSION
+            && !(row.translation_reviewed && row.reviewed_by && row.reviewed_by !== "official-pdf")))) {
           const queued = queueArchiveTranslation(metadata.id);
           if (queued && row.status !== "translating") {
             setArchiveStatus(metadata.id, "translating", "原题面可直接阅读，中文题面正在后台生成");

@@ -677,7 +677,8 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /Math\.max\(0, TRANSLATION_VERSION - 1\)/);
   assert.match(statements, /正在快速生成中文题面/);
   assert.match(statements, /extractArchiveGymStatement/);
-  assert.match(statements, /ARCHIVE_TRANSLATION_VERSION = 2/);
+  assert.match(statements, /ARCHIVE_TRANSLATION_VERSION = 3/);
+  assert.match(statements, /assessOfficialChineseArchive/);
   assert.match(statements, /TRANSLATION_VERSION = 22/);
   assert.match(statements, /edge\.microsoft\.com\/translate\/auth/);
   assert.match(statements, /json_schema/);

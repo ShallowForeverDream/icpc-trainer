@@ -1,8 +1,14 @@
 const HEADING_KEYS = new Map([
   ["input", "input"],
+  ["输入", "input"],
+  ["输入格式", "input"],
   ["output", "output"],
+  ["输出", "output"],
+  ["输出格式", "output"],
   ["interaction protocol", "interaction"],
   ["interaction", "interaction"],
+  ["交互", "interaction"],
+  ["交互协议", "interaction"],
   ["first run", "first-run"],
   ["second run", "second-run"],
   ["game introduction", "game-introduction"],
@@ -10,6 +16,8 @@ const HEADING_KEYS = new Map([
   ["problem", "problem"],
   ["note", "note"],
   ["notes", "note"],
+  ["说明", "note"],
+  ["提示", "note"],
 ]);
 
 const SECTION_TITLES = {
@@ -25,7 +33,43 @@ const SECTION_TITLES = {
   note: { english: "Note", chinese: "说明" },
 };
 
-const SAMPLE_HEADINGS = new Set(["example", "examples", "sample", "samples"]);
+const SAMPLE_HEADINGS = new Set(["example", "examples", "sample", "samples", "样例", "示例"]);
+
+function archiveSectionsText(value) {
+  return (value?.sections || []).flatMap((section) => (section.blocks || []).flatMap((block) => {
+    if (block.kind === "bullets") return block.items || [];
+    return typeof block.text === "string" ? [block.text] : [];
+  })).join("\n");
+}
+
+/**
+ * `pdftotext` can return readable Chinese while silently dropping every
+ * fraction, exponent, and delimiter. Such output must not be published as an
+ * "official reviewed" statement. The caller can fall back to the structured
+ * English statement and the formula-preserving translator instead.
+ */
+export function assessOfficialChineseArchive(parsed, original) {
+  const chineseText = archiveSectionsText(parsed);
+  const originalText = archiveSectionsText(original);
+  const chineseCharacters = (chineseText.match(/[\u3400-\u9fff]/g) || []).length;
+  if (chineseCharacters < 24) return { usable: false, reason: "中文正文过短" };
+  if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f\u007f\ufffd]/.test(chineseText)) {
+    return { usable: false, reason: "PDF 文本包含损坏字符" };
+  }
+
+  const originalKeys = new Set((original?.sections || []).map((section) => section.key));
+  const chineseKeys = new Set((parsed?.sections || []).map((section) => section.key));
+  for (const key of ["input", "output"]) {
+    if (originalKeys.has(key) && !chineseKeys.has(key)) return { usable: false, reason: `缺少${chineseSectionTitle(key)}` };
+  }
+
+  const originalFormulaCount = (originalText.match(/\${3}[\s\S]*?\${3}/g) || []).length;
+  const chineseFormulaCount = (chineseText.match(/\${1,3}[\s\S]*?\${1,3}/g) || []).length;
+  if (originalFormulaCount && chineseFormulaCount < originalFormulaCount) {
+    return { usable: false, reason: "PDF 文本丢失数学公式" };
+  }
+  return { usable: true, reason: "" };
+}
 
 function cleanFormulaText(value) {
   const superscripts = { 3: "³", 4: "⁴", 5: "⁵", 6: "⁶", 7: "⁷", 8: "⁸", 9: "⁹" };

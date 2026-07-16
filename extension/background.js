@@ -80,9 +80,22 @@ function rememberTrainerResult(result) {
     const stored = await chrome.storage.local.get("trainerSubmissionResults");
     const timestamp = Date.now();
     const current = Array.isArray(stored.trainerSubmissionResults) ? stored.trainerSubmissionResults : [];
-    const next = [...current.filter((item) => item && timestamp - Number(item.createdAt || 0) < 7 * 24 * 60 * 60 * 1000), { ...result, createdAt: timestamp }].slice(-200);
+    const next = [...current.filter((item) => item && timestamp - Number(item.createdAt || 0) < 7 * 24 * 60 * 60 * 1000
+      && (item.requestId !== result.requestId || item.stage !== result.stage)), { ...result, createdAt: timestamp }].slice(-200);
     await chrome.storage.local.set({ trainerSubmissionResults: next });
   }).catch(() => undefined);
+  return resultQueue;
+}
+
+function acknowledgeTrainerResult(requestId, stage) {
+  resultQueue = resultQueue.then(async () => {
+    const stored = await chrome.storage.local.get("trainerSubmissionResults");
+    const current = Array.isArray(stored.trainerSubmissionResults) ? stored.trainerSubmissionResults : [];
+    const terminal = ["judged", "failed", "needs_login"].includes(stage);
+    const next = current.filter((item) => item && (item.requestId !== requestId || (!terminal && item.stage !== stage)));
+    await chrome.storage.local.set({ trainerSubmissionResults: next });
+  }).catch(() => undefined);
+  return resultQueue;
 }
 
 async function openJudgeTab(message, sender, sendResponse) {
@@ -196,7 +209,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         verdict: ["AC", "WA"].includes(message.verdict) ? message.verdict : undefined,
         submissionId: Number.isInteger(message.submissionId) ? message.submissionId : undefined,
       };
-      rememberTrainerResult(result);
+      await rememberTrainerResult(result);
       chrome.tabs.sendMessage(pending.originTabId, result).catch(() => undefined);
       if (["judged", "failed", "needs_login"].includes(message.stage)) await removePendingJob(sender.tab.id, pending.requestId);
       if (message.stage === "judged") {
@@ -210,6 +223,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (!trustedTrainerSender(sender)) return;
+  if (message?.type === "ACK_TRAINER_SUBMISSION_RESULT") {
+    if (!validRequestId(message.requestId) || !["submitted", "judged", "failed", "needs_login"].includes(message.stage)) return;
+    void acknowledgeTrainerResult(message.requestId, message.stage)
+      .then(() => sendResponse({ ok: true }))
+      .catch(() => sendResponse({ ok: false }));
+    return true;
+  }
   if (message?.type === "CHECK_JUDGE_SESSIONS") {
     void Promise.all([checkJudgeSession("codeforces"), checkJudgeSession("ucup"), checkJudgeSession("luogu")])
       .then(([codeforces, ucup, luogu]) => sendResponse({ sessions: { codeforces, ucup, luogu } }))

@@ -4,7 +4,7 @@ import { FormEvent, ReactNode, useEffect, useRef, useState } from "react";
 import Link from "next/link";
 import { authFetch, readAuth, type AuthUser } from "../lib/auth-client";
 import { applyArchiveJudgeVerdict } from "../lib/archive-vp-session";
-import { updatePlatformSubmission } from "../lib/platform-submissions";
+import { syncPlatformSubmissionStatus } from "../lib/platform-submissions";
 import { getTrainingClientId } from "../lib/training-client";
 
 export function Icon({ name }: { name: string }) {
@@ -32,17 +32,16 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
       const data = event.data;
       if (event.source !== window || event.origin !== window.location.origin || data?.source !== "icpc-trainer-extension" || data.type !== "ICPC_TRAINER_SUBMIT_RESULT" || typeof data.requestId !== "string") return;
       const message = typeof data.message === "string" ? data.message : "提交状态已更新";
-      if (["queued", "submitted", "failed", "needs_login"].includes(data.stage)) {
-        void updatePlatformSubmission(data.requestId, data.stage, message);
-      }
-      if (data.stage === "judged" && ["AC", "WA"].includes(data.verdict)) {
-        const status = data.verdict === "AC" ? "accepted" : "rejected";
-        void updatePlatformSubmission(data.requestId, status, message, {
+      void (async () => {
+        const judged = data.stage === "judged" && ["AC", "WA"].includes(data.verdict);
+        if (!judged && !["queued", "submitted", "failed", "needs_login"].includes(data.stage)) return;
+        const status = judged ? data.verdict === "AC" ? "accepted" : "rejected" : data.stage;
+        const result = await syncPlatformSubmissionStatus(data.requestId, status, message, judged ? {
           verdict: data.verdict,
           judgeSubmissionId: Number.isInteger(data.submissionId) ? data.submissionId : undefined,
-        });
-        if (["ucup", "codeforces", "luogu"].includes(data.judge) && typeof data.archiveContestId === "string" && typeof data.slot === "string") {
-          void applyArchiveJudgeVerdict({
+        } : {});
+        if (judged && ["ucup", "codeforces", "luogu"].includes(data.judge) && typeof data.archiveContestId === "string" && typeof data.slot === "string") {
+          await applyArchiveJudgeVerdict({
             contestId: data.archiveContestId,
             slot: data.slot,
             verdict: data.verdict,
@@ -50,9 +49,16 @@ export function AppShell({ children, active }: { children: ReactNode; active: st
             submittedAt: Number.isFinite(data.submittedAt) ? data.submittedAt : undefined,
           });
         }
-      }
+        if (result.synced && data.stage !== "queued") window.postMessage({
+          source: "icpc-trainer",
+          type: "ICPC_TRAINER_SUBMIT_RESULT_ACK",
+          requestId: data.requestId,
+          stage: data.stage,
+        }, window.location.origin);
+      })().catch(() => undefined);
     };
     window.addEventListener("message", receiveJudgeStatus);
+    window.postMessage({ source: "icpc-trainer", type: "ICPC_TRAINER_PING" }, window.location.origin);
     return () => window.removeEventListener("message", receiveJudgeStatus);
   }, []);
   useEffect(() => {

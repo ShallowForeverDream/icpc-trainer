@@ -34,8 +34,14 @@ window.addEventListener("message", async (event) => {
   const message = event.data;
   if (!message || message.source !== "icpc-trainer") return;
 
+  if (message.type === "ICPC_TRAINER_SUBMIT_RESULT_ACK") {
+    if (!validRequestId(message.requestId) || !["submitted", "judged", "failed", "needs_login"].includes(message.stage)) return;
+    await chrome.runtime.sendMessage({ type: "ACK_TRAINER_SUBMISSION_RESULT", requestId: message.requestId, stage: message.stage }).catch(() => undefined);
+    return;
+  }
+
   if (message.type === "ICPC_TRAINER_PING") {
-    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.4.2" }, window.location.origin);
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.5.0" }, window.location.origin);
     await replayStoredResults();
     return;
   }
@@ -43,9 +49,9 @@ window.addEventListener("message", async (event) => {
   if (message.type === "ICPC_TRAINER_HEALTH_CHECK") {
     try {
       const result = await chrome.runtime.sendMessage({ type: "CHECK_JUDGE_SESSIONS" });
-      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.2", sessions: result?.sessions || {} }, window.location.origin);
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.5.0", sessions: result?.sessions || {} }, window.location.origin);
     } catch {
-      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.2", sessions: {} }, window.location.origin);
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.5.0", sessions: {} }, window.location.origin);
     }
     return;
   }

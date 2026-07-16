@@ -12,6 +12,10 @@ submissions can be judged concurrently without overwriting one another. The
 judge tab closes after a final verdict. Login or verification failures stop
 the flow and surface only the affected judge tab for the user.
 
+Final judge results are kept in extension storage until icpc-trainer confirms
+that the platform database accepted them. Closing or navigating away from the
+original problem tab therefore does not lose the verdict or VP update.
+
 The platform stores submitted source code in its own database so users can
 review every attempt from icpc-trainer. The extension never uploads passwords,
 cookies, API secrets, or judge verification data. Judge credentials stay in

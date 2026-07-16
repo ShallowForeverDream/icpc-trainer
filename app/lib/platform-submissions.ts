@@ -159,7 +159,7 @@ export async function recordPlatformSubmission(input: PlatformSubmissionCreate) 
   }
 }
 
-export async function updatePlatformSubmission(requestId: string, status: PlatformSubmissionStatus, message: string, details: { verdict?: PlatformVerdict; judgeSubmissionId?: number } = {}) {
+async function updatePlatformSubmissionInternal(requestId: string, status: PlatformSubmissionStatus, message: string, details: { verdict?: PlatformVerdict; judgeSubmissionId?: number } = {}) {
   const current = localRows();
   const timestamp = new Date().toISOString();
   const next = current.map((item) => {
@@ -174,10 +174,18 @@ export async function updatePlatformSubmission(requestId: string, status: Platfo
       body: JSON.stringify({ clientId: getDeviceId(), requestId, status, message, ...details }),
     })));
     upsertLocal(remote);
-    return remote;
+    return { submission: remote, synced: true };
   } catch {
-    return next.find((item) => item.requestId === requestId) || null;
+    return { submission: next.find((item) => item.requestId === requestId) || null, synced: false };
   }
+}
+
+export async function syncPlatformSubmissionStatus(requestId: string, status: PlatformSubmissionStatus, message: string, details: { verdict?: PlatformVerdict; judgeSubmissionId?: number } = {}) {
+  return updatePlatformSubmissionInternal(requestId, status, message, details);
+}
+
+export async function updatePlatformSubmission(requestId: string, status: PlatformSubmissionStatus, message: string, details: { verdict?: PlatformVerdict; judgeSubmissionId?: number } = {}) {
+  return (await updatePlatformSubmissionInternal(requestId, status, message, details)).submission;
 }
 
 export function subscribePlatformSubmissions(listener: (rows: PlatformSubmission[]) => void) {

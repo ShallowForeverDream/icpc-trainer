@@ -83,6 +83,14 @@ test("keeps concurrent judge submissions isolated by their background tab", asyn
   assert.equal(storage.trainerSubmissionResults.at(-1).verdict, "AC");
   assert.equal(sentMessages.at(-1).id, 10);
 
+  const acknowledged = await dispatch({
+    type: "ACK_TRAINER_SUBMISSION_RESULT",
+    requestId: firstJob.requestId,
+    stage: "judged",
+  }, trainerSender(10));
+  assert.equal(acknowledged.ok, true);
+  assert.equal(storage.trainerSubmissionResults.some((item) => item.requestId === firstJob.requestId), false);
+
   const luogu = await dispatch({
     type: "OPEN_LUOGU_SUBMIT",
     url: "https://www.luogu.com.cn/problem/P10553",
@@ -183,4 +191,14 @@ test("accepts archive submissions from Gym and regular Codeforces contests", asy
   });
   assert.equal(malformed.length, 0);
   assert.ok(postedMessages.some((message) => message.type === "ICPC_TRAINER_SUBMIT_RESULT"));
+
+  const beforeAck = runtimeMessages.length;
+  await pageMessageListener({
+    source: window,
+    origin: trainerOrigin,
+    data: { source: "icpc-trainer", type: "ICPC_TRAINER_SUBMIT_RESULT_ACK", requestId: "archive-regular-2172-a", stage: "judged" },
+  });
+  assert.equal(runtimeMessages[beforeAck].type, "ACK_TRAINER_SUBMISSION_RESULT");
+  assert.equal(runtimeMessages[beforeAck].requestId, "archive-regular-2172-a");
+  assert.equal(runtimeMessages[beforeAck].stage, "judged");
 });

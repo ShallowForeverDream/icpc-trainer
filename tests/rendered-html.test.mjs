@@ -190,13 +190,14 @@ test("ships readable Chinese fallbacks and a QOJ-like cached statement reader", 
 });
 
 test("ships a constrained Manifest V3 statement and submit bridge", async () => {
-  const [manifestText, background, bridge, fill, qojFill, luoguFill] = await Promise.all([
+  const [manifestText, background, bridge, fill, qojFill, luoguFill, extensionZip] = await Promise.all([
     readFile(new URL("extension/manifest.json", root), "utf8"),
     readFile(new URL("extension/background.js", root), "utf8"),
     readFile(new URL("extension/trainer-bridge.js", root), "utf8"),
     readFile(new URL("extension/codeforces-fill.js", root), "utf8"),
     readFile(new URL("extension/qoj-fill.js", root), "utf8"),
     readFile(new URL("extension/luogu-fill.js", root), "utf8"),
+    readFile(new URL("public/icpc-trainer-extension.zip", root)),
   ]);
   const manifest = JSON.parse(manifestText);
   assert.equal(manifest.manifest_version, 3);
@@ -205,7 +206,8 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://www.luogu.com.cn/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "1.4.2");
+  assert.equal(manifest.version, "1.5.0");
+  assert.match(extensionZip.toString("utf8"), /"version": "1\.5\.0"/);
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -234,6 +236,8 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(fill, /archiveContestId/);
   assert.match(background, /archiveContestId/);
   assert.match(background, /trainerSubmissionResults/);
+  assert.match(background, /ACK_TRAINER_SUBMISSION_RESULT/);
+  assert.match(bridge, /ICPC_TRAINER_SUBMIT_RESULT_ACK/);
   assert.match(background, /pendingJudgeSubmissions/);
   assert.match(background, /GET_PENDING_SUBMISSION/);
   assert.match(background, /CHECK_JUDGE_SESSIONS/);
@@ -846,8 +850,11 @@ test("keeps platform submissions, source code, final verdicts, and problem histo
   assert.match(client, /\/platform-submissions/);
   assert.match(client, /sourceCode/);
   assert.match(client, /queueRemote/);
+  assert.match(client, /syncPlatformSubmissionStatus/);
   assert.match(shell, /judgeSubmissionId/);
   assert.match(shell, /applyArchiveJudgeVerdict/);
+  assert.match(shell, /ICPC_TRAINER_SUBMIT_RESULT_ACK/);
+  assert.match(shell, /ICPC_TRAINER_PING/);
   assert.match(problem, /本题提交记录/);
   assert.match(problem, /选择文件/);
   assert.match(problem, /submitLanguage/);

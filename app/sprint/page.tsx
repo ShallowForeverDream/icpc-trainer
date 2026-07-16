@@ -39,10 +39,17 @@ type SprintPlan = {
   reflection: string;
 };
 
+type SprintState = {
+  version: 3;
+  plans: Record<string, SprintPlan>;
+};
+
 type ProblemProgress = "accepted" | "judging" | "attempted" | "blocked" | "new";
 
 const SPRINT_STATE_KEY = "shenyang-sprint";
 const SPRINT_LOCAL_KEY = "icpc-trainer-shenyang-sprint";
+const SPRINT_START = "2026-07-15";
+const SPRINT_END = "2026-07-30";
 const sprintContestIds = [
   "2025-shenyang",
   "2024-shenyang",
@@ -69,7 +76,7 @@ function dayNumber(value: string) {
 }
 
 function planForDate(date: string): SprintPlan {
-  const start = dayNumber("2026-07-15");
+  const start = dayNumber(SPRINT_START);
   const index = Math.max(0, dayNumber(date) - start);
   const requestedId = contestCycle[index % contestCycle.length];
   const contest = sprintContests.find((item) => item.id === requestedId) || sprintContests[0];
@@ -81,6 +88,17 @@ function planForDate(date: string): SprintPlan {
     ? balanced
     : Array.from({ length: size }, (_, item) => String.fromCharCode(65 + (offset + item) % contest.problemCount));
   return { version: 2, date, contestId: contest.id, slots, reflection: "" };
+}
+
+function sprintDates() {
+  const start = dayNumber(SPRINT_START);
+  const end = dayNumber(SPRINT_END);
+  return Array.from({ length: end - start + 1 }, (_, index) => new Date(Date.UTC(2026, 6, 15 + index)).toISOString().slice(0, 10));
+}
+
+function compactDate(value: string) {
+  const [, month, day] = value.split("-");
+  return `${Number(month)}月${Number(day)}日`;
 }
 
 function isSprintPlan(value: unknown): value is SprintPlan {
@@ -96,6 +114,24 @@ function isSprintPlan(value: unknown): value is SprintPlan {
     && plan.slots.every((slot) => typeof slot === "string" && /^[A-Z]$/.test(slot) && slot.charCodeAt(0) - 65 < (contest?.problemCount || 0))
     && typeof plan.reflection === "string"
     && plan.reflection.length <= 2000;
+}
+
+function isSprintState(value: unknown): value is SprintState {
+  if (!value || typeof value !== "object") return false;
+  const state = value as Partial<SprintState>;
+  if (state.version !== 3 || !state.plans || typeof state.plans !== "object" || Array.isArray(state.plans)) return false;
+  const entries = Object.entries(state.plans);
+  return entries.length <= 60 && entries.every(([date, plan]) => date === (plan as SprintPlan)?.date && isSprintPlan(plan));
+}
+
+function isStoredSprint(value: unknown): value is SprintPlan | SprintState {
+  return isSprintPlan(value) || isSprintState(value);
+}
+
+function normalizeSprintState(value: SprintPlan | SprintState, today: string, defaultPlan: SprintPlan): SprintState {
+  const plans = value.version === 3 ? { ...value.plans } : { [value.date]: value };
+  if (!plans[today]) plans[today] = defaultPlan;
+  return { version: 3, plans };
 }
 
 function progressFor(contestId: string, slot: string, submissions: PlatformSubmission[], session: ArchiveVpSession | null): ProblemProgress {
@@ -120,6 +156,7 @@ export default function ShenyangSprintPage() {
   const today = dateKey();
   const defaultPlan = useMemo(() => planForDate(today), [today]);
   const [plan, setPlan] = useState<SprintPlan>(defaultPlan);
+  const [sprintState, setSprintState] = useState<SprintState>({ version: 3, plans: { [today]: defaultPlan } });
   const [submissions, setSubmissions] = useState<PlatformSubmission[]>([]);
   const [session, setSession] = useState<ArchiveVpSession | null>(null);
   const [prewarm, setPrewarm] = useState<ArchivePrewarmProgress | null>(null);
@@ -129,10 +166,12 @@ export default function ShenyangSprintPage() {
   const contest = sprintContests.find((item) => item.id === plan.contestId) || sprintContests[0];
 
   useEffect(() => {
-    void loadPersistentJson<SprintPlan>(SPRINT_STATE_KEY, SPRINT_LOCAL_KEY, defaultPlan, isSprintPlan).then((saved) => {
-      const next = saved.date === today ? saved : defaultPlan;
-      setPlan(next);
-      void savePersistentJson(SPRINT_STATE_KEY, SPRINT_LOCAL_KEY, next);
+    const fallback = readStoredJson<SprintPlan | SprintState>(SPRINT_LOCAL_KEY, { version: 3, plans: { [today]: defaultPlan } }, isStoredSprint);
+    void loadPersistentJson<SprintPlan | SprintState>(SPRINT_STATE_KEY, SPRINT_LOCAL_KEY, fallback, isStoredSprint).then((saved) => {
+      const nextState = normalizeSprintState(saved, today, defaultPlan);
+      setSprintState(nextState);
+      setPlan(nextState.plans[today]);
+      void savePersistentJson(SPRINT_STATE_KEY, SPRINT_LOCAL_KEY, nextState);
     });
 
     const localSession = readStoredJson<ArchiveVpSession | null>(ARCHIVE_SESSION_KEY, null, (value): value is ArchiveVpSession | null => value === null || isArchiveVpSession(value));
@@ -196,17 +235,35 @@ export default function ShenyangSprintPage() {
   const accepted = problemRows.filter((item) => item.progress === "accepted").length;
   const attempted = problemRows.filter((item) => item.progress === "attempted" || item.progress === "blocked").length;
   const nextProblem = problemRows.find((item) => item.progress !== "accepted") || problemRows[0];
-  const vpStartedToday = Boolean(session?.contestId === contest.id && session.startedAt && dateKey(new Date(session.startedAt)) === today);
+  const vpStartedForPlan = Boolean(session?.contestId === contest.id && session.startedAt && dateKey(new Date(session.startedAt)) === plan.date);
   const reviewRows = submissions
     .filter((item) => item.archiveContestId === contest.id && plan.slots.includes(item.slot || "") && ["rejected", "failed", "needs_login"].includes(item.status))
     .filter((item, index, rows) => rows.findIndex((candidate) => candidate.slot === item.slot) === index)
     .slice(0, 4);
-  const completedSteps = Number(vpStartedToday) + Number(accepted === plan.slots.length) + Number(Boolean(plan.reflection.trim()));
+  const completedSteps = Number(vpStartedForPlan) + Number(accepted === plan.slots.length) + Number(Boolean(plan.reflection.trim()));
   const sprintJudge = contest.qojContestId && contest.qojProblemIds?.length ? "ucup" : contest.luoguContestId && contest.luoguProblemIds?.length ? "luogu" : "codeforces";
+  const schedule = useMemo(() => sprintDates().map((date) => {
+    const itemPlan = sprintState.plans[date] || planForDate(date);
+    const itemContest = sprintContests.find((item) => item.id === itemPlan.contestId) || sprintContests[0];
+    const solved = itemPlan.slots.filter((slot) => progressFor(itemContest.id, slot, submissions, session) === "accepted").length;
+    return { date, plan: itemPlan, contest: itemContest, solved };
+  }), [session, sprintState, submissions]);
+
+  async function selectPlan(date: string) {
+    const currentState = { ...sprintState, plans: { ...sprintState.plans, [plan.date]: plan } } satisfies SprintState;
+    const next = currentState.plans[date] || planForDate(date);
+    const nextState = { ...currentState, plans: { ...currentState.plans, [date]: next } } satisfies SprintState;
+    setSprintState(nextState);
+    setPlan(next);
+    setSaveState("idle");
+    await savePersistentJson(SPRINT_STATE_KEY, SPRINT_LOCAL_KEY, nextState);
+  }
 
   async function saveReflection() {
     setSaveState("saving");
-    const ok = await savePersistentJson(SPRINT_STATE_KEY, SPRINT_LOCAL_KEY, plan);
+    const nextState = { ...sprintState, plans: { ...sprintState.plans, [plan.date]: plan } } satisfies SprintState;
+    setSprintState(nextState);
+    const ok = await savePersistentJson(SPRINT_STATE_KEY, SPRINT_LOCAL_KEY, nextState);
     setSaveState(ok ? "saved" : "error");
   }
 
@@ -217,7 +274,7 @@ export default function ShenyangSprintPage() {
         <h1>沈阳邀请赛冲刺</h1>
         <p>今日题目、中文题面、代码提交、评测记录、VP 榜单与复盘全部在本站完成。</p>
         <div className="hero-actions">
-          <Link className="button button-primary" href={nextProblem.href}><Icon name="play" /> {accepted ? "继续今日计划" : "开始今日训练"}</Link>
+          <Link className="button button-primary" href={nextProblem.href}><Icon name="play" /> {accepted ? "继续当前计划" : plan.date === today ? "开始今日训练" : "开始此日训练"}</Link>
           <Link className="button button-ghost" href={`/vp/archive?contest=${contest.id}`}><Icon name="trophy" /> 进入整场 VP</Link>
         </div>
       </div>
@@ -229,10 +286,21 @@ export default function ShenyangSprintPage() {
     </div>
     <JudgeReadiness judges={[sprintJudge]} label="今日训练提交环境" />
 
+    <section className="panel sprint-calendar" aria-label="沈阳赛前冲刺日历">
+      <div className="panel-head"><div><h2>赛前冲刺日历</h2><p>每天一组分层题；计划、AC 与复盘同步到账号</p></div><strong>{compactDate(plan.date)}</strong></div>
+      <div className="sprint-calendar-days">
+        {schedule.map((item) => <button type="button" className={`${item.date === plan.date ? "selected " : ""}${item.date === today ? "today " : ""}${item.solved === item.plan.slots.length ? "complete" : ""}`} onClick={() => void selectPlan(item.date)} key={item.date}>
+          <span>{item.date === today ? "今天" : compactDate(item.date)}</span>
+          <b>{item.contest.city}</b>
+          <small>{item.solved}/{item.plan.slots.length} AC{item.plan.reflection.trim() ? " · 已复盘" : ""}</small>
+        </button>)}
+      </div>
+    </section>
+
     <section className="sprint-grid sprint-work-grid">
       <article className="panel sprint-today-card sprint-plan-card">
         <div className="panel-head">
-          <div><h2>今日计划 · {contest.city}</h2><p>{contest.city === "沈阳" ? "按原场通过率均衡安排热身、重点与挑战题" : contest.name}</p></div>
+          <div><h2>{plan.date === today ? "今日计划" : compactDate(plan.date)} · {contest.city}</h2><p>{contest.city === "沈阳" ? "按原场通过率均衡安排热身、重点与挑战题" : contest.name}</p></div>
           <div className="sprint-plan-meta"><Pill>{accepted}/{plan.slots.length} AC</Pill>{prewarm ? <small>{prewarm.readyChinese}/{prewarm.total} 中文就绪</small> : <small>首次打开自动导入</small>}</div>
         </div>
         <div className="sprint-problem-list">
@@ -242,17 +310,17 @@ export default function ShenyangSprintPage() {
             <div>{item.latest ? <Link href={`/submissions/${item.latest.requestId}`}>提交记录</Link> : null}<Link href={item.href}>{item.progress === "accepted" ? "查看题面" : "开始做题"} →</Link></div>
           </article>)}
         </div>
-        <Link className="sprint-enter-vp" href={`/vp/archive?contest=${contest.id}`}><span><b>{vpStartedToday ? "继续今日整场 VP" : "开启 5 小时整场 VP"}</b><small>题目列表 · 原场实时榜单 · 队伍提交</small></span><strong>→</strong></Link>
+        <Link className="sprint-enter-vp" href={`/vp/archive?contest=${contest.id}`}><span><b>{vpStartedForPlan ? "继续当前整场 VP" : "开启 5 小时整场 VP"}</b><small>题目列表 · 原场实时榜单 · 队伍提交</small></span><strong>→</strong></Link>
       </article>
 
       <aside className="sprint-side-stack">
         <article className="panel sprint-auto-progress">
-          <div className="panel-head"><div><h2>今日闭环</h2><p>由平台自动记录</p></div><strong>{completedSteps}/3</strong></div>
-          <div><span className={vpStartedToday ? "done" : ""}><i>{vpStartedToday ? "✓" : "1"}</i><b>实战 VP</b><small>{vpStartedToday ? "已开始" : "待开始"}</small></span><span className={accepted === plan.slots.length ? "done" : ""}><i>{accepted === plan.slots.length ? "✓" : "2"}</i><b>完成计划题</b><small>{accepted}/{plan.slots.length} AC</small></span><span className={plan.reflection.trim() ? "done" : ""}><i>{plan.reflection.trim() ? "✓" : "3"}</i><b>赛后复盘</b><small>{plan.reflection.trim() ? "已保存" : "待记录"}</small></span></div>
+          <div className="panel-head"><div><h2>{plan.date === today ? "今日闭环" : "训练闭环"}</h2><p>由平台自动记录</p></div><strong>{completedSteps}/3</strong></div>
+          <div><span className={vpStartedForPlan ? "done" : ""}><i>{vpStartedForPlan ? "✓" : "1"}</i><b>实战 VP</b><small>{vpStartedForPlan ? "已开始" : "待开始"}</small></span><span className={accepted === plan.slots.length ? "done" : ""}><i>{accepted === plan.slots.length ? "✓" : "2"}</i><b>完成计划题</b><small>{accepted}/{plan.slots.length} AC</small></span><span className={plan.reflection.trim() ? "done" : ""}><i>{plan.reflection.trim() ? "✓" : "3"}</i><b>赛后复盘</b><small>{plan.reflection.trim() ? "已保存" : "待记录"}</small></span></div>
         </article>
 
         <article className="panel sprint-review-card">
-          <div className="panel-head"><div><h2>今日复盘</h2><p>{attempted ? `${attempted} 题需要回看` : "写下一个关键失误"}</p></div></div>
+          <div className="panel-head"><div><h2>{plan.date === today ? "今日复盘" : `${compactDate(plan.date)}复盘`}</h2><p>{attempted ? `${attempted} 题需要回看` : "写下一个关键失误"}</p></div></div>
           {reviewRows.length ? <div className="sprint-review-links">{reviewRows.map((item) => <Link href={`/submissions/${item.requestId}`} key={item.requestId}><b>{item.slot} · {item.verdict || progressText(item.status === "rejected" ? "attempted" : "blocked")}</b><span>查看代码与评测记录 →</span></Link>)}</div> : null}
           <textarea value={plan.reflection} maxLength={2000} onChange={(event) => { setPlan({ ...plan, reflection: event.target.value }); setSaveState("idle"); }} placeholder="例：D 题漏看单调性；下次先写出状态转移再动手。" aria-label="今日复盘内容" />
           <div className="sprint-review-actions"><span>{saveState === "saving" ? "正在保存…" : saveState === "saved" ? "已保存到账号" : saveState === "error" ? "保存失败，请重试" : ""}</span><button type="button" onClick={saveReflection}>保存复盘</button></div>

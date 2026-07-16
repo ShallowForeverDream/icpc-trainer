@@ -54,6 +54,9 @@ test("ships an automatic Shenyang sprint loop driven by persistent submissions",
   assert.match(page, /站内题面 · 中文切换 · 直接提交/);
   assert.match(page, /由平台自动记录/);
   assert.match(page, /查看代码与评测记录/);
+  assert.match(page, /SprintState/);
+  assert.match(page, /赛前冲刺日历/);
+  assert.match(page, /计划、AC 与复盘同步到账号/);
   assert.match(page, /"2023-shenyang"/);
   assert.match(page, /"2022-shenyang"/);
   assert.doesNotMatch(page, /toggleTask/);
@@ -66,6 +69,7 @@ test("ships an automatic Shenyang sprint loop driven by persistent submissions",
   assert.match(html, /今日计划/);
   assert.match(html, /准确中文/);
   assert.match(html, /进入整场 VP/);
+  assert.match(html, /赛前冲刺日历/);
 });
 
 test("balances Shenyang daily drills with real contest solve rates", async () => {

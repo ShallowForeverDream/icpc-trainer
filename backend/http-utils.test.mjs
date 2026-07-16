@@ -14,6 +14,9 @@ test("bounds numeric request values", () => {
   assert.equal(boundedInteger("17.6", { min: 1, max: 20, fallback: 5 }), 18);
   assert.equal(boundedInteger(-10, { min: 1, max: 20, fallback: 5 }), 1);
   assert.equal(boundedInteger("bad", { min: 1, max: 20, fallback: 5 }), 5);
+  assert.equal(boundedInteger(null, { min: 1, max: 20, fallback: 5 }), 5);
+  assert.equal(boundedInteger(undefined, { min: 1, max: 20, fallback: 5 }), 5);
+  assert.equal(boundedInteger("", { min: 1, max: 20, fallback: 5 }), 5);
 });
 
 test("window limiter caps keys, enforces limits, and resets", () => {

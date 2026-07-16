@@ -385,10 +385,17 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /id: "2025-bangkok"[\s\S]*gymId: 106164/);
   assert.match(catalog, /id: "2025-taichung"[\s\S]*codeforcesContestId: 2172/);
   assert.match(catalog, /id: "2024-taichung"[\s\S]*codeforcesContestId: 2041/);
+  assert.match(catalog, /id: "2026-apac-championship"[\s\S]*codeforcesContestId: 2206/);
+  assert.match(catalog, /id: "2025-apac-championship"[\s\S]*codeforcesContestId: 2073/);
+  assert.match(catalog, /id: "2025-nerc-finals"[\s\S]*codeforcesContestId: 2181/);
+  assert.match(catalog, /id: "2024-jakarta"[\s\S]*codeforcesContestId: 2045/);
+  assert.match(catalog, /id: "2024-european-championship"[\s\S]*codeforcesContestId: 1949/);
   assert.match(catalog, /No Distance is Too Far Apart/);
   assert.match(catalog, /Railway Construction/);
+  assert.match(catalog, /Deformed Balance/);
+  assert.match(catalog, /Medical Parity/);
   assert.match(scoreboard, /contest\.codeforcesContestId/);
-  assert.match(backendScoreboard, /codeforces-v2/);
+  assert.match(backendScoreboard, /codeforces-v3/);
   assert.match(backendScoreboard, /expectedJudgedSubmissions/);
   assert.match(backendScoreboard, /Codeforces 原场逐提交时间轴/);
   assert.match(page, /国际区域赛/);

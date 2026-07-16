@@ -80,7 +80,7 @@ export function buildOriginalVpRows(problems: VpStandingProblem[], sourceBoards:
   if (!replays.length) return [];
   if (replays.length === 1) return replays[0].rows;
 
-  const referenceCount = Math.min(500, ...replays.map((source) => source.rows.length));
+  const referenceCount = Math.min(2_000, ...replays.map((source) => source.rows.length));
   return Array.from({ length: referenceCount }, (_, index): VpStandingRow => {
     const states = emptyVpStates(problems);
     const sourceTeams: Array<{ contestId: number; handle: string }> = [];

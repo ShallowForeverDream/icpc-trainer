@@ -139,12 +139,12 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
     assert.match(ghostTimeline.sourceFidelity, /逐提交时间轴/);
     assert.equal(ghostTimeline.boardUrl, "https://codeforces.com/contest/2172/standings");
 
-    const methods = [];
+    const requests = [];
     let response;
     const handler = createArchiveScoreboardHandler({
       json: (_target, status, value) => { response = { status, value }; },
-      codeforces: async (method) => {
-        methods.push(method);
+      codeforces: async (method, params, options) => {
+        requests.push({ method, params: params.toString(), authenticated: options?.authenticated });
         return method === "contest.standings" ? {
           contest: { name: "Asia Regional", startTimeSeconds: 1_730_000_000, durationSeconds: 18_000 },
           problems: [{ index: "A" }],
@@ -153,13 +153,19 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
       },
     });
     await handler({ method: "GET" }, {}, new URL("http://localhost/archive/scoreboards?source=codeforces&gymId=106268&id=2025-yokohama&name=Yokohama&elapsed=1300&reveal=1&group=official"));
-    assert.deepEqual(methods, ["contest.standings", "contest.status"]);
+    assert.deepEqual(requests.map((request) => request.method), ["contest.standings", "contest.status"]);
+    assert.equal(requests[0].authenticated, true);
+    assert.match(requests[0].params, /showUnofficial=true/);
+    assert.equal(requests[1].authenticated, true);
     assert.equal(response.status, 200);
     assert.equal(response.value.rows[0].solved, 1);
     assert.match(response.value.contest.sourceFidelity, /逐提交时间轴/);
 
     await handler({ method: "GET" }, {}, new URL("http://localhost/archive/scoreboards?source=codeforces&contestId=2172&id=2025-taichung&name=Taichung&elapsed=1300&reveal=1&group=official"));
-    assert.deepEqual(methods, ["contest.standings", "contest.status", "contest.standings", "contest.status"]);
+    assert.deepEqual(requests.map((request) => request.method), ["contest.standings", "contest.status", "contest.standings", "contest.status"]);
+    assert.deepEqual(requests[2], { method: "contest.standings", params: "contestId=2172", authenticated: false });
+    assert.equal(requests[3].authenticated, false);
+    assert.match(requests[3].params, /^contestId=2172&from=1&count=10000$/);
     assert.equal(response.value.contest.boardUrl, "https://codeforces.com/contest/2172/standings");
   } finally {
     persistence.closePersistenceForTests();
@@ -203,7 +209,7 @@ test("persists XCPCIO sources and generated scoreboard views in SQLite across re
     assert.equal(health.caches.archiveScoreboardSources, 1);
     assert.equal(health.caches.archiveScoreboardViews, 1);
     assert.equal(health.memory.limitMiB, 512);
-    assert.equal(health.versions.api, 10);
+    assert.equal(health.versions.api, 11);
     assert.equal(health.versions.revision, "local");
     assert.equal(health.integrations.codeforcesAuthenticated, false);
     assert.equal(health.versions.statementTranslation, 22);

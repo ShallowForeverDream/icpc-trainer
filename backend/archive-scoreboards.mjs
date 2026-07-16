@@ -238,11 +238,11 @@ export function normalizeCodeforcesArchiveStandings(value, contestId, submission
   };
 }
 
-async function loadCodeforcesSubmissions(contestId, codeforces) {
+async function loadCodeforcesSubmissions(contestId, codeforces, authenticated) {
   const submissions = [];
   const pageSize = 10_000;
   for (let from = 1; from <= 100_000; from += pageSize) {
-    const page = await codeforces("contest.status", new URLSearchParams({ contestId: String(contestId), from: String(from), count: String(pageSize) }));
+    const page = await codeforces("contest.status", new URLSearchParams({ contestId: String(contestId), from: String(from), count: String(pageSize) }), { authenticated });
     if (!Array.isArray(page)) throw new Error("Codeforces 提交时间轴数据无效");
     submissions.push(...page);
     if (page.length < pageSize) return submissions;
@@ -252,7 +252,7 @@ async function loadCodeforcesSubmissions(contestId, codeforces) {
 
 async function loadCodeforcesSource(contestId, contestKind, codeforces) {
   if (typeof codeforces !== "function") throw new Error("Codeforces 榜单服务未配置");
-  const cacheKey = `codeforces-v2:${contestKind}:${contestId}`;
+  const cacheKey = `codeforces-v3:${contestKind}:${contestId}`;
   const timestamp = Date.now();
   const cached = readRuntimeCache(SOURCE_NAMESPACE, cacheKey);
   if (cached && cached.expiresAt > timestamp) return { ...cached, cacheHit: true };
@@ -260,10 +260,14 @@ async function loadCodeforcesSource(contestId, contestKind, codeforces) {
   if (sourceJobs.size >= 8) throw new HttpError(503, "真实榜单同步队列繁忙，请稍后重试", { expose: true });
   const job = (async () => {
     try {
-      const standings = await codeforces("contest.standings", new URLSearchParams({ contestId: String(contestId), from: "1", count: "5000", showUnofficial: "true" }));
+      const authenticated = contestKind === "gym";
+      const standingsParams = authenticated
+        ? new URLSearchParams({ contestId: String(contestId), from: "1", count: "5000", showUnofficial: "true" })
+        : new URLSearchParams({ contestId: String(contestId) });
+      const standings = await codeforces("contest.standings", standingsParams, { authenticated });
       let submissions = null;
       try {
-        submissions = await loadCodeforcesSubmissions(contestId, codeforces);
+        submissions = await loadCodeforcesSubmissions(contestId, codeforces, authenticated);
       } catch (error) {
         console.warn(`Codeforces contest ${contestId} submission timeline unavailable; using final standings`, error instanceof Error ? error.message : error);
       }
@@ -374,7 +378,7 @@ async function scoreboard(url, codeforces) {
   const requestedElapsed = boundedInteger(url.searchParams.get("elapsed"), { min: 0, max: 24 * 60 * 60, fallback: 0 });
   const elapsedBucket = Math.floor(requestedElapsed / 10);
   const elapsed = elapsedBucket * 10;
-  const sourceKey = sourceKind === "codeforces" ? `codeforces-v2:${contestKind}:${codeforcesContestId}` : `xcpcio:${boardPath}`;
+  const sourceKey = sourceKind === "codeforces" ? `codeforces-v3:${contestKind}:${codeforcesContestId}` : `xcpcio:${boardPath}`;
   const source = sourceKind === "codeforces" ? await loadCodeforcesSource(codeforcesContestId, contestKind, codeforces) : await loadSource(boardPath);
   const key = snapshotKey({ sourceKey, elapsedBucket, reveal, group, sourceFetchedAt: source.fetchedAt });
   const cached = readRuntimeCache(SNAPSHOT_NAMESPACE, key);

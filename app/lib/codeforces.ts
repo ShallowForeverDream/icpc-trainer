@@ -132,10 +132,10 @@ export async function getContestStandings(contestId: number): Promise<Codeforces
   try {
     const value = await throttledFetch<CodeforcesContestStandings>("contest.standings", new URLSearchParams({ contestId: String(normalizedId) }));
     if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new Error("原比赛榜单数据格式无效");
-    value.rows = value.rows.slice(0, 500);
+    value.rows = value.rows.slice(0, 10_000);
     const now = Date.now();
     cache.set(normalizedId, { expiresAt: now + 6 * 60 * 60 * 1000, staleUntil: now + 7 * 24 * 60 * 60 * 1000, value });
-    while (cache.size > 64) cache.delete(cache.keys().next().value!);
+    while (cache.size > 12) cache.delete(cache.keys().next().value!);
     return value;
   } catch (error) {
     if (cached && cached.staleUntil > Date.now()) return cached.value;

@@ -28,3 +28,7 @@ export function signCodeforcesParams(method, params, {
   ordered.set("apiSig", `${randomPrefix}${digest}`);
   return ordered;
 }
+
+export function codeforcesRequestParams(method, params, { authenticated = true, ...credentials } = {}) {
+  return authenticated ? signCodeforcesParams(method, params, credentials) : new URLSearchParams(params);
+}

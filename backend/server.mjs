@@ -4,7 +4,7 @@ import { readFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } from "./auth.mjs";
 import { createArchiveScoreboardHandler } from "./archive-scoreboards.mjs";
-import { signCodeforcesParams } from "./codeforces-auth.mjs";
+import { codeforcesRequestParams } from "./codeforces-auth.mjs";
 import { ARCHIVE_TRANSLATION_VERSION, TRANSLATION_VERSION, createStatementHandler } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
 import { buildOriginalVpRows, buildTeamVpRow, rankVpRows } from "./vp-scoring.mjs";
@@ -60,7 +60,7 @@ function clientIp(request) {
   return realIp || request.socket.remoteAddress || "unknown";
 }
 
-async function runCodeforces(method, params) {
+async function runCodeforces(method, params, { authenticated = true } = {}) {
   const previous = apiQueue;
   let release;
   apiQueue = new Promise((resolve) => { release = resolve; });
@@ -72,12 +72,12 @@ async function runCodeforces(method, params) {
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
       lastApiCall = Date.now();
-      const requestParams = signCodeforcesParams(method, params, { apiKey: CF_API_KEY, apiSecret: CF_API_SECRET });
+      const requestParams = codeforcesRequestParams(method, params, { authenticated, apiKey: CF_API_KEY, apiSecret: CF_API_SECRET });
       const response = await fetch(`${CF_BASE}/${method}?${requestParams}`, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" }, signal: controller.signal });
       const payload = await response.json().catch(() => null);
       if (!response.ok || payload?.status !== "OK") {
         const comment = String(payload?.comment || "");
-        if (/authenticated|api key|apisig|signature/i.test(comment)) throw new HttpError(503, "Codeforces Gym 榜单需要在服务器配置 API Key", { expose: true });
+        if (authenticated && /authenticated|api key|apisig|signature/i.test(comment)) throw new HttpError(503, "Codeforces Gym 榜单需要在服务器配置 API Key", { expose: true });
         throw new HttpError(502, "Codeforces 暂时不可用，请稍后重试", { expose: true });
       }
       return payload.result;
@@ -89,13 +89,13 @@ async function runCodeforces(method, params) {
   }
 }
 
-function codeforces(method, params) {
-  const key = `${method}?${params}`;
+function codeforces(method, params, options = {}) {
+  const key = `${options.authenticated === false ? "anonymous" : "authenticated"}:${method}?${params}`;
   const current = inFlightCodeforces.get(key);
   if (current) return current;
   if (apiQueueDepth >= 40) throw new HttpError(503, "Codeforces 同步队列繁忙，请稍后重试", { expose: true });
   apiQueueDepth += 1;
-  const job = runCodeforces(method, params).finally(() => {
+  const job = runCodeforces(method, params, options).finally(() => {
     apiQueueDepth -= 1;
     inFlightCodeforces.delete(key);
   });
@@ -149,7 +149,7 @@ async function getContestStandings(contestId) {
       const persisted = JSON.parse(await readFile(cachePath, "utf8"));
       if (persisted?.value?.contest && Array.isArray(persisted.value.problems) && Array.isArray(persisted.value.rows)) {
         const now = Date.now();
-        persisted.value.rows = persisted.value.rows.slice(0, 500);
+        persisted.value.rows = persisted.value.rows.slice(0, 10_000);
         writeRuntimeCache("contest-standings", cacheKey, persisted.value, { itemCount: persisted.value.rows.length, fetchedAt: Number(persisted.cachedAt) || now, expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, maxEntries: 512 });
         cached = readRuntimeCache("contest-standings", cacheKey);
         void unlink(cachePath).catch(() => undefined);
@@ -158,9 +158,9 @@ async function getContestStandings(contestId) {
     } catch { /* Cache miss. */ }
   }
   try {
-    const value = await codeforces("contest.standings", new URLSearchParams({ contestId: String(normalizedId) }));
+    const value = await codeforces("contest.standings", new URLSearchParams({ contestId: String(normalizedId) }), { authenticated: false });
     if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new HttpError(502, "原比赛榜单数据无效");
-    value.rows = value.rows.slice(0, 500);
+    value.rows = value.rows.slice(0, 10_000);
     const now = Date.now();
     writeRuntimeCache("contest-standings", cacheKey, value, { itemCount: value.rows.length, fetchedAt: now, expiresAt: now + 6 * 60 * 60_000, staleUntil: now + 90 * 24 * 60 * 60_000, maxEntries: 512 });
     return value;
@@ -667,7 +667,7 @@ const server = http.createServer(async (request, response) => {
         codeforcesAuthenticated: Boolean(CF_API_KEY && CF_API_SECRET),
       },
       versions: {
-        api: 10,
+        api: 11,
         revision: process.env.SOURCE_REVISION || "local",
         statementTranslation: TRANSLATION_VERSION,
         archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,

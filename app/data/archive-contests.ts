@@ -41,6 +41,10 @@ export const archiveContests: ArchiveContest[] = [
     qojProblemIds: [18307, 18308, 18309, 18310, 18311, 18312, 18313, 18314, 18315, 18316, 18317, 18318, 18319],
     problemTitles: ["Klotski", "Dictionary 2", "Meeting Schedule", "Largest Digit 2", "Simple Constructive Problem", "Gifts in Place", "Vampire Crawlers", "Puzzle", "Version Number", "Making Pine Branches", "Minimum Spanning Tree", "Fraction Iteration", "Night at the Museum 2"],
   },
+  {
+    id: "2026-apac-championship", year: 2026, name: "ICPC 亚洲太平洋锦标赛", city: "亚太赛区", type: "国际区域赛", boardSource: "codeforces", problemCount: 13, codeforcesContestId: 2206,
+    problemTitles: ["Compare Suffixes", "Subtree Removal Game", "Upside Down Dijkstra", "Christmas Tree Un-decoration", "Parallel Sums", "Minesweeper String", "Extra Transition", "Reflect Sort", "Growth Factor", "Worldwide Playlist", "Time Display Stickers", "Onion", "Deformed Balance"],
+  },
 
   { id: "2025-wuhan-invitational", year: 2025, name: "ICPC 武汉全国邀请赛暨湖北省赛", city: "武汉", type: "邀请赛", boardPath: "icpc/50th/wuhan-invitational", problemCount: 13, qojContestId: 2025, qojProblemIds: [10736, 10737, 10738, 10739, 10740, 10741, 10742, 10743, 10744, 10745, 10746, 10747, 10748] },
   { id: "2025-nanchang-invitational", year: 2025, name: "ICPC 南昌全国邀请赛暨江西省赛", city: "南昌", type: "邀请赛", boardPath: "icpc/50th/nanchang-invitational", problemCount: 13, gymId: 105911 },
@@ -80,6 +84,14 @@ export const archiveContests: ArchiveContest[] = [
   {
     id: "2025-taichung", year: 2025, name: "ICPC 亚洲台中区域赛", city: "中国台湾 · 台中", type: "国际区域赛", boardSource: "codeforces", problemCount: 14, codeforcesContestId: 2172,
     problemTitles: ["ASCII Art Contest", "Buses", "Circles Are Far from Each Other", "Divisor Card Game", "Number Maze", "Cluster Computing System", "Gene Editor", "Shuffling Cards with Problem Solver 68!", "Birthday", "Sliding Tiles", "Kindergarten Homework", "Maximum Color Segment", "Maximum Distance To Port", "New Kingdom"],
+  },
+  {
+    id: "2025-apac-championship", year: 2025, name: "ICPC 亚洲太平洋锦标赛", city: "亚太赛区", type: "国际区域赛", boardSource: "codeforces", problemCount: 13, codeforcesContestId: 2073,
+    problemTitles: ["Control Towers", "Three-Dimensional Embedding", "Cactus Connectivity", "Tower of Hanoi", "Minus Operator", "Hold the Star", "Corrupted File", "Secret Lilies and Roses", "Squares on Grid Lines", "Gathering Sharks", "Book Sorting", "Boarding Queue", "Can You Reach There?"],
+  },
+  {
+    id: "2025-nerc-finals", year: 2025, name: "ICPC 北方欧亚赛区决赛（NERC）", city: "北方欧亚赛区", type: "国际区域赛", boardSource: "codeforces", problemCount: 13, codeforcesContestId: 2181,
+    problemTitles: ["Alphabet City", "Battle of Arrays", "Cacti Classification", "Doorway", "Elevator Against Humanity", "Fragmented Nim", "Greta's Game", "Honey Cake", "Irrigation Interlock", "Jinx or Jackpot", "Knit the Grid", "LLM Training", "Medical Parity"],
   },
   {
     id: "2025-yokohama", year: 2025, name: "ICPC 亚洲横滨区域赛", city: "日本 · 横滨", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 106268,
@@ -131,6 +143,14 @@ export const archiveContests: ArchiveContest[] = [
   {
     id: "2024-taichung", year: 2024, name: "ICPC 亚洲台中区域赛", city: "中国台湾 · 台中", type: "国际区域赛", boardSource: "codeforces", problemCount: 14, codeforcesContestId: 2041,
     problemTitles: ["The Bento Box Adventure", "Bowling Frame", "Cube", "Drunken Maze", "Beautiful Array", "Segmentation Folds", "Grid Game", "Sheet Music", "Auto Complete", "Bottle Arrangement", "Trophic Balance Species", "Building Castle", "Selection Sort", "Railway Construction"],
+  },
+  {
+    id: "2024-jakarta", year: 2024, name: "ICPC 亚洲雅加达区域赛", city: "印度尼西亚 · 雅加达", type: "国际区域赛", boardSource: "codeforces", problemCount: 13, codeforcesContestId: 2045,
+    problemTitles: ["Scrambled Scrabble", "ICPC Square", "Saraga", "Aquatic Dragon", "Narrower Passageway", "Grid Game 3-angle", "X Aura", "Missing Separators", "Microwavable Subsequence", "Xorderable Array", "GCDDCG", "Buggy DFS", "Mirror Maze"],
+  },
+  {
+    id: "2024-european-championship", year: 2024, name: "ICPC 欧洲锦标赛", city: "欧洲赛区", type: "国际区域赛", boardSource: "codeforces", problemCount: 11, codeforcesContestId: 1949,
+    problemTitles: ["Grove", "Charming Meals", "Annual Ants' Gathering", "Funny or Scary?", "Damage per Second", "Dating", "Scooter", "Division Avoidance", "Disks", "Amanda the Amoeba", "Make Triangle"],
   },
   {
     id: "2024-yokohama", year: 2024, name: "ICPC 亚洲横滨区域赛", city: "日本 · 横滨", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 105633,

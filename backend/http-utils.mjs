@@ -8,6 +8,7 @@ export class HttpError extends Error {
 }
 
 export function boundedInteger(value, { min, max, fallback }) {
+  if (value === null || value === undefined || typeof value === "string" && !value.trim()) return fallback;
   const parsed = Number(value);
   if (!Number.isFinite(parsed)) return fallback;
   return Math.min(max, Math.max(min, Math.round(parsed)));

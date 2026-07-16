@@ -17,7 +17,7 @@ type ProblemStanding = { solved: boolean; wrongAttempts: number; pendingAttempts
 type VpMedal = "gold" | "silver" | "bronze" | null;
 type StandingRow = { id: string; rank: number; handle: string; solved: number; penalty: number; lastSolvedMinutes?: number | null; medal?: VpMedal; problems: Record<string, ProblemStanding>; mine?: boolean; origin?: "original" | "mine"; sourceCount?: number };
 type Standings = { updatedAt: string; elapsedSeconds?: number; freezeAtSeconds?: number; frozen?: boolean; finished?: boolean; pollAfterSeconds?: number; totalRows?: number; originalTeams?: number; medalCutoffs?: { gold: number; silver: number; bronze: number }; participantRows?: StandingRow[]; unavailableContestIds?: number[]; sourceBoards?: Array<{ contestId: number; name: string; selectedProblems: string[]; sampledTeams: number }>; rows: StandingRow[] };
-type Contest = { id: string; handle: string; participants?: string[]; mode: string; seed: string; durationMinutes: number; targetRating: number; thinkingRatio?: number; thinkingCount?: number; sourceContestId: number | null; sourceContests?: SourceContest[]; excludedSolved: number; createdAt: string; startedAt?: number; problems: VpProblem[]; standings?: Standings };
+type Contest = { id: string; handle: string; participants?: string[]; mode: string; seed: string; durationMinutes: number; targetRating: number; thinkingRatio?: number; thinkingCount?: number; sourceContestId: number | null; sourceContests?: SourceContest[]; excludedSolved: number; createdAt: string; startedAt?: number; finishedAt?: number; abandoned?: boolean; problems: VpProblem[]; standings?: Standings };
 type RoomTab = "problems" | "standings" | "submissions";
 type TeamSubmission = { id: string; handle: string; createdAt: string; code: string; contestId?: number; index: string; title: string; language: string; verdict: string; timeMs?: number; memoryBytes?: number; judgeSubmissionId?: number | null; detailHref?: string; platform?: boolean };
 
@@ -131,6 +131,7 @@ export default function VpPage() {
   const [participantText, setParticipantText] = useState("ShallowDream2");
   const [seed, setSeed] = useState("");
   const [contest, setContest] = useState<Contest | null>(null);
+  const [vpHistory, setVpHistory] = useState<Contest[]>([]);
   const [status, setStatus] = useState<"idle" | "loading" | "error" | "syncing">("idle");
   const [message, setMessage] = useState("");
   const [now, setNow] = useState(Date.now());
@@ -151,6 +152,7 @@ export default function VpPage() {
     void vpJson<{ session: Contest | null }>(`/vp/sessions/active?clientId=${encodeURIComponent(getDeviceId())}`, { cache: "no-store" }).then(({ session }) => {
       if (session && isContest(session)) { save(session); setParticipantText((session.participants ?? [session.handle]).join(", ")); }
     }).catch(() => undefined);
+    void loadVpHistory();
     return () => { generateRequest.current?.abort(); standingsRequest.current?.abort(); };
   }, []);
   useEffect(() => {
@@ -183,6 +185,13 @@ export default function VpPage() {
     if (next) {
       if (!writeStoredJson(STORAGE_KEY, next)) setMessage("浏览器无法保存本场 VP，刷新页面后进度可能丢失");
     } else removeStoredValue(STORAGE_KEY);
+  }
+
+  async function loadVpHistory() {
+    try {
+      const data = await vpJson<{ sessions?: Contest[] }>(`/vp/sessions/history?clientId=${encodeURIComponent(getDeviceId())}&limit=20`, { cache: "no-store" }, 12_000);
+      setVpHistory((data.sessions || []).filter((session) => isContest(session) && session.standings?.finished === true));
+    } catch { /* API v13 之前不提供常规 VP 历史，当前比赛仍可正常使用。 */ }
   }
 
   async function generateContest() {
@@ -224,10 +233,11 @@ export default function VpPage() {
     void vpJson<{ session: Contest }>("/vp/sessions/start", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), id: contest.id, startedAt }) }).then(({ session }) => { if (isContest(session)) save(session); }).catch(() => setMessage("比赛已在本机开始，但服务器暂时未能保存开始时间"));
   }
 
-  function finishContest() {
+  async function finishContest() {
     if (!contest) return;
-    void vpJson("/vp/sessions/finish", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), id: contest.id }) }).catch(() => undefined);
+    await vpJson("/vp/sessions/finish", { method: "POST", body: JSON.stringify({ clientId: getDeviceId(), id: contest.id, abandoned: contest.standings?.finished !== true }) }).catch(() => undefined);
     save(null);
+    await loadVpHistory();
   }
 
   async function syncStandings(silent = false) {
@@ -244,6 +254,7 @@ export default function VpPage() {
       ]);
       if (!Array.isArray(data.rows)) throw new Error("榜单服务返回了无效数据");
       save({ ...contest, standings: data });
+      if (data.finished) void loadVpHistory();
       setTeamSubmissions(submissions);
       setMessage(data.finished ? "比赛结束，最终排名与奖牌已完成结算" : data.frozen ? "最后一小时封榜中；你的提交仍会正常判题" : `已同步 ${data.originalTeams ?? 0} 支正式队伍，排名动态更新`);
       setStatus("idle");
@@ -283,7 +294,7 @@ export default function VpPage() {
       {!contest.startedAt ? <JudgeReadiness judges={["codeforces"]} label="本场 VP 提交环境" /> : null}
       <section className="contest-actions">
         {!contest.startedAt ? <button className="button button-primary" onClick={startContest}><Icon name="play" /> 开始比赛</button> : <button className="button button-primary" onClick={() => void syncStandings(false)} disabled={status === "syncing"}><Icon name="history" /> {status === "syncing" ? "同步中…" : "立即刷新榜单"}</button>}
-        <button className="button button-ghost" onClick={finishContest}>{finished ? "重新组卷" : "放弃本场"}</button>
+        <button className="button button-ghost" onClick={() => void finishContest()}>{finished ? "重新组卷" : "放弃本场"}</button>
         {message ? <span className={status === "error" ? "form-error" : ""}>{message}</span> : null}
       </section>
       {frozen ? <section className="vp-freeze-banner"><b>封榜中</b><span>榜单停在最后一小时前；提交与判题继续，比赛结束后自动揭榜。</span></section> : null}
@@ -339,5 +350,9 @@ export default function VpPage() {
       </div>
       <aside className="builder-summary"><h2>{mode}</h2><div className="summary-time"><b>{duration / 60}</b><span>小时</span><i>·</i><b>{count}</b><span>题</span></div><p className="builder-handle">{participants[0] || "未填写 Handle"}</p><button className="create-contest" onClick={() => void generateContest()} disabled={status === "loading"}>{status === "loading" ? "正在组卷…" : "生成比赛"}</button>{message ? <small className="summary-foot form-error">{message}</small> : null}</aside>
     </section>
+    {vpHistory.length ? <section className="panel archive-vp-history regular-vp-history"><header><div><h2>我的常规 VP</h2><p>最终排名、罚时与组卷题目已保存，可随时回看。</p></div><strong>{vpHistory.length} 场</strong></header><div>{vpHistory.map((entry) => {
+      const result = entry.standings?.participantRows?.find((row) => row.mine) || entry.standings?.participantRows?.[0] || entry.standings?.rows.find((row) => row.mine);
+      return <article key={entry.id}><span className="finished">{result?.medal ? medalText[result.medal] : "已完成"}</span><div><b>{entry.mode} · {entry.problems.length} 题</b><small>{entry.startedAt ? new Date(entry.startedAt).toLocaleString("zh-CN") : new Date(entry.createdAt).toLocaleString("zh-CN")} · {entry.thinkingCount ?? entry.problems.filter((problem) => problem.thinking).length} 道思维题</small></div><em>第 {result?.rank ?? "—"} 名 · {result?.solved ?? 0} 题 · {result?.penalty ?? 0} 罚时</em><button type="button" onClick={() => { save(entry); setRoomTab("problems"); setTeamSubmissions([]); }}>查看结果 →</button></article>;
+    })}</div></section> : null}
   </AppShell>;
 }

@@ -12,6 +12,7 @@ import {
   finishVpSession,
   createPlatformSubmission,
   listPlatformSubmissions,
+  listVpHistory,
   ownerKeys,
   persistVpSession,
   persistenceStats,
@@ -619,6 +620,7 @@ async function buildVpStandings(body, ownerKey) {
     rows: visible,
   };
   writeVpSnapshot(snapshotKey, sessionId, elapsedBucket, result);
+  if (finished && sessionId) finishVpSession(sessionId, ownerKey);
   return result;
 }
 
@@ -668,7 +670,7 @@ const server = http.createServer(async (request, response) => {
         codeforcesAuthenticated: Boolean(CF_API_KEY && CF_API_SECRET),
       },
       versions: {
-        api: 12,
+        api: 13,
         revision: process.env.SOURCE_REVISION || "local",
         statementTranslation: TRANSLATION_VERSION,
         archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,
@@ -730,6 +732,14 @@ const server = http.createServer(async (request, response) => {
       }
       return json(response, 200, { session });
     }
+    if (request.method === "GET" && url.pathname === "/vp/sessions/history") {
+      const owners = requestOwners(request, url.searchParams.get("clientId"), { allowGuest: true });
+      const limit = boundedInteger(url.searchParams.get("limit"), { min: 1, max: 50, fallback: 20 });
+      if (owners.fallback) {
+        for (const session of listVpHistory(owners.fallback, limit)) persistVpSession(owners.primary, session);
+      }
+      return json(response, 200, { sessions: listVpHistory(owners.primary, limit) });
+    }
     if (request.method === "POST" && url.pathname === "/vp/sessions/start") {
       const body = await readBody(request);
       const owners = requestOwners(request, body.clientId, { allowGuest: true });
@@ -739,7 +749,7 @@ const server = http.createServer(async (request, response) => {
     if (request.method === "POST" && url.pathname === "/vp/sessions/finish") {
       const body = await readBody(request);
       const owners = requestOwners(request, body.clientId, { allowGuest: true });
-      return finishVpSession(String(body.id || ""), owners.primary) ? json(response, 200, { ok: true }) : json(response, 404, { error: "VP 记录不存在或不属于当前账号" });
+      return finishVpSession(String(body.id || ""), owners.primary, { abandoned: body.abandoned === true }) ? json(response, 200, { ok: true }) : json(response, 404, { error: "VP 记录不存在或不属于当前账号" });
     }
     if (request.method === "GET" && url.pathname === "/problemset") return json(response, 200, { problems: await getProblemset() }, { "Cache-Control": "public, max-age=600" });
     if (request.method === "GET" && url.pathname === "/codeforces/problems") {

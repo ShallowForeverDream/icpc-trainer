@@ -7,6 +7,8 @@ import { gzipSync, gunzipSync } from "node:zlib";
 const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const PERSONAL_STATE_LIMIT = 2 * 1024 * 1024;
 const VP_SESSION_TTL = 30 * 24 * 60 * 60_000;
+const VP_HISTORY_TTL = 365 * 24 * 60 * 60_000;
+const VP_HISTORY_LIMIT = 50;
 
 mkdirSync(dirname(DB_PATH), { recursive: true });
 const db = new DatabaseSync(DB_PATH);
@@ -313,13 +315,21 @@ export function readPlatformSubmission(owners, requestId, options = {}) {
 export function persistVpSession(ownerKey, session) {
   const now = Date.now();
   const startedAt = Number(session.startedAt) || null;
-  const status = startedAt ? "running" : "ready";
+  const status = session.finishedAt ? "finished" : startedAt ? "running" : "ready";
+  const expiresAt = now + (status === "finished" ? VP_HISTORY_TTL : VP_SESSION_TTL);
+  if (status !== "finished") {
+    db.prepare("DELETE FROM vp_sessions WHERE owner_key = ? AND id <> ? AND status IN ('ready', 'running')")
+      .run(ownerKey, session.id);
+  }
   db.prepare(`INSERT INTO vp_sessions (id, owner_key, primary_handle, status, payload, started_at, created_at, updated_at, expires_at)
     VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
     ON CONFLICT(id) DO UPDATE SET owner_key = excluded.owner_key, primary_handle = excluded.primary_handle,
       status = excluded.status, payload = excluded.payload, started_at = excluded.started_at,
       updated_at = excluded.updated_at, expires_at = excluded.expires_at`)
-    .run(session.id, ownerKey, session.handle, status, encode(session), startedAt, now, now, now + VP_SESSION_TTL);
+    .run(session.id, ownerKey, session.handle, status, encode(session), startedAt, now, now, expiresAt);
+  db.prepare(`DELETE FROM vp_sessions WHERE owner_key = ? AND id IN (
+    SELECT id FROM vp_sessions WHERE owner_key = ? AND status = 'finished' ORDER BY updated_at DESC LIMIT -1 OFFSET ?
+  )`).run(ownerKey, ownerKey, VP_HISTORY_LIMIT);
   pruneVpData(now);
   return session;
 }
@@ -350,6 +360,14 @@ export function readVpSession(id, ownerKey) {
   return publicSession(sessionRow(id, ownerKey));
 }
 
+export function listVpHistory(ownerKey, limit = 20) {
+  const requestedLimit = Math.max(1, Math.min(VP_HISTORY_LIMIT, Number(limit) || 20));
+  return db.prepare("SELECT * FROM vp_sessions WHERE owner_key = ? AND status = 'finished' AND expires_at > ? ORDER BY updated_at DESC LIMIT ?")
+    .all(ownerKey, Date.now(), requestedLimit)
+    .map((row) => publicSession(row))
+    .filter((session) => session?.standings?.finished === true);
+}
+
 export function startVpSession(id, ownerKey, startedAt = Date.now()) {
   const row = sessionRow(id, ownerKey);
   if (!row) return null;
@@ -361,8 +379,18 @@ export function startVpSession(id, ownerKey, startedAt = Date.now()) {
   return session;
 }
 
-export function finishVpSession(id, ownerKey) {
-  const result = db.prepare("UPDATE vp_sessions SET status = 'finished', updated_at = ? WHERE id = ? AND owner_key = ?").run(Date.now(), id, ownerKey);
+export function finishVpSession(id, ownerKey, { abandoned = false } = {}) {
+  const row = sessionRow(id, ownerKey);
+  if (!row) return false;
+  const timestamp = Date.now();
+  const session = publicSession(row);
+  session.finishedAt = timestamp;
+  session.abandoned = Boolean(abandoned || session.standings?.finished !== true);
+  const result = db.prepare("UPDATE vp_sessions SET status = 'finished', payload = ?, updated_at = ?, expires_at = ? WHERE id = ? AND owner_key = ?")
+    .run(encode(session), timestamp, timestamp + VP_HISTORY_TTL, id, ownerKey);
+  db.prepare(`DELETE FROM vp_sessions WHERE owner_key = ? AND id IN (
+    SELECT id FROM vp_sessions WHERE owner_key = ? AND status = 'finished' ORDER BY updated_at DESC LIMIT -1 OFFSET ?
+  )`).run(ownerKey, ownerKey, VP_HISTORY_LIMIT);
   return Boolean(result.changes);
 }
 
@@ -404,8 +432,9 @@ export function persistenceStats() {
     (SELECT COUNT(*) FROM personal_state) AS personal_states,
     (SELECT COUNT(*) FROM platform_submissions) AS platform_submissions,
     (SELECT COUNT(*) FROM vp_sessions WHERE status IN ('ready', 'running')) AS active_vps,
+    (SELECT COUNT(*) FROM vp_sessions WHERE status = 'finished') AS vp_history,
     (SELECT COUNT(*) FROM vp_standing_snapshots) AS vp_snapshots`).get();
-  return { personalStates: Number(row.personal_states), platformSubmissions: Number(row.platform_submissions), activeVps: Number(row.active_vps), vpSnapshots: Number(row.vp_snapshots) };
+  return { personalStates: Number(row.personal_states), platformSubmissions: Number(row.platform_submissions), activeVps: Number(row.active_vps), vpHistory: Number(row.vp_history), vpSnapshots: Number(row.vp_snapshots) };
 }
 
 export function closePersistenceForTests() {

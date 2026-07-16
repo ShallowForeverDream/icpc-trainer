@@ -322,6 +322,9 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(page, /vp-room-tabs/);
   assert.match(page, /只看我的队伍/);
   assert.match(page, /relativeSubmissionTime/);
+  assert.match(page, /\/vp\/sessions\/history/);
+  assert.match(page, /我的常规 VP/);
+  assert.match(page, /最终排名、罚时与组卷题目已保存/);
   assert.match(detail, /VP · Problem/);
   assert.match(detail, /直接提交/);
   assert.match(detail, /autoSubmit: true/);

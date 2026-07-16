@@ -54,12 +54,17 @@ test("persists bounded runtime data, personal state, platform submissions, VP se
     assert.equal(persistence.readActiveVpSession("user:7").id, session.id);
     const started = persistence.startVpSession(session.id, "user:7", now);
     assert.ok(started.startedAt >= now && started.startedAt <= Date.now() + 60_000);
-    persistence.writeVpSnapshot(`session:${session.id}`, session.id, 3, { rows: [{ handle: "ShallowDream2" }] });
+    persistence.writeVpSnapshot(`session:${session.id}`, session.id, 3, { finished: true, participantRows: [{ handle: "ShallowDream2", rank: 7, solved: 4, penalty: 321 }], rows: [{ handle: "ShallowDream2" }] });
     assert.equal(persistence.readVpSnapshot(`session:${session.id}`, 3).value.rows[0].handle, "ShallowDream2");
     assert.equal(persistence.readVpSession(session.id, "user:7").standings.rows.length, 1);
     assert.equal(persistence.finishVpSession(session.id, "user:7"), true);
     assert.equal(persistence.readActiveVpSession("user:7"), null);
+    const history = persistence.listVpHistory("user:7");
+    assert.equal(history.length, 1);
+    assert.equal(history[0].standings.participantRows[0].rank, 7);
+    assert.ok(history[0].finishedAt >= now);
     assert.equal(persistence.persistenceStats().platformSubmissions, 2);
+    assert.equal(persistence.persistenceStats().vpHistory, 1);
   } finally {
     persistence.closePersistenceForTests();
     await rm(directory, { recursive: true, force: true });

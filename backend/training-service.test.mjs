@@ -61,6 +61,10 @@ test("records deliberate-practice outcomes and accepts product feedback", async 
     });
     assert.equal(historyResponse.status, 200);
 
+    const regularVpHistoryResponse = await fetch(`${baseUrl}/vp/sessions/history?clientId=${clientId}&limit=20`);
+    assert.equal(regularVpHistoryResponse.status, 200);
+    assert.deepEqual((await regularVpHistoryResponse.json()).sessions, []);
+
     const archiveDraft = { sourceCode: "int main() { return 0; }", languageValue: "C++20", fileName: "main.cpp" };
     const saveDraftResponse = await fetch(`${baseUrl}/state`, {
       method: "POST",

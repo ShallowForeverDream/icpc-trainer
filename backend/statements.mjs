@@ -18,7 +18,7 @@ const DB_PATH = process.env.DB_PATH || "/data/icpc-trainer.sqlite";
 const TRANSLATOR_BASE_URL = String(process.env.TRANSLATOR_BASE_URL || process.env.OLLAMA_BASE_URL || "").replace(/\/$/, "");
 const TRANSLATOR_MODEL = process.env.TRANSLATOR_MODEL || "qwen2.5-1.5b-instruct";
 export const TRANSLATION_VERSION = 22;
-export const ARCHIVE_TRANSLATION_VERSION = 3;
+export const ARCHIVE_TRANSLATION_VERSION = 4;
 const FAST_TRANSLATOR_AUTH_URL = "https://edge.microsoft.com/translate/auth";
 const FAST_TRANSLATOR_URL = "https://api-edge.cognitive.microsofttranslator.com/translate?api-version=3.0&from=en&to=zh-Hans";
 const USER_AGENT = "icpc-trainer-statement-importer/0.4 (+https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site)";
@@ -121,9 +121,12 @@ if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => 
 if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "reviewed_at")) db.exec("ALTER TABLE problem_statements ADD COLUMN reviewed_at INTEGER");
 if (!db.prepare("PRAGMA table_info(problem_statements)").all().some((column) => column.name === "reviewed_by")) db.exec("ALTER TABLE problem_statements ADD COLUMN reviewed_by TEXT");
 if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "chinese_source_url")) db.exec("ALTER TABLE archive_statements ADD COLUMN chinese_source_url TEXT");
+if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "translation_version")) db.exec("ALTER TABLE archive_statements ADD COLUMN translation_version INTEGER NOT NULL DEFAULT 0");
 if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "translation_reviewed")) db.exec("ALTER TABLE archive_statements ADD COLUMN translation_reviewed INTEGER NOT NULL DEFAULT 0");
 if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "reviewed_at")) db.exec("ALTER TABLE archive_statements ADD COLUMN reviewed_at INTEGER");
 if (!db.prepare("PRAGMA table_info(archive_statements)").all().some((column) => column.name === "reviewed_by")) db.exec("ALTER TABLE archive_statements ADD COLUMN reviewed_by TEXT");
+db.prepare("UPDATE archive_statements SET translation_version = ? WHERE chinese_source_url IS NOT NULL AND chinese_json IS NOT NULL AND translation_version < ?")
+  .run(ARCHIVE_TRANSLATION_VERSION, ARCHIVE_TRANSLATION_VERSION);
 
 const now = () => Date.now();
 const sha256 = (value) => createHash("sha256").update(value).digest("hex");
@@ -837,6 +840,8 @@ function applySourceGlossary(value) {
     [/\bedges?\b/gi, "边"],
     [/\bintegers?\b/gi, "整数"],
     [/\bsequences?\b/gi, "序列"],
+    [/\bproperties?\b/gi, "属性"],
+    [/\bsuggestions?\b/gi, "建议"],
     [/\bdistinct\b/gi, "互不相同"],
     [/\bat most\b/gi, "至多"],
     [/\bat least\b/gi, "至少"],
@@ -1022,6 +1027,16 @@ function polishChinese(value) {
     .replace(/您/g, "你")
     .replace(/\s+([，。；：！？])/g, "$1")
     .trim();
+}
+
+function archiveTitleTranslation(source, translated) {
+  const title = polishChinese(translated);
+  const sourceTitle = String(source || "").trim();
+  if (!title || !/[\u3400-\u9fff]/.test(title) || /[\r\n]/.test(title)) return sourceTitle;
+  if (title.length > Math.max(32, sourceTitle.length * 3)) return sourceTitle;
+  if (/输出/.test(title) && !/\b(?:output|print)\b/i.test(sourceTitle)) return sourceTitle;
+  if (/输入/.test(title) && !/\binput\b/i.test(sourceTitle)) return sourceTitle;
+  return title;
 }
 
 function escapeHtml(value) {
@@ -1582,10 +1597,11 @@ async function translateArchiveStatement(id) {
     const chinese = structuredClone(original);
     const records = archiveTranslationRecords(chinese);
     const masked = records.map((record) => maskArchiveRecord(record.text));
-    const translated = await translateReviewedTexts([row.title_en, ...masked.map((record) => record.masked)]);
-    const titleZh = translated[0] || row.title_en;
+    const [titleDraft] = await translateTexts([row.title_en]);
+    const titleZh = archiveTitleTranslation(row.title_en, titleDraft);
+    const translated = await translateReviewedTexts(masked.map((record) => record.masked));
     for (let index = 0; index < records.length; index += 1) {
-      records[index].target[records[index].key] = restoreArchiveRecord(translated[index + 1] || masked[index].masked, records[index].text, masked[index].formulas);
+      records[index].target[records[index].key] = restoreArchiveRecord(translated[index] || masked[index].masked, records[index].text, masked[index].formulas);
     }
     for (const section of chinese.sections || []) section.title = chineseSectionTitle(section.key);
 

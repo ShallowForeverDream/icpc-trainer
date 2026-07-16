@@ -72,7 +72,7 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
   const directory = await mkdtemp(join(tmpdir(), "icpc-trainer-archive-calc-"));
   process.env.NODE_ENV = "test";
   process.env.DB_PATH = join(directory, "calculator.sqlite");
-  const { calculateArchiveStandings } = await import(`./archive-scoreboards.mjs?calc=${Date.now()}`);
+  const { calculateArchiveStandings, createArchiveScoreboardHandler, normalizeCodeforcesArchiveStandings } = await import(`./archive-scoreboards.mjs?calc=${Date.now()}`);
   const persistence = await import("./persistence.mjs");
   try {
     const frozen = calculateArchiveStandings(fixture, 15_500, false, "official");
@@ -86,6 +86,57 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
     assert.equal(teamOne.solved, 2);
     assert.equal(teamOne.penalty, 20 + 20 + 250);
     assert.equal(revealed.rows[0].teamId, "one");
+
+    const raw = normalizeCodeforcesArchiveStandings({
+      contest: { name: "Asia Regional", startTimeSeconds: 1_730_000_000, durationSeconds: 18_000 },
+      problems: [{ index: "A" }, { index: "B" }],
+      rows: [
+        { party: { participantType: "CONTESTANT", teamId: 7, teamName: "Official Team", members: [{ handle: "one" }, { handle: "two" }] }, problemResults: [{ points: 1, rejectedAttemptCount: 2, bestSubmissionTimeSeconds: 1_200 }, { points: 0, rejectedAttemptCount: 1 }] },
+        { party: { participantType: "PRACTICE", members: [{ handle: "practice" }] }, problemResults: [{ points: 1, bestSubmissionTimeSeconds: 100 }] },
+      ],
+    }, 106268);
+    assert.equal(raw.teams.length, 1);
+    assert.equal(raw.runs.length, 3);
+    assert.equal(raw.submissionCount, 4);
+    assert.equal(raw.config.frozen_time, 3_600);
+    const board = calculateArchiveStandings(raw, 1_300, false, "official");
+    assert.equal(board.rows[0].solved, 1);
+    assert.equal(board.rows[0].penalty, 60);
+    assert.equal(board.rows[0].problems.A.wrongAttempts, 2);
+    assert.match(raw.sourceFidelity, /解题时间与最终罚时/);
+
+    const exact = normalizeCodeforcesArchiveStandings({
+      contest: { name: "Asia Regional", startTimeSeconds: 1_730_000_000, durationSeconds: 18_000 },
+      problems: [{ index: "A" }, { index: "B" }],
+      rows: [{ party: { participantType: "CONTESTANT", teamId: 7, teamName: "Official Team", members: [{ handle: "one" }] }, problemResults: [{ points: 1, rejectedAttemptCount: 1, bestSubmissionTimeSeconds: 1_200 }, {}] }],
+    }, 106268, [
+      { id: 10, relativeTimeSeconds: 300, author: { participantType: "CONTESTANT", teamId: 7 }, problem: { index: "A" }, verdict: "WRONG_ANSWER" },
+      { id: 11, relativeTimeSeconds: 1_200, author: { participantType: "CONTESTANT", teamId: 7 }, problem: { index: "A" }, verdict: "OK" },
+      { id: 12, relativeTimeSeconds: 200, author: { participantType: "PRACTICE", members: [{ handle: "practice" }] }, problem: { index: "A" }, verdict: "OK" },
+    ]);
+    assert.equal(exact.runs.length, 2);
+    assert.match(exact.sourceFidelity, /逐提交时间轴/);
+    assert.equal(calculateArchiveStandings(exact, 500, false, "official").rows[0].problems.A.wrongAttempts, 1);
+    assert.equal(calculateArchiveStandings(exact, 1_300, false, "official").rows[0].penalty, 40);
+
+    const methods = [];
+    let response;
+    const handler = createArchiveScoreboardHandler({
+      json: (_target, status, value) => { response = { status, value }; },
+      codeforces: async (method) => {
+        methods.push(method);
+        return method === "contest.standings" ? {
+          contest: { name: "Asia Regional", startTimeSeconds: 1_730_000_000, durationSeconds: 18_000 },
+          problems: [{ index: "A" }],
+          rows: [{ party: { participantType: "CONTESTANT", teamId: 7, teamName: "Official Team" }, problemResults: [{ points: 1, bestSubmissionTimeSeconds: 1_200 }] }],
+        } : [{ id: 11, relativeTimeSeconds: 1_200, author: { participantType: "CONTESTANT", teamId: 7 }, problem: { index: "A" }, verdict: "OK" }];
+      },
+    });
+    await handler({ method: "GET" }, {}, new URL("http://localhost/archive/scoreboards?source=codeforces&gymId=106268&id=2025-yokohama&name=Yokohama&elapsed=1300&reveal=1&group=official"));
+    assert.deepEqual(methods, ["contest.standings", "contest.status"]);
+    assert.equal(response.status, 200);
+    assert.equal(response.value.rows[0].solved, 1);
+    assert.match(response.value.contest.sourceFidelity, /逐提交时间轴/);
   } finally {
     persistence.closePersistenceForTests();
     await rm(directory, { recursive: true, force: true });
@@ -128,9 +179,10 @@ test("persists XCPCIO sources and generated scoreboard views in SQLite across re
     assert.equal(health.caches.archiveScoreboardSources, 1);
     assert.equal(health.caches.archiveScoreboardViews, 1);
     assert.equal(health.memory.limitMiB, 512);
-    assert.equal(health.versions.api, 7);
+    assert.equal(health.versions.api, 8);
+    assert.equal(health.integrations.codeforcesAuthenticated, false);
     assert.equal(health.versions.statementTranslation, 22);
-    assert.equal(health.versions.archiveStatementTranslation, 3);
+    assert.equal(health.versions.archiveStatementTranslation, 4);
 
     await stopBackend(backend);
     await new Promise((resolve) => fixtureServer.close(resolve));

@@ -118,6 +118,139 @@ async function loadSource(boardPath) {
   return job;
 }
 
+function codeforcesTeamId(party, index) {
+  if (Number.isInteger(party?.teamId)) return `cf-team-${party.teamId}`;
+  const handles = Array.isArray(party?.members) ? party.members.map((member) => String(member?.handle || "").trim()).filter(Boolean) : [];
+  return `cf-party-${handles.join("+") || index + 1}`;
+}
+
+function codeforcesTeamName(party, index) {
+  const teamName = String(party?.teamName || "").trim();
+  if (teamName) return teamName;
+  const handles = Array.isArray(party?.members) ? party.members.map((member) => String(member?.handle || "").trim()).filter(Boolean) : [];
+  return handles.join(", ") || `Team ${index + 1}`;
+}
+
+export function normalizeCodeforcesArchiveStandings(value, gymId, submissions = null) {
+  if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new Error("Codeforces Gym 榜单数据无效");
+  const durationSeconds = Math.max(60, Number(value.contest.durationSeconds) || 5 * 60 * 60);
+  const startTimeSeconds = Number(value.contest.startTimeSeconds) || 0;
+  const slots = value.problems.map((problem, index) => safeLabel(problem?.index, String.fromCharCode(65 + index), 8));
+  const teams = [];
+  const runs = [];
+  const officialTeamIds = new Set();
+  let runId = 0;
+
+  value.rows.forEach((row, rowIndex) => {
+    const party = row?.party || {};
+    const participantType = String(party.participantType || "").toUpperCase();
+    if (!party.ghost && participantType !== "CONTESTANT") return;
+    const teamId = codeforcesTeamId(party, rowIndex);
+    const members = Array.isArray(party.members) ? party.members.map((member) => String(member?.handle || "").trim()).filter(Boolean) : [];
+    officialTeamIds.add(teamId);
+    teams.push({ id: teamId, name: codeforcesTeamName(party, rowIndex), organization_id: members.join(", "), group: ["official"] });
+  });
+
+  if (Array.isArray(submissions)) {
+    const problemIndexes = new Map(slots.map((slot, index) => [slot, index]));
+    submissions.forEach((submission, submissionIndex) => {
+      const teamId = codeforcesTeamId(submission?.author || {}, submissionIndex);
+      const problemIndex = problemIndexes.get(String(submission?.problem?.index || ""));
+      if (!officialTeamIds.has(teamId) || problemIndex === undefined) return;
+      const timestamp = Math.max(0, Math.min(durationSeconds, Math.floor(Number(submission.relativeTimeSeconds) || 0)));
+      runs.push({
+        id: `cf-${gymId}-${Number.isInteger(submission.id) ? submission.id : ++runId}`,
+        team_id: teamId,
+        problem_id: problemIndex,
+        timestamp,
+        status: String(submission.verdict || "UNKNOWN"),
+      });
+    });
+  } else value.rows.forEach((row, rowIndex) => {
+    const party = row?.party || {};
+    const participantType = String(party.participantType || "").toUpperCase();
+    if (!party.ghost && participantType !== "CONTESTANT") return;
+    const teamId = codeforcesTeamId(party, rowIndex);
+    slots.forEach((_, problemIndex) => {
+      const result = row.problemResults?.[problemIndex] || {};
+      const rejected = Math.max(0, Math.min(1000, Number(result.rejectedAttemptCount) || 0));
+      const best = Number(result.bestSubmissionTimeSeconds);
+      const solved = Number(result.points) > 0 || Number.isFinite(best) && best >= 0;
+      const timestamp = solved ? Math.max(0, Math.min(durationSeconds, Math.floor(best))) : durationSeconds;
+      if (rejected) runs.push({ id: `cf-${gymId}-${++runId}`, team_id: teamId, problem_id: problemIndex, timestamp, status: "WRONG_ANSWER", attempts: rejected });
+      if (solved) runs.push({ id: `cf-${gymId}-${++runId}`, team_id: teamId, problem_id: problemIndex, timestamp, status: "ACCEPTED" });
+    });
+  });
+
+  const submissionCount = runs.reduce((total, run) => total + Math.max(1, Math.floor(Number(run.attempts) || 1)), 0);
+  return {
+    config: {
+      contest_name: String(value.contest.name || `Codeforces Gym ${gymId}`),
+      start_time: startTimeSeconds,
+      end_time: startTimeSeconds + durationSeconds,
+      frozen_time: Math.min(3600, durationSeconds),
+      penalty: 1200,
+      problem_id: slots,
+      group: { official: "正式队伍" },
+      options: { submission_timestamp_unit: "second" },
+    },
+    teams,
+    runs,
+    submissionCount,
+    organizations: [],
+    boardUrl: `https://codeforces.com/gym/${gymId}/standings`,
+    sourceFidelity: Array.isArray(submissions) ? "Codeforces 原场逐提交时间轴" : "Codeforces 原榜解题时间与最终罚时重放",
+  };
+}
+
+async function loadCodeforcesSubmissions(gymId, codeforces) {
+  const submissions = [];
+  const pageSize = 10_000;
+  for (let from = 1; from <= 100_000; from += pageSize) {
+    const page = await codeforces("contest.status", new URLSearchParams({ contestId: String(gymId), from: String(from), count: String(pageSize) }));
+    if (!Array.isArray(page)) throw new Error("Codeforces Gym 提交时间轴数据无效");
+    submissions.push(...page);
+    if (page.length < pageSize) return submissions;
+  }
+  throw new Error("Codeforces Gym 提交时间轴超过安全上限");
+}
+
+async function loadCodeforcesSource(gymId, codeforces) {
+  if (typeof codeforces !== "function") throw new Error("Codeforces Gym 榜单服务未配置");
+  const cacheKey = `codeforces:${gymId}`;
+  const timestamp = Date.now();
+  const cached = readRuntimeCache(SOURCE_NAMESPACE, cacheKey);
+  if (cached && cached.expiresAt > timestamp) return { ...cached, cacheHit: true };
+  if (sourceJobs.has(cacheKey)) return sourceJobs.get(cacheKey);
+  if (sourceJobs.size >= 8) throw new HttpError(503, "真实榜单同步队列繁忙，请稍后重试", { expose: true });
+  const job = (async () => {
+    try {
+      const standings = await codeforces("contest.standings", new URLSearchParams({ contestId: String(gymId), from: "1", count: "5000", showUnofficial: "true" }));
+      let submissions = null;
+      try {
+        submissions = await loadCodeforcesSubmissions(gymId, codeforces);
+      } catch (error) {
+        console.warn(`Codeforces Gym ${gymId} submission timeline unavailable; using final standings`, error instanceof Error ? error.message : error);
+      }
+      const value = normalizeCodeforcesArchiveStandings(standings, gymId, submissions);
+      const fetchedAt = Date.now();
+      writeRuntimeCache(SOURCE_NAMESPACE, cacheKey, value, {
+        itemCount: value.runs.length,
+        fetchedAt,
+        expiresAt: fetchedAt + 7 * 24 * 60 * 60_000,
+        staleUntil: fetchedAt + 90 * 24 * 60 * 60_000,
+        maxEntries: 128,
+      });
+      return { value, fetchedAt, expiresAt: fetchedAt + 7 * 24 * 60 * 60_000, staleUntil: fetchedAt + 90 * 24 * 60 * 60_000, cacheHit: false };
+    } catch (error) {
+      if (cached && cached.staleUntil > timestamp) return { ...cached, cacheHit: true, stale: true };
+      throw error;
+    }
+  })().finally(() => sourceJobs.delete(cacheKey));
+  sourceJobs.set(cacheKey, job);
+  return job;
+}
+
 export function calculateArchiveStandings(raw, elapsedSeconds, reveal, group = "all") {
   const config = raw.config || {};
   const start = unixMs(Number(config.start_time) || 0);
@@ -160,8 +293,9 @@ export function calculateArchiveStandings(raw, elapsedSeconds, reveal, group = "
     const state = row?.problems[slot];
     if (!row || !state || state.solved || run.is_ignore) continue;
     const status = String(run.status || "UNKNOWN").toUpperCase().replaceAll(" ", "_");
+    const attemptCount = Math.max(1, Math.min(1000, Math.floor(Number(run.attempts) || 1)));
     if (isFrozen && second > freezeAt) {
-      state.pendingAttempts += 1;
+      state.pendingAttempts += attemptCount;
     } else if (ignoredStatuses.has(status)) {
       continue;
     } else if (pendingStatuses.has(status)) {
@@ -173,7 +307,7 @@ export function calculateArchiveStandings(raw, elapsedSeconds, reveal, group = "
       row.penalty += state.solvedMinutes + state.wrongAttempts * Math.floor(penaltySeconds / 60);
       row.lastSolvedMinutes = state.solvedMinutes;
     } else {
-      state.wrongAttempts += 1;
+      state.wrongAttempts += attemptCount;
     }
   }
 
@@ -186,12 +320,15 @@ export function calculateArchiveStandings(raw, elapsedSeconds, reveal, group = "
   return { rows, slots, elapsedSeconds: elapsed, durationSeconds, freezeAtSeconds: freezeAt, frozen: isFrozen };
 }
 
-function snapshotKey({ boardPath, elapsedBucket, reveal, group, sourceFetchedAt }) {
-  return createHash("sha256").update(JSON.stringify({ boardPath, elapsedBucket, reveal, group, sourceFetchedAt })).digest("hex");
+function snapshotKey({ sourceKey, elapsedBucket, reveal, group, sourceFetchedAt }) {
+  return createHash("sha256").update(JSON.stringify({ sourceKey, elapsedBucket, reveal, group, sourceFetchedAt })).digest("hex");
 }
 
-async function scoreboard(url) {
-  const boardPath = safeBoardPath(url.searchParams.get("boardPath"));
+async function scoreboard(url, codeforces) {
+  const sourceKind = url.searchParams.get("source") === "codeforces" ? "codeforces" : "xcpcio";
+  const boardPath = sourceKind === "xcpcio" ? safeBoardPath(url.searchParams.get("boardPath")) : null;
+  const gymId = sourceKind === "codeforces" ? boundedInteger(url.searchParams.get("gymId"), { min: 1, max: 10_000_000, fallback: 0 }) : 0;
+  if (sourceKind === "codeforces" && !gymId) throw new HttpError(400, "Codeforces Gym 编号无效");
   const id = safeContestId(url.searchParams.get("id"));
   const name = safeLabel(url.searchParams.get("name"), id);
   const group = safeLabel(url.searchParams.get("group"), "all", 100);
@@ -199,8 +336,9 @@ async function scoreboard(url) {
   const requestedElapsed = boundedInteger(url.searchParams.get("elapsed"), { min: 0, max: 24 * 60 * 60, fallback: 0 });
   const elapsedBucket = Math.floor(requestedElapsed / 10);
   const elapsed = elapsedBucket * 10;
-  const source = await loadSource(boardPath);
-  const key = snapshotKey({ boardPath, elapsedBucket, reveal, group, sourceFetchedAt: source.fetchedAt });
+  const sourceKey = sourceKind === "codeforces" ? `codeforces:${gymId}` : `xcpcio:${boardPath}`;
+  const source = sourceKind === "codeforces" ? await loadCodeforcesSource(gymId, codeforces) : await loadSource(boardPath);
+  const key = snapshotKey({ sourceKey, elapsedBucket, reveal, group, sourceFetchedAt: source.fetchedAt });
   const cached = readRuntimeCache(SNAPSHOT_NAMESPACE, key);
   if (cached && cached.expiresAt > Date.now()) return { ...cached.value, cache: { source: true, snapshot: true, persistent: "sqlite" } };
 
@@ -214,10 +352,11 @@ async function scoreboard(url) {
       officialName: safeLabel(source.value.config?.contest_name, name),
       startTime: new Date(startTime).toISOString(),
       endTime: new Date(endTime).toISOString(),
-      boardUrl: `https://board.xcpcio.com/${boardPath}`,
+      boardUrl: source.value.boardUrl || `https://board.xcpcio.com/${boardPath}`,
+      sourceFidelity: source.value.sourceFidelity || "XCPCIO 原场逐提交时间轴",
       groups: source.value.config?.group || {},
       teamCount: source.value.teams.length,
-      runCount: source.value.runs.length,
+      runCount: source.value.submissionCount ?? source.value.runs.length,
     },
     ...calculated,
     generatedAt: new Date().toISOString(),
@@ -234,7 +373,7 @@ async function scoreboard(url) {
   return result;
 }
 
-export function createArchiveScoreboardHandler({ json }) {
+export function createArchiveScoreboardHandler({ json, codeforces }) {
   return async function handleArchiveScoreboards(request, response, url) {
     if (url.pathname !== "/archive/scoreboards") return false;
     if (request.method !== "GET") {
@@ -242,13 +381,12 @@ export function createArchiveScoreboardHandler({ json }) {
       return true;
     }
     try {
-      json(response, 200, await scoreboard(url), { "Cache-Control": "private, max-age=5" });
+      json(response, 200, await scoreboard(url, codeforces), { "Cache-Control": "private, max-age=5" });
     } catch (error) {
       if (error instanceof HttpError) throw error;
-      const message = error instanceof Error && /XCPCIO/.test(error.message) ? error.message : "XCPCIO 真实榜单暂时不可用，请稍后重试";
+      const message = error instanceof Error && /(XCPCIO|Codeforces Gym|API Key)/i.test(error.message) ? error.message : "真实榜单暂时不可用，请稍后重试";
       throw new HttpError(502, message, { expose: true });
     }
     return true;
   };
 }
-

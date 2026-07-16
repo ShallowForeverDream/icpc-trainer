@@ -4,6 +4,7 @@ import { readFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } from "./auth.mjs";
 import { createArchiveScoreboardHandler } from "./archive-scoreboards.mjs";
+import { signCodeforcesParams } from "./codeforces-auth.mjs";
 import { ARCHIVE_TRANSLATION_VERSION, TRANSLATION_VERSION, createStatementHandler } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
 import { buildOriginalVpRows, buildParticipantVpRows, rankVpRows } from "./vp-scoring.mjs";
@@ -35,6 +36,8 @@ const USER_AGENT = "icpc-trainer-backend/0.1";
 const CF_STANDINGS_CACHE_DIR = join(dirname(process.env.DB_PATH || "./data/icpc-trainer.sqlite"), "cf-standings");
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
 const API_MEMORY_LIMIT_MIB = Math.max(128, Math.min(4096, Number(process.env.API_MEMORY_LIMIT_MIB) || 512));
+const CF_API_KEY = String(process.env.CODEFORCES_API_KEY || "").trim();
+const CF_API_SECRET = String(process.env.CODEFORCES_API_SECRET || "").trim();
 const inFlightCodeforces = new Map();
 let apiQueue = Promise.resolve();
 let lastApiCall = 0;
@@ -69,9 +72,14 @@ async function runCodeforces(method, params) {
     const timeout = setTimeout(() => controller.abort(), 30_000);
     try {
       lastApiCall = Date.now();
-      const response = await fetch(`${CF_BASE}/${method}?${params}`, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" }, signal: controller.signal });
+      const requestParams = signCodeforcesParams(method, params, { apiKey: CF_API_KEY, apiSecret: CF_API_SECRET });
+      const response = await fetch(`${CF_BASE}/${method}?${requestParams}`, { headers: { "User-Agent": USER_AGENT, Accept: "application/json" }, signal: controller.signal });
       const payload = await response.json().catch(() => null);
-      if (!response.ok || payload?.status !== "OK") throw new HttpError(502, "Codeforces 暂时不可用，请稍后重试", { expose: true });
+      if (!response.ok || payload?.status !== "OK") {
+        const comment = String(payload?.comment || "");
+        if (/authenticated|api key|apisig|signature/i.test(comment)) throw new HttpError(503, "Codeforces Gym 榜单需要在服务器配置 API Key", { expose: true });
+        throw new HttpError(502, "Codeforces 暂时不可用，请稍后重试", { expose: true });
+      }
       return payload.result;
     } finally {
       clearTimeout(timeout);
@@ -448,7 +456,7 @@ function pickCombined(pool, desiredCount, target, random) {
 
 const readBody = (request) => readJsonBody(request, { maxBytes: 64 * 1024 });
 const handleAuth = createAuthHandler({ json, readBody, clientIp });
-const handleArchiveScoreboards = createArchiveScoreboardHandler({ json });
+const handleArchiveScoreboards = createArchiveScoreboardHandler({ json, codeforces });
 const handleStatements = createStatementHandler({ json, clientIp });
 
 function requestOwners(request, clientIdValue, { allowGuest = false } = {}) {
@@ -655,8 +663,11 @@ const server = http.createServer(async (request, response) => {
         codeforcesInFlight: inFlightCodeforces.size,
       },
       persistence: persistenceStats(),
+      integrations: {
+        codeforcesAuthenticated: Boolean(CF_API_KEY && CF_API_SECRET),
+      },
       versions: {
-        api: 7,
+        api: 8,
         statementTranslation: TRANSLATION_VERSION,
         archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,
       },

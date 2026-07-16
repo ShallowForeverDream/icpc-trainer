@@ -377,6 +377,9 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /qojProblemIds: \[5433, 5434, 5435/);
   assert.match(catalog, /gymId: 105143/);
   assert.match(catalog, /gymId: 106554/);
+  assert.match(catalog, /id: "2025-yokohama"[\s\S]*boardSource: "codeforces"[\s\S]*gymId: 106268/);
+  assert.match(catalog, /id: "2024-yokohama"[\s\S]*boardSource: "codeforces"[\s\S]*gymId: 105633/);
+  assert.match(page, /国际区域赛/);
   assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /URLSearchParams\(window\.location\.search\)/);
@@ -450,6 +453,9 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(backendScoreboard, /archive-scoreboard-source/);
   assert.match(backendScoreboard, /archive-scoreboard-view/);
   assert.match(backendScoreboard, /persistent: "sqlite"/);
+  assert.match(backendScoreboard, /normalizeCodeforcesArchiveStandings/);
+  assert.match(backendScoreboard, /Codeforces 原场逐提交时间轴/);
+  assert.match(backendScoreboard, /contest\.status/);
   const response = await render("/vp/archive");
   assert.equal(response.status, 200);
   const html = await response.text();
@@ -679,7 +685,7 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /Math\.max\(0, TRANSLATION_VERSION - 1\)/);
   assert.match(statements, /正在快速生成中文题面/);
   assert.match(statements, /extractArchiveGymStatement/);
-  assert.match(statements, /ARCHIVE_TRANSLATION_VERSION = 3/);
+  assert.match(statements, /ARCHIVE_TRANSLATION_VERSION = 4/);
   assert.match(statements, /assessOfficialChineseArchive/);
   assert.match(statements, /TRANSLATION_VERSION = 22/);
   assert.match(statements, /edge\.microsoft\.com\/translate\/auth/);
@@ -692,6 +698,8 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(compose, /ggml-org\/llama\.cpp:server/);
   assert.match(compose, /condition: service_healthy/);
   assert.match(compose, /API_MEMORY_LIMIT_MIB: 512/);
+  assert.match(compose, /CODEFORCES_API_KEY/);
+  assert.match(compose, /CODEFORCES_API_SECRET/);
   assert.match(dockerfile, /tesseract-ocr/);
   assert.match(dockerfile, /poppler-utils/);
   assert.match(nginx, /\/icpc-api\//);
@@ -729,6 +737,7 @@ test("ships invite-only authentication and administration", async () => {
   assert.match(admin, /数据写入 SQLite/);
   assert.match(admin, /versions\.archiveStatementTranslation/);
   assert.match(admin, /升级阿里云后显示版本/);
+  assert.match(admin, /Gym 原榜/);
   assert.match(admin, /可注册人数/);
   assert.match(admin, /invite-presets/);
   assert.match(admin, /撤销/);

@@ -6,11 +6,16 @@ export async function archiveScoreboard(contest: ArchiveContest, elapsedSeconds:
   const params = new URLSearchParams({
     id: contest.id,
     name: contest.name,
-    boardPath: contest.boardPath,
     elapsed: String(elapsedSeconds),
     reveal: reveal ? "1" : "0",
     group,
   });
+  if (contest.boardSource === "codeforces") {
+    params.set("source", "codeforces");
+    if (contest.gymId) params.set("gymId", String(contest.gymId));
+  } else if (contest.boardPath) {
+    params.set("boardPath", contest.boardPath);
+  }
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), 25_000);
   try {

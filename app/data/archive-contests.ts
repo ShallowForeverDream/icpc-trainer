@@ -3,8 +3,9 @@ export type ArchiveContest = {
   year: 2022 | 2023 | 2024 | 2025 | 2026;
   name: string;
   city: string;
-  type: "邀请赛" | "省赛" | "区域赛" | "东亚决赛";
-  boardPath: string;
+  type: "邀请赛" | "省赛" | "区域赛" | "国际区域赛" | "东亚决赛";
+  boardPath?: string;
+  boardSource?: "xcpcio" | "codeforces";
   problemCount: number;
   gymId?: number;
   qojContestId?: number;
@@ -71,6 +72,10 @@ export const archiveContests: ArchiveContest[] = [
     problemTitles: ["Bipartite Graph Matching Problem", "Travelling", "Stonebag", "Dumb Problem", "Bipartite Graph Weighting Problem", "Find the Circuit", "Watering System", "Longest Common Prefix", "DFS Order - Extra Stage", "Re: Becoming the Programming Champion", "Cyclic Shift", "Cyclic Shift II"],
   },
   { id: "2025-ecfinal", year: 2025, name: "ICPC 东亚区决赛", city: "EC-Final", type: "东亚决赛", boardPath: "icpc/50th/ecfinal", problemCount: 12, qojContestId: 3295, qojProblemIds: [16328, 16329, 16330, 16331, 16332, 16333, 16334, 16335, 16336, 16337, 16338, 16339] },
+  {
+    id: "2025-yokohama", year: 2025, name: "ICPC 亚洲横滨区域赛", city: "日本 · 横滨", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 106268,
+    problemTitles: ["Tatami Renovation", "Minimizing Wildlife Damage", "Seagull Population", "Decompose and Concatenate", "Cutting Tofu", "Astral Geometry", "Charity Raffle", "U-Shaped Panels", "Game of Names", "ICPC Board", "Membership Structure of a Secret Society", "Common Tangent Lines"],
+  },
 
   {
     id: "2024-xian-invitational", year: 2024, name: "ICPC 西安全国邀请赛", city: "西安", type: "邀请赛", boardPath: "icpc/49th/xian-invitational", problemCount: 13, staticStatements: "translated-chinese",
@@ -114,6 +119,10 @@ export const archiveContests: ArchiveContest[] = [
     qojProblemIds: [9975, 9976, 9977, 9978, 9979, 9980, 9981, 9982, 9983, 9984, 9985, 9986],
     problemTitles: ["Hitoshizuku", "Guess the Polygon 2", "Norte da Universidade", "Keystone Correction", "Corrupted Scoreboard Log", "Boolean Function Reconstruction", "Collatz Conjecture", "Staircase Museum", "Color-Balanced Tree", "The Mysterious Shop", "Exploration Boundary", "Shiori"],
   },
+  {
+    id: "2024-yokohama", year: 2024, name: "ICPC 亚洲横滨区域赛", city: "日本 · 横滨", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 105633,
+    problemTitles: ["Ribbon on the Christmas Present", "The Sparsest Number in Between", "Omnes Viae Yokohamam Ducunt?", "Tree Generators", "E-Circuit Is Now on Sale!", "The Farthest Point", "Beyond the Former Explorer", "Remodeling the Dungeon 2", "Greatest of the Greatest Common Divisors", "Mixing Solutions", "Scheduling Two Meetings", "Peculiar Protocol"],
+  },
 
   {
     id: "2023-shenyang", year: 2023, name: "ICPC 区域赛沈阳站", city: "沈阳", type: "区域赛", boardPath: "icpc/48th/shenyang", problemCount: 13, gymId: 104869,
@@ -147,7 +156,7 @@ export function archiveProblemUrl(contest: ArchiveContest, slot: string) {
   const luoguProblemId = contest.luoguProblemIds?.[slot.charCodeAt(0) - 65];
   if (luoguProblemId) return `https://www.luogu.com.cn/problem/${luoguProblemId}`;
   if (contest.luoguContestId) return `https://www.luogu.com.cn/contest/${contest.luoguContestId}`;
-  return `https://board.xcpcio.com/${contest.boardPath}`;
+  return contest.boardPath ? `https://board.xcpcio.com/${contest.boardPath}` : "/vp/archive";
 }
 
 export function archiveProblemHref(contest: ArchiveContest, slot: string) {

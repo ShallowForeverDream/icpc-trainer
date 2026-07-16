@@ -16,7 +16,7 @@ import { readStoredJson } from "../../lib/storage";
 type ProblemState = { solved: boolean; wrongAttempts: number; pendingAttempts: number; solvedMinutes: number | null };
 type StandingRow = { rank: number; teamId: string; name: string; organization: string; groups: string[]; solved: number; penalty: number; lastSolvedMinutes: number | null; problems: Record<string, ProblemState>; mine?: boolean };
 type ScoreboardPayload = {
-  contest: { id: string; officialName: string; name: string; startTime: string; endTime: string; boardUrl: string; groups: Record<string, string>; teamCount: number; runCount: number };
+  contest: { id: string; officialName: string; name: string; startTime: string; endTime: string; boardUrl: string; sourceFidelity?: string; groups: Record<string, string>; teamCount: number; runCount: number };
   rows: StandingRow[];
   slots: string[];
   elapsedSeconds: number;
@@ -409,13 +409,13 @@ export default function ArchiveVpPage() {
     </section>
     <section className="archive-filters">
       <div className="segmented">{([2026, 2025, 2024, "past"] as const).map((value) => <button key={value} className={year === value ? "active" : ""} onClick={() => setYear(value)}>{value === "past" ? "往届" : value}</button>)}</div>
-      <div className="segmented">{["全部", "邀请赛", "省赛", "区域赛", "东亚决赛"].map((value) => <button key={value} className={type === value ? "active" : ""} onClick={() => setType(value)}>{value}</button>)}</div>
+      <div className="segmented">{["全部", "邀请赛", "省赛", "区域赛", "国际区域赛", "东亚决赛"].map((value) => <button key={value} className={type === value ? "active" : ""} onClick={() => setType(value)}>{value}</button>)}</div>
       <input aria-label="搜索赛事" value={query} onChange={(event) => setQuery(event.target.value)} placeholder="搜索城市或赛事" />
     </section>
     <section className="archive-grid">{filteredContests.map((contest) => {
       const integrated = archiveContestIntegrated(contest);
       return <article key={contest.id} className={`archive-card${integrated ? "" : " pending"}`}>
-        <div><span>{contest.year}</span><i>{contest.type}</i></div><h2>{contest.name}</h2><p>{contest.city} · {contest.problemCount} 题 · {integrated ? "题面与提交已接入" : "题面接入中"}</p>
+        <div><span>{contest.year}</span><i>{contest.type}</i></div><h2>{contest.name}</h2><p>{contest.city} · {contest.problemCount} 题 · {integrated ? contest.boardSource === "codeforces" ? "Gym 原榜、题面与提交" : "题面与提交已接入" : "题面接入中"}</p>
         <button className="button button-primary" disabled={!integrated} onClick={() => chooseContest(contest.id)}>{integrated ? "开始准备" : "即将开放"}</button>
       </article>;
     })}</section>
@@ -436,7 +436,7 @@ export default function ArchiveVpPage() {
 
   return <AppShell active="模拟赛">
     <section className="archive-room-head">
-      <div><button className="archive-back" onClick={() => saveSession(null)}>← 更换赛事</button><span className="eyebrow"><span className="live-dot" /> {session.startedAt ? finished ? "比赛结束" : "原场榜单同步中" : "赛前准备"}</span><h1>{scoreboard?.contest.officialName || contest?.name || "历届补题"}</h1><p>{scoreboard ? `${new Date(scoreboard.contest.startTime).toLocaleDateString("zh-CN")} · ${scoreboard.contest.teamCount} 支真实队伍 · ${scoreboard.contest.runCount} 条提交` : "正在读取原场数据…"}</p></div>
+      <div><button className="archive-back" onClick={() => saveSession(null)}>← 更换赛事</button><span className="eyebrow"><span className="live-dot" /> {session.startedAt ? finished ? "比赛结束" : "原场榜单同步中" : "赛前准备"}</span><h1>{scoreboard?.contest.officialName || contest?.name || "历届补题"}</h1><p>{scoreboard ? `${new Date(scoreboard.contest.startTime).toLocaleDateString("zh-CN")} · ${scoreboard.contest.teamCount} 支真实队伍 · ${scoreboard.contest.runCount} 条提交${scoreboard.contest.sourceFidelity ? ` · ${scoreboard.contest.sourceFidelity}` : ""}` : "正在读取原场数据…"}</p></div>
       <div className="archive-clock"><small>{session.startedAt ? "剩余时间" : "原场时长"}</small><b>{clock(session.startedAt ? remaining : duration)}</b><span>我的队伍：{!session.startedAt ? "等待开赛" : mine ? `第 ${mine.rank} 名 · ${mine.solved} 题` : "等待榜单"}</span></div>
     </section>
     <div className="archive-timeline"><i style={{ width: `${progress}%` }} /><span className="freeze-marker" style={{ left: `${(scoreboard?.freezeAtSeconds || duration * .8) / duration * 100}%` }}>封榜</span></div>

@@ -102,16 +102,18 @@ test("uses a concise white, pink, and violet visual system across the product", 
 });
 
 test("ships a readable contest template catalog and dedicated code reader", async () => {
-  const [catalog, expandedCatalog, page, detail, styles] = await Promise.all([
+  const [catalog, expandedCatalog, advancedCatalog, page, detail, styles] = await Promise.all([
     readFile(new URL("app/templates/data.ts", root), "utf8"),
     readFile(new URL("app/templates/expanded-data.ts", root), "utf8"),
+    readFile(new URL("app/templates/advanced-data.ts", root), "utf8"),
     readFile(new URL("app/templates/page.tsx", root), "utf8"),
     readFile(new URL("app/templates/[slug]/page.tsx", root), "utf8"),
     readFile(new URL("app/globals.css", root), "utf8"),
   ]);
   const templateCount = (catalog.match(/^    slug: "/gm) ?? []).length
-    + (expandedCatalog.match(/^    slug: "/gm) ?? []).length;
-  assert.equal(templateCount, 32);
+    + (expandedCatalog.match(/^    slug: "/gm) ?? []).length
+    + (advancedCatalog.match(/^    slug: "/gm) ?? []).length;
+  assert.equal(templateCount, 40);
   assert.match(catalog, /BinaryLiftingLCA/);
   assert.match(catalog, /TarjanSCC/);
   assert.match(catalog, /ModInt/);
@@ -121,6 +123,10 @@ test("ships a readable contest template catalog and dedicated code reader", asyn
   assert.match(expandedCatalog, /SuffixArray/);
   assert.match(expandedCatalog, /BFPRTSelection/);
   assert.match(expandedCatalog, /MorrisInorder/);
+  assert.match(advancedCatalog, /MinCostMaxFlow/);
+  assert.match(advancedCatalog, /HeavyLightDecomposition/);
+  assert.match(advancedCatalog, /PersistentKthSegmentTree/);
+  assert.match(advancedCatalog, /NTTConvolution/);
   assert.match(page, /打开模板/);
   assert.match(page, /独立模块/);
   assert.doesNotMatch(page, /template-code-preview/);

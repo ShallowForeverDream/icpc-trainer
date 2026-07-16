@@ -1,4 +1,5 @@
 import { expandedContestTemplates } from "./expanded-data";
+import { advancedContestTemplates } from "./advanced-data";
 
 export type TemplateApi = { signature: string; description: string };
 
@@ -733,6 +734,7 @@ struct Combinations {
 export const contestTemplates: ContestTemplate[] = [
   ...expandedContestTemplates,
   ...coreContestTemplates,
+  ...advancedContestTemplates,
 ];
 
 export function findContestTemplate(slug: string) {

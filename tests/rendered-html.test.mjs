@@ -729,6 +729,8 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /translateBatch/);
   assert.match(statements, /translateReviewedTexts/);
   assert.match(statements, /reviewDraftTexts/);
+  assert.match(statements, /Promise\.any\(attempts\)/);
+  assert.match(statements, /fetchDatasetRow\(parsed, controller\.signal\)/);
   assert.match(statements, /Math\.max\(0, TRANSLATION_VERSION - 1\)/);
   assert.match(statements, /正在快速生成中文题面/);
   assert.match(statements, /extractArchiveGymStatement/);

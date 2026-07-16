@@ -722,13 +722,14 @@ function setStatus(code, status, error = null) {
   db.prepare("UPDATE problem_statements SET status = ?, error = ?, updated_at = ? WHERE code = ?").run(status, error ? String(error).slice(0, 500) : null, now(), code);
 }
 
-async function fetchText(url, timeoutMs = 25_000) {
+async function fetchText(url, timeoutMs = 18_000, parentSignal = null) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const signal = parentSignal ? AbortSignal.any([controller.signal, parentSignal]) : controller.signal;
   try {
     const response = await fetchCodeforcesResource(url, {
       headers: { "User-Agent": USER_AGENT, Accept: "text/html,application/xhtml+xml", "Accept-Language": "en-US,en;q=0.9" },
-      signal: controller.signal,
+      signal,
     });
     if (!response.ok) throw new Error(`HTTP ${response.status}`);
     const buffer = await readLimitedBuffer(response, 4 * 1024 * 1024);
@@ -738,26 +739,27 @@ async function fetchText(url, timeoutMs = 25_000) {
   }
 }
 
-async function fetchDatasetRow(parsed) {
+async function fetchDatasetRow(parsed, parentSignal = null) {
   const id = `${parsed.contestId}/${parsed.index}`;
   const where = encodeURIComponent(`"id"='${id}'`);
-  for (const split of ["train", "test"]) {
-    try {
-      const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 18_000);
-      try {
-        const response = await fetch(`https://datasets-server.huggingface.co/filter?dataset=open-r1/codeforces&config=default&split=${split}&length=1&where=${where}`, { headers: { "User-Agent": USER_AGENT }, signal: controller.signal });
-        if (!response.ok) continue;
-        const payload = await response.json();
-        if (payload.rows?.[0]?.row) return payload.rows[0].row;
-      } finally {
-        clearTimeout(timeout);
-      }
-    } catch {
-      // Continue to the next split or the browser extension fallback.
-    }
+  const controller = new AbortController();
+  const signal = parentSignal ? AbortSignal.any([controller.signal, parentSignal]) : controller.signal;
+  try {
+    return await Promise.any(["train", "test"].map(async (split) => {
+      const response = await fetchWithTimeout(`https://datasets-server.huggingface.co/filter?dataset=open-r1/codeforces&config=default&split=${split}&length=1&where=${where}`, {
+        headers: { "User-Agent": USER_AGENT },
+        signal,
+      }, 14_000);
+      if (!response.ok) throw new Error(`dataset ${split} HTTP ${response.status}`);
+      const row = (await response.json()).rows?.[0]?.row;
+      if (!row) throw new Error(`dataset ${split} has no row`);
+      return row;
+    }));
+  } catch {
+    return null;
+  } finally {
+    controller.abort();
   }
-  return null;
 }
 
 async function importOriginal(parsed, sourceKind = "problemset") {
@@ -770,23 +772,24 @@ async function importOriginal(parsed, sourceKind = "problemset") {
     setStatus(parsed.code, "importing");
     const urls = [statementSourceUrl(parsed, sourceKind), statementSourceUrl(parsed, sourceKind, true)]
       .map((url) => `${url}?locale=en`);
-    for (const url of urls) {
-      try {
-        const page = await fetchText(url);
-        const document = parseCodeforcesStatement(page.text, page.finalUrl, parsed.code);
-        saveOriginal(document);
-        if (!queueTranslation(parsed.code)) setStatus(parsed.code, "ready_original", "原题面已就绪；中文翻译将在稍后开始");
-        return document;
-      } catch {
-        // Codeforces may challenge datacenter IPs. The extension and dataset fallbacks handle this.
-      }
-    }
-    const row = sourceKind === "gym" ? null : await fetchDatasetRow(parsed);
-    if (row) {
-      const document = datasetRowToStatement(row, parsed.code);
+    const controller = new AbortController();
+    const attempts = urls.map(async (url) => {
+      const page = await fetchText(url, 18_000, controller.signal);
+      return parseCodeforcesStatement(page.text, page.finalUrl, parsed.code);
+    });
+    if (sourceKind !== "gym") attempts.push((async () => {
+      const row = await fetchDatasetRow(parsed, controller.signal);
+      if (!row) throw new Error("Codeforces dataset fallback unavailable");
+      return datasetRowToStatement(row, parsed.code);
+    })());
+    try {
+      const document = await Promise.any(attempts);
+      controller.abort();
       saveOriginal(document);
       if (!queueTranslation(parsed.code)) setStatus(parsed.code, "ready_original", "原题面已就绪；中文翻译将在稍后开始");
       return document;
+    } catch {
+      controller.abort();
     }
     setStatus(parsed.code, "source_required", `需要浏览器扩展读取 Codeforces ${sourceKind === "gym" ? "Gym " : ""}原题面`);
     return null;
@@ -812,8 +815,10 @@ async function translatorFetch(path, options = {}, timeoutMs = 120_000) {
 async function fetchWithTimeout(url, options = {}, timeoutMs = 15_000) {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const { signal: parentSignal, ...requestOptions } = options;
+  const signal = parentSignal ? AbortSignal.any([controller.signal, parentSignal]) : controller.signal;
   try {
-    return await fetch(url, { ...options, signal: controller.signal });
+    return await fetch(url, { ...requestOptions, signal });
   } finally {
     clearTimeout(timeout);
   }

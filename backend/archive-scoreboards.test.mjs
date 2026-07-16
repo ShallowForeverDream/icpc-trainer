@@ -127,6 +127,10 @@ test("persists XCPCIO sources and generated scoreboard views in SQLite across re
     const health = await fetch(`${backendBase}/health`).then((response) => response.json());
     assert.equal(health.caches.archiveScoreboardSources, 1);
     assert.equal(health.caches.archiveScoreboardViews, 1);
+    assert.equal(health.memory.limitMiB, 512);
+    assert.equal(health.versions.api, 7);
+    assert.equal(health.versions.statementTranslation, 22);
+    assert.equal(health.versions.archiveStatementTranslation, 3);
 
     await stopBackend(backend);
     await new Promise((resolve) => fixtureServer.close(resolve));

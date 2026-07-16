@@ -691,6 +691,7 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(compose, /127\.0\.0\.1:8787:8787/);
   assert.match(compose, /ggml-org\/llama\.cpp:server/);
   assert.match(compose, /condition: service_healthy/);
+  assert.match(compose, /API_MEMORY_LIMIT_MIB: 512/);
   assert.match(dockerfile, /tesseract-ocr/);
   assert.match(dockerfile, /poppler-utils/);
   assert.match(nginx, /\/icpc-api\//);
@@ -723,6 +724,11 @@ test("ships invite-only authentication and administration", async () => {
   assert.match(auth, /used_count = used_count \+ 1/);
   assert.match(auth, /min: 1, max: 100/);
   assert.match(admin, /生成邀请码/);
+  assert.match(admin, /系统状态/);
+  assert.match(admin, /API 内存/);
+  assert.match(admin, /数据写入 SQLite/);
+  assert.match(admin, /versions\.archiveStatementTranslation/);
+  assert.match(admin, /升级阿里云后显示版本/);
   assert.match(admin, /可注册人数/);
   assert.match(admin, /invite-presets/);
   assert.match(admin, /撤销/);

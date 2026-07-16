@@ -4,7 +4,7 @@ import { readFile, unlink } from "node:fs/promises";
 import { dirname, join } from "node:path";
 import { createAuthHandler, getTrainingSignals, optionalAuthenticateRequest } from "./auth.mjs";
 import { createArchiveScoreboardHandler } from "./archive-scoreboards.mjs";
-import { createStatementHandler } from "./statements.mjs";
+import { ARCHIVE_TRANSLATION_VERSION, TRANSLATION_VERSION, createStatementHandler } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
 import { buildOriginalVpRows, buildParticipantVpRows, rankVpRows } from "./vp-scoring.mjs";
 import {
@@ -34,6 +34,7 @@ const CF_BASE = "https://codeforces.com/api";
 const USER_AGENT = "icpc-trainer-backend/0.1";
 const CF_STANDINGS_CACHE_DIR = join(dirname(process.env.DB_PATH || "./data/icpc-trainer.sqlite"), "cf-standings");
 const ALLOWED_ORIGINS = new Set((process.env.ALLOWED_ORIGINS || "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site,http://localhost:3000,http://localhost:5173").split(",").map((value) => value.trim()).filter(Boolean));
+const API_MEMORY_LIMIT_MIB = Math.max(128, Math.min(4096, Number(process.env.API_MEMORY_LIMIT_MIB) || 512));
 const inFlightCodeforces = new Map();
 let apiQueue = Promise.resolve();
 let lastApiCall = 0;
@@ -642,6 +643,7 @@ const server = http.createServer(async (request, response) => {
         rssMiB: Math.round(memory.rss / 1024 / 1024),
         heapUsedMiB: Math.round(memory.heapUsed / 1024 / 1024),
         heapTotalMiB: Math.round(memory.heapTotal / 1024 / 1024),
+        limitMiB: API_MEMORY_LIMIT_MIB,
       },
       caches: {
         storage: "sqlite",
@@ -653,6 +655,11 @@ const server = http.createServer(async (request, response) => {
         codeforcesInFlight: inFlightCodeforces.size,
       },
       persistence: persistenceStats(),
+      versions: {
+        api: 7,
+        statementTranslation: TRANSLATION_VERSION,
+        archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,
+      },
     });
   }
   const rate = requestLimiter(clientIp(request));

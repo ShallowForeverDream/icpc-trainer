@@ -8,6 +8,21 @@ import { authFetch, readAuth, type AuthUser } from "../lib/auth-client";
 type Invite = { id: number; code?: string; codePrefix?: string; maxUses: number; usedCount: number; expiresAt: string; createdAt: string; status: "active" | "used" | "expired" };
 type Feedback = { id: number; email: string | null; category: string; rating: number; message: string; page: string; status: string; createdAt: string };
 type StatementReview = { kind: "codeforces" | "archive"; id: string; title: string; source: string; reviewed: boolean; official: boolean; href: string; reviewedAt: string | null; updatedAt: string };
+type SystemHealth = {
+  status: "ok";
+  uptime: number;
+  memory: { rssMiB: number; heapUsedMiB: number; heapTotalMiB: number; limitMiB?: number };
+  caches: { storage: string; problemsets: number; submissions: number; contestStandings: number; archiveScoreboardSources: number; archiveScoreboardViews: number; codeforcesInFlight: number };
+  persistence: { personalStates: number; platformSubmissions: number; activeVps: number; vpSnapshots: number };
+  versions?: { api: number; statementTranslation: number; archiveStatementTranslation: number };
+};
+
+function uptimeText(seconds: number) {
+  const days = Math.floor(seconds / 86_400);
+  const hours = Math.floor(seconds % 86_400 / 3_600);
+  const minutes = Math.floor(seconds % 3_600 / 60);
+  return days ? `${days} 天 ${hours} 小时` : hours ? `${hours} 小时 ${minutes} 分` : `${minutes} 分钟`;
+}
 
 export default function AdminPage() {
   const [users, setUsers] = useState<AuthUser[]>([]);
@@ -15,13 +30,16 @@ export default function AdminPage() {
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [statementReviews, setStatementReviews] = useState<StatementReview[]>([]);
   const [reviewServiceReady, setReviewServiceReady] = useState(true);
+  const [systemHealth, setSystemHealth] = useState<SystemHealth | null>(null);
+  const [healthCheckedAt, setHealthCheckedAt] = useState("");
+  const [healthLoading, setHealthLoading] = useState(false);
   const [generated, setGenerated] = useState("");
   const [maxUses, setMaxUses] = useState(1);
   const [expiresInDays, setExpiresInDays] = useState(7);
   const [message, setMessage] = useState("");
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
-  const [view, setView] = useState<"invites" | "users" | "statements" | "feedback">("invites");
+  const [view, setView] = useState<"invites" | "users" | "statements" | "feedback" | "system">("invites");
 
   const load = useCallback(async () => {
     const auth = readAuth();
@@ -30,7 +48,7 @@ export default function AdminPage() {
     if (auth.user.mustChangePassword) { location.replace("/account"); return; }
     setLoading(true);
     try {
-      const [usersResponse, invitesResponse, feedbackResponse, reviewsResponse] = await Promise.all([authFetch("/admin/users"), authFetch("/admin/invites"), authFetch("/admin/feedback"), authFetch("/codeforces/statements/review-queue?limit=300")]);
+      const [usersResponse, invitesResponse, feedbackResponse, reviewsResponse, healthResponse] = await Promise.all([authFetch("/admin/users"), authFetch("/admin/invites"), authFetch("/admin/feedback"), authFetch("/codeforces/statements/review-queue?limit=300"), authFetch("/health").catch(() => null)]);
       if (!usersResponse.ok || !invitesResponse.ok || !feedbackResponse.ok) throw new Error("管理员登录已失效");
       setUsers(((await usersResponse.json()) as { users: AuthUser[] }).users);
       setInvites(((await invitesResponse.json()) as { invites: Invite[] }).invites);
@@ -41,6 +59,10 @@ export default function AdminPage() {
       } else {
         setStatementReviews([]);
         setReviewServiceReady(false);
+      }
+      if (healthResponse?.ok) {
+        setSystemHealth((await healthResponse.json()) as SystemHealth);
+        setHealthCheckedAt(new Date().toISOString());
       }
     } catch (error) { setMessage(error instanceof Error ? error.message : "加载失败"); } finally { setLoading(false); }
   }, []);
@@ -86,6 +108,19 @@ export default function AdminPage() {
     if (!response.ok) throw new Error(data.error || "操作失败");
   }
 
+  async function refreshHealth() {
+    setHealthLoading(true);
+    try {
+      const response = await authFetch("/health", {}, 10_000);
+      if (!response.ok) throw new Error("服务状态读取失败");
+      setSystemHealth((await response.json()) as SystemHealth);
+      setHealthCheckedAt(new Date().toISOString());
+    } catch (error) {
+      setSystemHealth(null);
+      setMessage(error instanceof Error ? error.message : "服务状态读取失败");
+    } finally { setHealthLoading(false); }
+  }
+
   return <AppShell active="管理">
     <section className="admin-hero">
       <div><h1>管理</h1><p>注册、用户与反馈</p></div>
@@ -96,6 +131,7 @@ export default function AdminPage() {
       <button className={view === "users" ? "active" : ""} onClick={() => setView("users")}>用户</button>
       <button className={view === "statements" ? "active" : ""} onClick={() => setView("statements")}>题面校对</button>
       <button className={view === "feedback" ? "active" : ""} onClick={() => setView("feedback")}>反馈</button>
+      <button className={view === "system" ? "active" : ""} onClick={() => setView("system")}>系统</button>
     </div>
     {view === "invites" ? <div className="admin-grid">
       <form className="panel admin-create" onSubmit={createInvite}>
@@ -115,5 +151,18 @@ export default function AdminPage() {
     {view === "users" ? <section className="panel users-panel"><div className="panel-head"><h2>注册用户</h2></div><div className="admin-list user-list">{users.map((user) => <div key={user.id}><span className="user-avatar">{user.email.slice(0, 2).toUpperCase()}</span><b>{user.email}</b><Pill>{user.role === "admin" ? "管理员" : "用户"}</Pill><span>{new Date(user.createdAt).toLocaleDateString("zh-CN")}</span></div>)}</div></section> : null}
     {view === "statements" ? <section className="panel statement-review-queue"><div className="panel-head"><div><h2>中文题面校对</h2><p>优先处理沈阳训练中实际打开的机器翻译题面。</p></div><span>{statementReviews.filter((item) => !item.reviewed).length} 待校对</span></div>{!reviewServiceReady ? <div className="loading-panel">阿里云后端升级后会启用题面校对队列。</div> : loading ? <div className="loading-panel">加载中…</div> : statementReviews.length ? <div className="statement-review-list">{statementReviews.map((item) => <a href={item.href} key={`${item.kind}:${item.id}`}><span className={`review-state${item.reviewed ? " reviewed" : ""}`}>{item.official ? "官方" : item.reviewed ? "已校对" : "待校对"}</span><div><b>{item.title}</b><small>{item.source} · 更新于 {new Date(item.updatedAt).toLocaleDateString("zh-CN")}</small></div><em>{item.reviewed && !item.official ? "重新校对 →" : item.official ? "查看题面 →" : "开始校对 →"}</em></a>)}</div> : <div className="loading-panel">目前没有需要校对的动态题面</div>}</section> : null}
     {view === "feedback" ? <section className="panel users-panel"><div className="panel-head"><h2>反馈</h2><span>{feedback.length} 条</span></div>{feedback.length ? <div className="feedback-admin-list">{feedback.map((item) => <article key={item.id}><div><Pill>{item.category}</Pill><b>{"★".repeat(item.rating)}{"☆".repeat(5 - item.rating)}</b><time>{new Date(item.createdAt).toLocaleString("zh-CN")}</time><select aria-label="反馈处理状态" value={item.status} disabled={actionId === item.id} onChange={(event) => void updateFeedbackStatus(item.id, event.target.value)}><option value="new">待处理</option><option value="reviewed">已查看</option><option value="planned">已计划</option><option value="done">已完成</option></select></div><p>{item.message}</p><small>{item.email || "匿名用户"}</small></article>)}</div> : <div className="loading-panel">暂无反馈</div>}</section> : null}
+    {view === "system" ? <section className="panel system-health-panel">
+      <div className="panel-head"><div><h2>系统状态</h2><p>{healthCheckedAt ? `更新于 ${new Date(healthCheckedAt).toLocaleTimeString("zh-CN")}` : "检查国内 API 与持久化存储"}</p></div><button type="button" onClick={() => void refreshHealth()} disabled={healthLoading}>{healthLoading ? "检查中…" : "刷新"}</button></div>
+      {systemHealth ? <>
+        <div className="system-health-status"><i /><b>运行正常</b><span>数据写入 SQLite，重启不会丢失</span></div>
+        <div className="system-health-grid">
+          <article><span>API 内存</span><b>{systemHealth.memory.rssMiB} <small>/ {systemHealth.memory.limitMiB || 512} MiB</small></b><em>堆内存 {systemHealth.memory.heapUsedMiB} MiB</em></article>
+          <article><span>持续运行</span><b>{uptimeText(systemHealth.uptime)}</b><em>自动健康检查已启用</em></article>
+          <article><span>持久化数据</span><b>{systemHealth.persistence.platformSubmissions} <small>次提交</small></b><em>{systemHealth.persistence.personalStates} 条个人状态 · {systemHealth.persistence.activeVps} 场 VP</em></article>
+          <article><span>题面版本</span><b>{systemHealth.versions ? `API v${systemHealth.versions.api}` : "待升级"}</b><em>{systemHealth.versions ? `CF ${systemHealth.versions.statementTranslation} · 历届赛 ${systemHealth.versions.archiveStatementTranslation}` : "升级阿里云后显示版本"}</em></article>
+        </div>
+        <div className="system-cache-row"><span>题库缓存 <b>{systemHealth.caches.problemsets}</b></span><span>提交缓存 <b>{systemHealth.caches.submissions}</b></span><span>CF 榜单 <b>{systemHealth.caches.contestStandings}</b></span><span>历届榜单 <b>{systemHealth.caches.archiveScoreboardViews}</b></span><span>VP 快照 <b>{systemHealth.persistence.vpSnapshots}</b></span></div>
+      </> : <div className="system-health-offline"><b>国内 API 暂时不可达</b><span>点击“刷新”重试；若持续失败，再检查阿里云容器。</span></div>}
+    </section> : null}
   </AppShell>;
 }

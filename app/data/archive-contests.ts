@@ -94,6 +94,14 @@ export const archiveContests: ArchiveContest[] = [
     problemTitles: ["Alphabet City", "Battle of Arrays", "Cacti Classification", "Doorway", "Elevator Against Humanity", "Fragmented Nim", "Greta's Game", "Honey Cake", "Irrigation Interlock", "Jinx or Jackpot", "Knit the Grid", "LLM Training", "Medical Parity"],
   },
   {
+    id: "2025-latin-america", year: 2025, name: "ICPC 拉丁美洲区域赛", city: "拉丁美洲", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 106178,
+    problemTitles: ["Apple Pie", "Balanced Balloons", "Clean Streets", "Displaying Decimals", "Emergency Rations", "Fuzzy Factorization", "Gridoland Power Gauge", "Harder Horizons", "Infiltration Route", "Judgmental Crowd", "Kings Conquest", "Lonely Creatures"],
+  },
+  {
+    id: "2025-dhaka", year: 2025, name: "ICPC 亚洲达卡区域赛", city: "孟加拉国 · 达卡", type: "国际区域赛", boardSource: "codeforces", problemCount: 10, gymId: 106270,
+    problemTitles: ["Mission Hexa", "Boulevard of Broken Cars", "Gas Reservoir", "Save the Wonderland", "Love Marriage", "Morning Walk", "Nonogram", "Optimal Balancing Strategy", "Two Strings Attached", "C-Style String Length"],
+  },
+  {
     id: "2025-yokohama", year: 2025, name: "ICPC 亚洲横滨区域赛", city: "日本 · 横滨", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 106268,
     problemTitles: ["Tatami Renovation", "Minimizing Wildlife Damage", "Seagull Population", "Decompose and Concatenate", "Cutting Tofu", "Astral Geometry", "Charity Raffle", "U-Shaped Panels", "Game of Names", "ICPC Board", "Membership Structure of a Secret Society", "Common Tangent Lines"],
   },
@@ -159,6 +167,10 @@ export const archiveContests: ArchiveContest[] = [
   {
     id: "2024-european-championship", year: 2024, name: "ICPC 欧洲锦标赛", city: "欧洲赛区", type: "国际区域赛", boardSource: "codeforces", problemCount: 11, codeforcesContestId: 1949,
     problemTitles: ["Grove", "Charming Meals", "Annual Ants' Gathering", "Funny or Scary?", "Damage per Second", "Dating", "Scooter", "Division Avoidance", "Disks", "Amanda the Amoeba", "Make Triangle"],
+  },
+  {
+    id: "2024-swerc", year: 2024, name: "ICPC 西南欧区域赛（SWERC）", city: "法国 · 里昂", type: "国际区域赛", boardSource: "codeforces", problemCount: 13, gymId: 105677,
+    problemTitles: ["Titanomachy", "Divine Gifting", "Phryctoria", "Temple Architecture", "Building the Fort", "Yaxchilán Maze", "Guess How the Ballet Will End", "The king of SWERC", "Divination", "Recovering the Tablet", "Disk Covering", "The Charioteer", "Ook? Ook!"],
   },
   {
     id: "2024-yokohama", year: 2024, name: "ICPC 亚洲横滨区域赛", city: "日本 · 横滨", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 105633,

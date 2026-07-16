@@ -288,6 +288,8 @@ test("ships live multiplayer VP generation, in-platform solving, frozen standing
   assert.match(standingsRoute, /buildOriginalVpRows/);
   assert.match(standingsRoute, /freezeAtSeconds/);
   assert.match(standingsRoute, /participantRows/);
+  assert.match(standingsRoute, /buildTeamVpRow/);
+  assert.match(page, /我们的队伍/);
   assert.match(standingsRoute, /medalCutoffs/);
   assert.match(standingsRoute, /sourceBoards/);
   assert.match(standingsRoute, /selectedProblems/);

@@ -186,7 +186,7 @@ export default function VpPage() {
   }
 
   async function generateContest() {
-    if (!participants.length || participants.length > 12 || participants.some((item) => !validCodeforcesHandle(item))) { setStatus("error"); setMessage("请输入 1–12 个有效的 Codeforces Handle"); return; }
+    if (!participants.length || participants.length > 3 || participants.some((item) => !validCodeforcesHandle(item))) { setStatus("error"); setMessage("请输入 1–3 个有效的队员 Codeforces Handle"); return; }
     generateRequest.current?.abort();
     const controller = new AbortController();
     generateRequest.current = controller;
@@ -255,10 +255,12 @@ export default function VpPage() {
   }
 
   if (contest) {
-    const participantHandles = new Set((contest.participants ?? [contest.handle]).map((handle) => handle.toLowerCase()));
-    const rows: StandingRow[] = contest.standings?.rows?.map((row, index) => ({ ...row, id: row.id || `legacy:${row.handle.toLowerCase()}:${index}`, mine: row.mine ?? participantHandles.has(row.handle.toLowerCase()) })) ?? (contest.participants ?? [contest.handle]).map((handle, index) => ({ id: `mine:${handle.toLowerCase()}`, rank: index + 1, handle, solved: 0, penalty: 0, problems: {} as Record<string, ProblemStanding>, mine: true, origin: "mine" }));
+    const teamMembers = contest.participants ?? [contest.handle];
+    const participantHandles = new Set(teamMembers.map((handle) => handle.toLowerCase()));
+    const teamLabel = teamMembers.join(" + ");
+    const rows: StandingRow[] = contest.standings?.rows?.map((row, index) => ({ ...row, id: row.id || `legacy:${row.handle.toLowerCase()}:${index}`, mine: row.mine ?? participantHandles.has(row.handle.toLowerCase()) })) ?? [{ id: `mine:${teamMembers.map((handle) => handle.toLowerCase()).sort().join("+")}`, rank: 1, handle: teamLabel, solved: 0, penalty: 0, problems: {} as Record<string, ProblemStanding>, mine: true, origin: "mine" }];
     const rankedMyRow = rows.find((row) => row.mine && row.handle.toLowerCase() === contest.handle.toLowerCase()) ?? rows.find((row) => row.mine) ?? rows[0];
-    const myRow = contest.standings?.participantRows?.find((row) => row.handle.toLowerCase() === contest.handle.toLowerCase()) ?? rankedMyRow;
+    const myRow = contest.standings?.participantRows?.find((row) => row.mine) ?? rankedMyRow;
     const pollSeconds = contest.standings?.pollAfterSeconds ?? Math.max(15, Math.ceil((contest.participants?.length ?? 1) * 2.5));
     const timerEnded = Boolean(contest.startedAt && remaining === 0);
     const finished = Boolean(contest.standings?.finished);
@@ -311,7 +313,7 @@ export default function VpPage() {
         <section className="vp-rule-strip"><b>ICPC 规则</b><span>{pollSeconds} 秒自动更新</span><span>最后 1 小时封榜</span><span>WA +20 分钟</span><span>金/银/铜 10%/20%/30%</span></section>
         {contest.startedAt && contest.sourceContests?.length ? <section className="contest-sources"><span>原场组合</span>{contest.sourceContests.map((source) => <b key={source.contestId}>CF {source.contestId} · {source.problemCount} 题 · 均分 {source.averageRating}</b>)}</section> : null}
         {contest.standings?.sourceBoards?.length ? <div className="combined-board-sources">{contest.standings.sourceBoards.map((source) => <span key={source.contestId}><b>CF {source.contestId}</b> · {source.selectedProblems.join("/")} · {source.sampledTeams} 队</span>)}{contest.standings.sourceBoards.length > 1 ? <span><b>组合规则</b> · 按各原场同百分位队伍配对，只统计已选题目</span> : null}</div> : null}
-        <div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者 / 原队伍</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{visibleRows.map((row) => <div className={`standings-row${row.mine ? " mine" : ""}${row.medal ? ` medal-${row.medal}` : ""}`} key={row.id}><strong>{row.rank}</strong><span className="standing-party"><b>{row.handle}</b><small>{row.medal ? `${medalText[row.medal]} · ` : ""}{row.mine ? "当前 VP" : `原比赛${row.sourceCount && row.sourceCount > 1 ? ` · 合并 ${row.sourceCount} 场` : ""}`}</small></span><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.pendingAttempts ? "pending" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.pendingAttempts ? `?${state.pendingAttempts}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div>
+        <div className="standings-table"><div className="standings-row standings-header"><span>#</span><span>参赛者 / 原队伍</span><span>AC</span><span>罚时</span>{contest.problems.map((problem) => <span key={problem.code}>{problem.slot}</span>)}</div>{visibleRows.map((row) => <div className={`standings-row${row.mine ? " mine" : ""}${row.medal ? ` medal-${row.medal}` : ""}`} key={row.id}><strong>{row.rank}</strong><span className="standing-party"><b>{row.handle}</b><small>{row.medal ? `${medalText[row.medal]} · ` : ""}{row.mine ? "我们的队伍" : `原比赛${row.sourceCount && row.sourceCount > 1 ? ` · 合并 ${row.sourceCount} 场` : ""}`}</small></span><strong>{row.solved}</strong><span>{row.penalty}</span>{contest.problems.map((problem) => { const state = row.problems?.[`${problem.contestId}${problem.index}`]; return <span className={state?.solved ? "solved" : state?.pendingAttempts ? "pending" : state?.wrongAttempts ? "attempted" : ""} key={problem.code}>{state?.solved ? `+${state.wrongAttempts || ""}` : state?.pendingAttempts ? `?${state.pendingAttempts}` : state?.wrongAttempts ? `-${state.wrongAttempts}` : "·"}</span>; })}</div>)}</div>
         {!visibleRows.length ? <div className="vp-tab-empty"><b>没有匹配的队伍</b><span>清空搜索或关闭“只看我的队伍”</span></div> : null}
       </section> : null}
 
@@ -327,13 +329,13 @@ export default function VpPage() {
   }
 
   return <AppShell active="模拟赛">
-    <section className="vp-builder-head"><div><h1>创建 VP</h1><p>自由组卷或复现历史比赛</p></div><div><b>{duration / 60}h</b><span>{count} 题</span><span>{participants.length || 0} 人</span></div></section>
+    <section className="vp-builder-head"><div><h1>创建 VP</h1><p>自由组卷或复现历史比赛</p></div><div><b>{duration / 60}h</b><span>{count} 题</span><span>{participants.length || 0} 名队员</span></div></section>
     <Link className="archive-vp-entry" href="/vp/archive"><span>ICPC</span><div><h2>历届补题</h2><p>邀请赛、区域赛与 EC-Final 原榜回放</p></div><b>选择赛事 →</b></Link>
     <section className="vp-builder simplified-vp-builder">
       <div className="builder-main">
         <div className="builder-section"><div><h2>模式</h2></div><div className="mode-grid three-modes">{modeOptions.map(([name, description, icon]) => <button key={name} className={mode === name ? "active" : ""} onClick={() => setMode(name)}><b>{icon}</b><span><strong>{name}</strong><small>{description}</small></span><i>{mode === name ? "●" : "○"}</i></button>)}</div></div>
         <div className="builder-section"><div><h2>设置</h2></div><div className="vp-inline-settings"><label>时长<div className="segmented">{[[120, "2 小时"], [180, "3 小时"], [300, "5 小时"]].map(([value, label]) => <button type="button" key={value} className={duration === value ? "active" : ""} onClick={() => setDuration(Number(value))}>{label}</button>)}</div></label><label>题数<div className="counter"><button type="button" onClick={() => setCount(Math.max(5, count - 1))}>−</button><strong>{count}</strong><button type="button" onClick={() => setCount(Math.min(13, count + 1))}>＋</button></div></label><label>Rating<select value={targetRating} onChange={(event) => setTargetRating(Number(event.target.value))}>{[1200, 1400, 1600, 1800, 2000, 2200].map((value) => <option key={value}>{value}</option>)}</select></label><label>思维题<select value={thinkingRatio} disabled={mode !== "自由组卷"} onChange={(event) => setThinkingRatio(Number(event.target.value))}><option value={0.4}>40%</option><option value={0.6}>60%</option><option value={0.8}>80%</option></select></label></div></div>
-        <div className="builder-section"><div><h2>参赛者</h2></div><div className="form-grid vp-participant-form"><label>Codeforces Handles<textarea value={participantText} onChange={(event) => setParticipantText(event.target.value)} placeholder="ShallowDream2, teammate" /></label><label>Seed<input value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="自动生成" /></label></div></div>
+        <div className="builder-section"><div><h2>队伍成员</h2></div><div className="form-grid vp-participant-form"><label>队员 Codeforces Handles<textarea value={participantText} onChange={(event) => setParticipantText(event.target.value)} placeholder="ShallowDream2, teammate" /></label><label>Seed<input value={seed} onChange={(event) => setSeed(event.target.value)} placeholder="自动生成" /></label></div></div>
       </div>
       <aside className="builder-summary"><h2>{mode}</h2><div className="summary-time"><b>{duration / 60}</b><span>小时</span><i>·</i><b>{count}</b><span>题</span></div><p className="builder-handle">{participants[0] || "未填写 Handle"}</p><button className="create-contest" onClick={() => void generateContest()} disabled={status === "loading"}>{status === "loading" ? "正在组卷…" : "生成比赛"}</button>{message ? <small className="summary-foot form-error">{message}</small> : null}</aside>
     </section>

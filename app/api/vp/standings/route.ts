@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getContestStandings, getUserSubmissions } from "../../../lib/codeforces";
-import { buildOriginalVpRows, buildParticipantVpRows, rankVpRows, type VpStandingProblem } from "../../../lib/vp-original-standings";
+import { buildOriginalVpRows, buildTeamVpRow, rankVpRows, type VpStandingProblem } from "../../../lib/vp-original-standings";
 
 type StandingsRequest = { participants?: string[]; handle?: string; startedAt?: number; durationMinutes?: number; problems?: Array<Partial<VpStandingProblem>> };
 
@@ -15,8 +15,8 @@ export async function POST(request: NextRequest) {
         if (data) return NextResponse.json(data, { status: upstream.status });
       } catch { /* Cloudflare cannot always reach an HTTPS IP; fall back to Codeforces directly. */ }
     }
-    const participants = [...new Set((body.participants?.length ? body.participants : [body.handle ?? "ShallowDream2"]).map((item) => item.trim()).filter(Boolean))].slice(0, 12);
-    if (!participants.length || participants.some((handle) => !/^[A-Za-z0-9_.-]{3,24}$/.test(handle))) return NextResponse.json({ error: "参赛 Handle 列表无效" }, { status: 400 });
+    const participants = [...new Set((body.participants?.length ? body.participants : [body.handle ?? "ShallowDream2"]).map((item) => item.trim()).filter(Boolean))];
+    if (!participants.length || participants.length > 3 || participants.some((handle) => !/^[A-Za-z0-9_.-]{3,24}$/.test(handle))) return NextResponse.json({ error: "请输入 1–3 个有效的队员 Codeforces Handle" }, { status: 400 });
     const startedAt = Number(body.startedAt);
     const durationMinutes = Math.max(60, Math.min(600, Number(body.durationMinutes) || 180));
     const problems = (body.problems ?? []).slice(0, 20).filter((item) => Number(item.contestId) && /^[A-Z][0-9]?$/.test(String(item.index ?? ""))).map((item, index) => ({ contestId: Number(item.contestId), index: String(item.index), slot: String(item.slot || String.fromCharCode(65 + index)) }));
@@ -34,8 +34,8 @@ export async function POST(request: NextRequest) {
     ]);
     const sourceBoards = sourceResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
     const originalRows = buildOriginalVpRows(problems, sourceBoards, boardElapsedSeconds);
-    const participantRows = buildParticipantVpRows(participants, problems, startedAt, submissionSets, elapsedSeconds);
-    const boardParticipantRows = frozen ? buildParticipantVpRows(participants, problems, startedAt, submissionSets, freezeAtSeconds) : participantRows;
+    const participantRows = [buildTeamVpRow(participants, problems, startedAt, submissionSets, elapsedSeconds)];
+    const boardParticipantRows = frozen ? [buildTeamVpRow(participants, problems, startedAt, submissionSets, freezeAtSeconds)] : participantRows;
     const ranked = rankVpRows(originalRows, boardParticipantRows);
     const rows = ranked.rows;
     const rankedById = new Map(rows.map((row) => [row.id, row]));

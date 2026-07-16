@@ -3,7 +3,7 @@ import type { CodeforcesContestStandings, CodeforcesParty, CodeforcesSubmission 
 export type VpStandingProblem = { contestId: number; index: string; slot: string };
 export type VpStandingState = { solved: boolean; wrongAttempts: number; pendingAttempts: number; solvedMinutes: number | null; penalty: number };
 export type VpMedal = "gold" | "silver" | "bronze" | null;
-export type VpStandingRow = { id: string; handle: string; solved: number; penalty: number; lastSolvedMinutes: number | null; problems: Record<string, VpStandingState>; sourceCount: number; sourceContests: number[]; sourceTeams?: Array<{ contestId: number; handle: string }>; origin: "original" | "mine"; mine: boolean; rank?: number; medal?: VpMedal };
+export type VpStandingRow = { id: string; handle: string; members?: string[]; solved: number; penalty: number; lastSolvedMinutes: number | null; problems: Record<string, VpStandingState>; sourceCount: number; sourceContests: number[]; sourceTeams?: Array<{ contestId: number; handle: string }>; origin: "original" | "mine"; mine: boolean; rank?: number; medal?: VpMedal };
 
 export function vpProblemKey(problem: Pick<VpStandingProblem, "contestId" | "index">) {
   return `${problem.contestId}${problem.index}`;
@@ -104,26 +104,47 @@ export function buildOriginalVpRows(problems: VpStandingProblem[], sourceBoards:
   });
 }
 
-export function buildParticipantVpRows(participants: string[], problems: VpStandingProblem[], startedAt: number, submissionSets: CodeforcesSubmission[][], cutoffSeconds: number) {
+function buildParticipantStates(problems: VpStandingProblem[], startedAt: number, submissionSets: CodeforcesSubmission[][], cutoffSeconds: number) {
   const startSeconds = Math.floor(startedAt / 1000);
   const cutoff = startSeconds + Math.max(0, Math.floor(cutoffSeconds));
   const problemKeys = new Set(problems.map(vpProblemKey));
+  const states = emptyVpStates(problems);
+  const submissions = submissionSets.flatMap((items) => items ?? []).filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= cutoff && problemKeys.has(`${item.problem.contestId}${item.problem.index}`)).sort((left, right) => left.creationTimeSeconds - right.creationTimeSeconds);
+  for (const submission of submissions) {
+    const state = states[`${submission.problem.contestId}${submission.problem.index}`];
+    if (!state || state.solved) continue;
+    if (submission.verdict === "OK") {
+      state.solved = true;
+      state.pendingAttempts = 0;
+      state.solvedMinutes = Math.max(0, Math.floor((submission.creationTimeSeconds - startSeconds) / 60));
+      state.penalty = state.solvedMinutes + state.wrongAttempts * 20;
+    } else if (submission.verdict === "TESTING") state.pendingAttempts += 1;
+    else if (!["COMPILATION_ERROR", "SKIPPED"].includes(submission.verdict ?? "")) state.wrongAttempts += 1;
+  }
+  return states;
+}
+
+export function buildParticipantVpRows(participants: string[], problems: VpStandingProblem[], startedAt: number, submissionSets: CodeforcesSubmission[][], cutoffSeconds: number) {
   return participants.map((handle, participantIndex): VpStandingRow => {
-    const states = emptyVpStates(problems);
-    const submissions = (submissionSets[participantIndex] ?? []).filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= cutoff && problemKeys.has(`${item.problem.contestId}${item.problem.index}`)).sort((left, right) => left.creationTimeSeconds - right.creationTimeSeconds);
-    for (const submission of submissions) {
-      const state = states[`${submission.problem.contestId}${submission.problem.index}`];
-      if (!state || state.solved) continue;
-      if (submission.verdict === "OK") {
-        state.solved = true;
-        state.pendingAttempts = 0;
-        state.solvedMinutes = Math.max(0, Math.floor((submission.creationTimeSeconds - startSeconds) / 60));
-        state.penalty = state.solvedMinutes + state.wrongAttempts * 20;
-      } else if (submission.verdict === "TESTING") state.pendingAttempts += 1;
-      else if (!["COMPILATION_ERROR", "SKIPPED"].includes(submission.verdict ?? "")) state.wrongAttempts += 1;
-    }
+    const states = buildParticipantStates(problems, startedAt, [submissionSets[participantIndex] ?? []], cutoffSeconds);
     return { id: `mine:${handle.toLowerCase()}`, handle, ...summarize(states), problems: states, sourceCount: 0, sourceContests: [], origin: "mine", mine: true };
   });
+}
+
+export function buildTeamVpRow(members: string[], problems: VpStandingProblem[], startedAt: number, submissionSets: CodeforcesSubmission[][], cutoffSeconds: number): VpStandingRow {
+  const normalized = members.map((handle) => handle.trim()).filter(Boolean);
+  const states = buildParticipantStates(problems, startedAt, submissionSets, cutoffSeconds);
+  return {
+    id: `mine:${normalized.map((handle) => handle.toLowerCase()).sort().join("+")}`,
+    handle: normalized.join(" + "),
+    members: normalized,
+    ...summarize(states),
+    problems: states,
+    sourceCount: 0,
+    sourceContests: [],
+    origin: "mine",
+    mine: true,
+  };
 }
 
 export function rankVpRows(originalRows: VpStandingRow[], participantRows: VpStandingRow[]) {

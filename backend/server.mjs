@@ -7,7 +7,7 @@ import { createArchiveScoreboardHandler } from "./archive-scoreboards.mjs";
 import { signCodeforcesParams } from "./codeforces-auth.mjs";
 import { ARCHIVE_TRANSLATION_VERSION, TRANSLATION_VERSION, createStatementHandler } from "./statements.mjs";
 import { HttpError, boundedInteger, createWindowLimiter, publicError, readJsonBody } from "./http-utils.mjs";
-import { buildOriginalVpRows, buildParticipantVpRows, rankVpRows } from "./vp-scoring.mjs";
+import { buildOriginalVpRows, buildTeamVpRow, rankVpRows } from "./vp-scoring.mjs";
 import {
   finishVpSession,
   createPlatformSubmission,
@@ -218,8 +218,8 @@ function validHandle(value) {
 
 function normalizeParticipants(value, fallback = "ShallowDream2") {
   const source = Array.isArray(value) ? value : String(value || fallback).split(/[\s,;]+/);
-  const handles = [...new Set(source.map((item) => String(item).trim()).filter(Boolean))].slice(0, 12);
-  if (!handles.length || handles.some((handle) => !validHandle(handle))) throw new HttpError(400, "参赛 Handle 列表无效");
+  const handles = [...new Set(source.map((item) => String(item).trim()).filter(Boolean))];
+  if (!handles.length || handles.length > 3 || handles.some((handle) => !validHandle(handle))) throw new HttpError(400, "请输入 1–3 个有效的队员 Codeforces Handle");
   return handles;
 }
 
@@ -593,8 +593,8 @@ async function buildVpStandings(body, ownerKey) {
   const sourceBoards = sourceResults.flatMap((result) => result.status === "fulfilled" ? [result.value] : []);
   const unavailableContestIds = contestIds.filter((_, index) => sourceResults[index].status === "rejected");
   const originalRows = buildOriginalVpRows(problems, sourceBoards, boardElapsedSeconds);
-  const participantRows = buildParticipantVpRows(participants, problems, startedAt, submissionSets, elapsedSeconds);
-  const boardParticipantRows = frozen ? buildParticipantVpRows(participants, problems, startedAt, submissionSets, freezeAtSeconds) : participantRows;
+  const participantRows = [buildTeamVpRow(participants, problems, startedAt, submissionSets, elapsedSeconds)];
+  const boardParticipantRows = frozen ? [buildTeamVpRow(participants, problems, startedAt, submissionSets, freezeAtSeconds)] : participantRows;
   const ranked = rankVpRows(originalRows, boardParticipantRows, originalRows.length);
   const rows = ranked.rows;
   const rankedById = new Map(rows.map((row) => [row.id, row]));
@@ -667,7 +667,7 @@ const server = http.createServer(async (request, response) => {
         codeforcesAuthenticated: Boolean(CF_API_KEY && CF_API_SECRET),
       },
       versions: {
-        api: 9,
+        api: 10,
         revision: process.env.SOURCE_REVISION || "local",
         statementTranslation: TRANSLATION_VERSION,
         archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,

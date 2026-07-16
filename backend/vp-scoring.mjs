@@ -121,26 +121,31 @@ export function buildOriginalVpRows(problems, sourceBoards, elapsedSeconds) {
   });
 }
 
-export function buildParticipantVpRows(participants, problems, startedAt, submissionSets, cutoffSeconds) {
+function buildParticipantStates(problems, startedAt, submissionSets, cutoffSeconds) {
   const startSeconds = Math.floor(startedAt / 1000);
   const cutoff = startSeconds + Math.max(0, Math.floor(cutoffSeconds));
   const problemKeys = new Set(problems.map((problem) => `${problem.contestId}${problem.index}`));
+  const states = emptyVpStates(problems);
+  const ordered = submissionSets.flatMap((items) => Array.isArray(items) ? items : [])
+    .filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= cutoff && problemKeys.has(`${item.problem?.contestId}${item.problem?.index}`))
+    .sort((left, right) => left.creationTimeSeconds - right.creationTimeSeconds);
+  for (const submission of ordered) {
+    const state = states[`${submission.problem.contestId}${submission.problem.index}`];
+    if (!state || state.solved) continue;
+    if (submission.verdict === "OK") {
+      state.solved = true;
+      state.pendingAttempts = 0;
+      state.solvedMinutes = Math.max(0, Math.floor((submission.creationTimeSeconds - startSeconds) / 60));
+      state.penalty = state.solvedMinutes + state.wrongAttempts * 20;
+    } else if (submission.verdict === "TESTING") state.pendingAttempts += 1;
+    else if (!["COMPILATION_ERROR", "SKIPPED"].includes(submission.verdict || "")) state.wrongAttempts += 1;
+  }
+  return states;
+}
+
+export function buildParticipantVpRows(participants, problems, startedAt, submissionSets, cutoffSeconds) {
   return participants.map((handle, participantIndex) => {
-    const states = Object.fromEntries(problems.map((problem) => [`${problem.contestId}${problem.index}`, { solved: false, wrongAttempts: 0, pendingAttempts: 0, solvedMinutes: null, penalty: 0 }]));
-    const ordered = (submissionSets[participantIndex] || [])
-      .filter((item) => item.creationTimeSeconds >= startSeconds && item.creationTimeSeconds <= cutoff && problemKeys.has(`${item.problem?.contestId}${item.problem?.index}`))
-      .sort((left, right) => left.creationTimeSeconds - right.creationTimeSeconds);
-    for (const submission of ordered) {
-      const state = states[`${submission.problem.contestId}${submission.problem.index}`];
-      if (!state || state.solved) continue;
-      if (submission.verdict === "OK") {
-        state.solved = true;
-        state.pendingAttempts = 0;
-        state.solvedMinutes = Math.max(0, Math.floor((submission.creationTimeSeconds - startSeconds) / 60));
-        state.penalty = state.solvedMinutes + state.wrongAttempts * 20;
-      } else if (submission.verdict === "TESTING") state.pendingAttempts += 1;
-      else if (!["COMPILATION_ERROR", "SKIPPED"].includes(submission.verdict || "")) state.wrongAttempts += 1;
-    }
+    const states = buildParticipantStates(problems, startedAt, [submissionSets[participantIndex] || []], cutoffSeconds);
     return {
       id: `mine:${handle.toLowerCase()}`,
       handle,
@@ -152,6 +157,22 @@ export function buildParticipantVpRows(participants, problems, startedAt, submis
       mine: true,
     };
   });
+}
+
+export function buildTeamVpRow(members, problems, startedAt, submissionSets, cutoffSeconds) {
+  const normalized = members.map((handle) => String(handle).trim()).filter(Boolean);
+  const states = buildParticipantStates(problems, startedAt, submissionSets, cutoffSeconds);
+  return {
+    id: `mine:${normalized.map((handle) => handle.toLowerCase()).sort().join("+")}`,
+    handle: normalized.join(" + "),
+    members: normalized,
+    ...summarizeVpStates(states),
+    problems: states,
+    sourceCount: 0,
+    sourceContests: [],
+    origin: "mine",
+    mine: true,
+  };
 }
 
 export function rankVpRows(originalRows, participantRows, officialTeams = originalRows.length) {

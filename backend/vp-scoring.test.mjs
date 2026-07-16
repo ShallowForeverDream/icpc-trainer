@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { buildOriginalVpRows, buildParticipantVpRows, medalCutoffs, medalForRank, rankVpRows } from "./vp-scoring.mjs";
+import { buildOriginalVpRows, buildParticipantVpRows, buildTeamVpRow, medalCutoffs, medalForRank, rankVpRows } from "./vp-scoring.mjs";
 
 test("calculates ICPC penalty, freeze cutoffs, ranks, and 10/20/30 percent medals", () => {
   const startedAt = 1_700_000_000_000;
@@ -32,6 +32,28 @@ test("calculates ICPC penalty, freeze cutoffs, ranks, and 10/20/30 percent medal
   const mine = ranked.rows.find((row) => row.mine);
   assert.equal(mine.rank, 10);
   assert.equal(mine.medal, "gold");
+});
+
+test("combines all teammate handles into one ICPC team row", () => {
+  const startedAt = 1_700_000_000_000;
+  const startSeconds = Math.floor(startedAt / 1000);
+  const problems = [{ contestId: 300, index: "A" }, { contestId: 300, index: "B" }];
+  const row = buildTeamVpRow(["Alice", "Bob", "Carol"], problems, startedAt, [
+    [
+      { creationTimeSeconds: startSeconds + 300, problem: { contestId: 300, index: "A" }, verdict: "WRONG_ANSWER" },
+      { creationTimeSeconds: startSeconds + 1_200, problem: { contestId: 300, index: "B" }, verdict: "OK" },
+    ],
+    [{ creationTimeSeconds: startSeconds + 600, problem: { contestId: 300, index: "A" }, verdict: "OK" }],
+    [{ creationTimeSeconds: startSeconds + 900, problem: { contestId: 300, index: "A" }, verdict: "WRONG_ANSWER" }],
+  ], 10_800);
+
+  assert.equal(row.handle, "Alice + Bob + Carol");
+  assert.deepEqual(row.members, ["Alice", "Bob", "Carol"]);
+  assert.equal(row.solved, 2);
+  assert.equal(row.problems["300A"].wrongAttempts, 1);
+  assert.equal(row.problems["300A"].penalty, 30);
+  assert.equal(row.problems["300B"].penalty, 20);
+  assert.equal(row.penalty, 50);
 });
 
 test("pairs same-percentile teams into a full multi-contest reference board", () => {

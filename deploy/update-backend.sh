@@ -17,6 +17,11 @@ fi
 stamp="$(date +%Y%m%d-%H%M%S)"
 tmp="$(mktemp -d /tmp/icpc-trainer-update.XXXXXX)"
 stage="$root/.backend-stage-$stamp"
+image_tag="$(printf '%s' "$ref" | tr -cs 'A-Za-z0-9_.-' '-')"
+image_tag="${image_tag#-}"
+image_tag="${image_tag%-}"
+export ICPC_TRAINER_IMAGE_TAG="${image_tag:-release}"
+export ICPC_TRAINER_SOURCE_REF="$ref"
 cleanup() {
   rm -rf -- "$tmp"
   [[ ! -d "$stage" ]] || rm -rf -- "$stage"
@@ -31,6 +36,11 @@ tar -xzf "$tmp/source.tar.gz" -C "$tmp"
 source_root="$(find "$tmp" -mindepth 1 -maxdepth 1 -type d -name 'icpc-trainer-*' -print -quit)"
 if [[ -z "$source_root" || ! -f "$source_root/backend/compose.yaml" ]]; then
   echo "下载包中没有找到 backend/compose.yaml。" >&2
+  exit 1
+fi
+expected_api="$(sed -nE 's/^[[:space:]]*api: ([0-9]+),?$/\1/p' "$source_root/backend/server.mjs" | head -n 1)"
+if [[ -z "$expected_api" ]]; then
+  echo "无法从后端源码读取 API 版本。" >&2
   exit 1
 fi
 
@@ -56,8 +66,9 @@ COMPOSE_PROJECT_NAME=backend docker compose -f "$root/backend/compose.yaml" up -
 
 echo "[3/3] 等待健康检查"
 healthy=0
+health=""
 for _ in $(seq 1 60); do
-  if curl -fsS --max-time 3 http://127.0.0.1:8787/health >/dev/null; then
+  if health="$(curl -fsS --max-time 3 http://127.0.0.1:8787/health)"; then
     healthy=1
     break
   fi
@@ -66,6 +77,12 @@ done
 if [[ "$healthy" -ne 1 ]]; then
   docker compose -f "$root/backend/compose.yaml" logs --tail=100 api >&2 || true
   echo "新 API 未通过健康检查；旧文件保存在 $root/backups/backend-dir-$stamp。" >&2
+  exit 1
+fi
+
+if [[ "$health" != *"\"api\":$expected_api"* || "$health" != *"\"revision\":\"$ref\""* ]]; then
+  docker compose -f "$root/backend/compose.yaml" logs --tail=100 api >&2 || true
+  echo "健康检查通过，但运行版本与目标版本不一致：$health" >&2
   exit 1
 fi
 

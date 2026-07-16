@@ -1,6 +1,7 @@
 services:
   api:
     build: .
+    image: icpc-trainer-api:${ICPC_TRAINER_IMAGE_TAG:-local}
     container_name: icpc-trainer-api
     restart: unless-stopped
     ports:
@@ -14,6 +15,7 @@ services:
       TRANSLATOR_MODEL: ${TRANSLATOR_MODEL:-qwen2.5-1.5b-instruct}
       CODEFORCES_API_KEY: ${CODEFORCES_API_KEY:-}
       CODEFORCES_API_SECRET: ${CODEFORCES_API_SECRET:-}
+      SOURCE_REVISION: ${ICPC_TRAINER_SOURCE_REF:-local}
       API_MEMORY_LIMIT_MIB: 512
     volumes:
       - icpc-trainer-data:/data

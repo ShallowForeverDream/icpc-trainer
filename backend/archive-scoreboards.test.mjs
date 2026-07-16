@@ -204,6 +204,7 @@ test("persists XCPCIO sources and generated scoreboard views in SQLite across re
     assert.equal(health.caches.archiveScoreboardViews, 1);
     assert.equal(health.memory.limitMiB, 512);
     assert.equal(health.versions.api, 9);
+    assert.equal(health.versions.revision, "local");
     assert.equal(health.integrations.codeforcesAuthenticated, false);
     assert.equal(health.versions.statementTranslation, 22);
     assert.equal(health.versions.archiveStatementTranslation, 4);

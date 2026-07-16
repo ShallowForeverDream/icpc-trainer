@@ -35,7 +35,7 @@ window.addEventListener("message", async (event) => {
   if (!message || message.source !== "icpc-trainer") return;
 
   if (message.type === "ICPC_TRAINER_PING") {
-    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.4.1" }, window.location.origin);
+    window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_PONG", version: "1.4.2" }, window.location.origin);
     await replayStoredResults();
     return;
   }
@@ -43,9 +43,9 @@ window.addEventListener("message", async (event) => {
   if (message.type === "ICPC_TRAINER_HEALTH_CHECK") {
     try {
       const result = await chrome.runtime.sendMessage({ type: "CHECK_JUDGE_SESSIONS" });
-      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.1", sessions: result?.sessions || {} }, window.location.origin);
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.2", sessions: result?.sessions || {} }, window.location.origin);
     } catch {
-      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.1", sessions: {} }, window.location.origin);
+      window.postMessage({ source: "icpc-trainer-extension", type: "ICPC_TRAINER_HEALTH_RESULT", version: "1.4.2", sessions: {} }, window.location.origin);
     }
     return;
   }
@@ -97,7 +97,7 @@ window.addEventListener("message", async (event) => {
       || payload.contestId < 1 || payload.contestId > 10_000_000 || !/^[A-Z][0-9]?$/.test(payload.index)
       || typeof payload.sourceCode !== "string" || !payload.sourceCode.trim() || payload.sourceCode.length > 500_000
       || (payload.isGym !== undefined && typeof payload.isGym !== "boolean")
-      || (archiveScoped && (payload.isGym !== true || typeof payload.archiveContestId !== "string"
+      || (archiveScoped && (typeof payload.archiveContestId !== "string"
         || !/^[a-z0-9](?:[a-z0-9-]{1,78}[a-z0-9])$/.test(payload.archiveContestId) || !/^[A-Z][0-9]?$/.test(payload.slot)))) return;
     const submission = {
       requestId: payload.requestId,

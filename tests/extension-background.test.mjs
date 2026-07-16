@@ -101,3 +101,86 @@ test("keeps concurrent judge submissions isolated by their background tab", asyn
   const luoguPending = await dispatch({ type: "GET_PENDING_SUBMISSION", judge: "luogu" }, { url: "https://www.luogu.com.cn/problem/P10553", tab: { id: luoguJob.judgeTabId } });
   assert.equal(luoguPending.submission.luoguProblemId, "P10553");
 });
+
+test("accepts archive submissions from Gym and regular Codeforces contests", async () => {
+  const source = await readFile(new URL("../extension/trainer-bridge.js", import.meta.url), "utf8");
+  const trainerOrigin = "https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site";
+  const runtimeMessages = [];
+  const postedMessages = [];
+  let pageMessageListener;
+  const window = {
+    location: { origin: trainerOrigin },
+    addEventListener(type, listener) {
+      if (type === "message") pageMessageListener = listener;
+    },
+    postMessage(message) { postedMessages.push(message); },
+  };
+  const chrome = {
+    storage: { local: {
+      async get() { return { trainerSubmissionResults: [] }; },
+      async set() {},
+    } },
+    runtime: {
+      onMessage: { addListener() {} },
+      async sendMessage(message) {
+        runtimeMessages.push(message);
+        return { ok: true };
+      },
+    },
+  };
+  vm.runInNewContext(source, { window, chrome, URL, Date, setTimeout, clearTimeout, console }, { filename: "trainer-bridge.js" });
+
+  const dispatch = async (payload) => {
+    const before = runtimeMessages.length;
+    await pageMessageListener({
+      source: window,
+      origin: trainerOrigin,
+      data: { source: "icpc-trainer", type: "ICPC_TRAINER_SUBMIT", payload },
+    });
+    return runtimeMessages.slice(before);
+  };
+  const common = {
+    sourceCode: "int main(){}",
+    languageLabel: "GNU C++20",
+    autoSubmit: true,
+  };
+
+  const regular = await dispatch({
+    ...common,
+    requestId: "archive-regular-2172-a",
+    contestId: 2172,
+    index: "A",
+    isGym: false,
+    archiveContestId: "2025-taichung",
+    slot: "A",
+  });
+  assert.equal(regular.length, 1);
+  assert.equal(regular[0].type, "OPEN_CODEFORCES_SUBMIT");
+  assert.equal(regular[0].url, "https://codeforces.com/problemset/submit?contestId=2172&submittedProblemIndex=A");
+  assert.equal(regular[0].submission.isGym, false);
+  assert.equal(regular[0].submission.archiveContestId, "2025-taichung");
+
+  const gym = await dispatch({
+    ...common,
+    requestId: "archive-gym-106164-a",
+    contestId: 106164,
+    index: "A",
+    isGym: true,
+    archiveContestId: "2025-bangkok",
+    slot: "A",
+  });
+  assert.equal(gym.length, 1);
+  assert.equal(gym[0].url, "https://codeforces.com/gym/106164/submit?submittedProblemIndex=A");
+  assert.equal(gym[0].submission.isGym, true);
+
+  const malformed = await dispatch({
+    ...common,
+    requestId: "archive-missing-slot",
+    contestId: 2172,
+    index: "A",
+    isGym: false,
+    archiveContestId: "2025-taichung",
+  });
+  assert.equal(malformed.length, 0);
+  assert.ok(postedMessages.some((message) => message.type === "ICPC_TRAINER_SUBMIT_RESULT"));
+});

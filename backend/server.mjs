@@ -668,6 +668,7 @@ const server = http.createServer(async (request, response) => {
       },
       versions: {
         api: 9,
+        revision: process.env.SOURCE_REVISION || "local",
         statementTranslation: TRANSLATION_VERSION,
         archiveStatementTranslation: ARCHIVE_TRANSLATION_VERSION,
       },

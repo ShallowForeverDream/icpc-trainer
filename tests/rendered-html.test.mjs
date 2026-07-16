@@ -195,7 +195,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.ok(manifest.host_permissions.includes("https://qoj.ac/*"));
   assert.ok(manifest.host_permissions.includes("https://www.luogu.com.cn/*"));
   assert.ok(!manifest.permissions.includes("cookies"));
-  assert.equal(manifest.version, "1.4.1");
+  assert.equal(manifest.version, "1.4.2");
   assert.ok(!manifest.host_permissions.includes("https://*.chatgpt.site/*"));
   assert.ok(manifest.host_permissions.includes("https://icpc-trainer-shallowdream.safe-chime-4451.chatgpt.site/*"));
   assert.match(background, /FETCH_CODEFORCES_STATEMENT/);
@@ -220,6 +220,7 @@ test("ships a constrained Manifest V3 statement and submit bridge", async () => 
   assert.match(luoguFill, /phase === "tracking"/);
   assert.match(luoguFill, /status === 12/);
   assert.match(bridge, /archiveContestId/);
+  assert.doesNotMatch(bridge, /archiveScoped && \(payload\.isGym !== true/);
   assert.match(fill, /archiveContestId/);
   assert.match(background, /archiveContestId/);
   assert.match(background, /trainerSubmissionResults/);

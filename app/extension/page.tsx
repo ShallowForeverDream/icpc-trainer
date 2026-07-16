@@ -5,6 +5,7 @@ import { useCallback, useEffect, useState } from "react";
 import { AppShell, Icon, Pill } from "../components/AppShell";
 import { apiFetch } from "../lib/api-client";
 import { SUBMIT_EXTENSION_LABEL, SUBMIT_EXTENSION_VERSION } from "../lib/extension-config";
+import { backendIsCurrent, backendVersionText, type BackendVersions } from "../lib/service-health";
 
 type CheckState = "checking" | "ready" | "warning" | "error";
 type Check = { state: CheckState; title: string; detail: string };
@@ -34,12 +35,13 @@ export default function ExtensionPage() {
 
     setBackend(checking);
     void apiFetch("/health", { cache: "no-store" }, 7_000).then(async (response) => {
-      const payload = await response.json().catch(() => ({})) as { status?: string; persistence?: Record<string, unknown> };
+      const payload = await response.json().catch(() => ({})) as { status?: string; persistence?: Record<string, unknown>; versions?: BackendVersions };
       if (!response.ok || payload.status !== "ok") throw new Error();
-      const current = Boolean(payload.persistence && Object.prototype.hasOwnProperty.call(payload.persistence, "platformSubmissions"));
+      const current = backendIsCurrent(payload.versions)
+        && Boolean(payload.persistence && Object.prototype.hasOwnProperty.call(payload.persistence, "platformSubmissions"));
       setBackend(current
-        ? { state: "ready", title: "已连接", detail: "提交与训练数据可持久保存" }
-        : { state: "warning", title: "需要更新", detail: "服务器在线，但仍是旧版后端" });
+        ? { state: "ready", title: "已连接", detail: `提交与训练数据可持久保存 · ${backendVersionText(payload.versions)}` }
+        : { state: "warning", title: "需要更新", detail: `服务器在线，但仍是旧版后端 · ${backendVersionText(payload.versions)}` });
     }).catch(() => setBackend({ state: "error", title: "未连接", detail: "训练服务器暂时不可用" }));
   }, []);
 

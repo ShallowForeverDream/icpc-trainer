@@ -4,6 +4,7 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
 import { AppShell, Pill } from "../components/AppShell";
 import { authFetch, readAuth, type AuthUser } from "../lib/auth-client";
+import { backendIsCurrent, backendVersionText, type BackendVersions } from "../lib/service-health";
 
 type Invite = { id: number; code?: string; codePrefix?: string; maxUses: number; usedCount: number; expiresAt: string; createdAt: string; status: "active" | "used" | "expired" };
 type Feedback = { id: number; email: string | null; category: string; rating: number; message: string; page: string; status: string; createdAt: string };
@@ -24,7 +25,7 @@ type SystemHealth = {
   };
   persistence: { personalStates: number; platformSubmissions: number; activeVps: number; vpHistory?: number; vpSnapshots: number; trainingEvents?: number; accountTrainingEvents?: number };
   integrations?: { codeforcesAuthenticated: boolean };
-  versions?: { api: number; statementTranslation: number; archiveStatementTranslation: number };
+  versions?: BackendVersions;
 };
 
 function uptimeText(seconds: number) {
@@ -50,6 +51,7 @@ export default function AdminPage() {
   const [loading, setLoading] = useState(true);
   const [actionId, setActionId] = useState<number | null>(null);
   const [view, setView] = useState<"invites" | "users" | "statements" | "feedback" | "system">("invites");
+  const backendCurrent = backendIsCurrent(systemHealth?.versions);
 
   const load = useCallback(async () => {
     const auth = readAuth();
@@ -164,12 +166,12 @@ export default function AdminPage() {
     {view === "system" ? <section className="panel system-health-panel">
       <div className="panel-head"><div><h2>系统状态</h2><p>{healthCheckedAt ? `更新于 ${new Date(healthCheckedAt).toLocaleTimeString("zh-CN")}` : "检查国内 API 与持久化存储"}</p></div><button type="button" onClick={() => void refreshHealth()} disabled={healthLoading}>{healthLoading ? "检查中…" : "刷新"}</button></div>
       {systemHealth ? <>
-        <div className="system-health-status"><i /><b>运行正常</b><span>数据写入 SQLite，重启不会丢失</span></div>
+        <div className={`system-health-status${backendCurrent ? "" : " outdated"}`}><i /><b>{backendCurrent ? "运行正常" : "后端版本未切换"}</b><span>{backendCurrent ? "数据写入 SQLite，重启不会丢失" : "服务器在线，但一站式题面、VP 与跨设备功能仍在使用旧程序"}</span></div>
         <div className="system-health-grid">
           <article><span>API 内存</span><b>{systemHealth.memory.rssMiB} <small>/ {systemHealth.memory.limitMiB || 512} MiB</small></b><em>堆内存 {systemHealth.memory.heapUsedMiB} MiB</em></article>
           <article><span>持续运行</span><b>{uptimeText(systemHealth.uptime)}</b><em>自动健康检查已启用</em></article>
           <article><span>持久化数据</span><b>{systemHealth.persistence.platformSubmissions} <small>次提交</small></b><em>{systemHealth.persistence.trainingEvents || 0} 条训练 · {systemHealth.persistence.personalStates} 条个人状态</em></article>
-          <article><span>题面版本</span><b>{systemHealth.versions ? `API v${systemHealth.versions.api}` : "待升级"}</b><em>{systemHealth.versions ? `CF ${systemHealth.versions.statementTranslation} · 历届赛 ${systemHealth.versions.archiveStatementTranslation}` : "升级阿里云后显示版本"}</em></article>
+          <article><span>运行版本</span><b>{systemHealth.versions ? `API v${systemHealth.versions.api}` : "待升级"}</b><em>{backendVersionText(systemHealth.versions)}</em></article>
         </div>
         <div className="system-cache-row"><span>题库缓存 <b>{systemHealth.caches.problemsets}</b></span><span>提交缓存 <b>{systemHealth.caches.submissions}</b></span><span>CF 榜单 <b>{systemHealth.caches.contestStandings}</b></span><span>历届榜单 <b>{systemHealth.caches.archiveScoreboardViews}</b></span><span>账号训练 <b>{systemHealth.persistence.accountTrainingEvents || 0}</b></span><span>VP 历史 <b>{systemHealth.persistence.vpHistory || 0}</b></span><span>VP 快照 <b>{systemHealth.persistence.vpSnapshots}</b></span><span>题面任务 <b>{systemHealth.caches.statementJobs ? systemHealth.caches.statementJobs.imports + systemHealth.caches.statementJobs.archiveImports + systemHealth.caches.statementJobs.archiveOfficialChinese + systemHealth.caches.statementJobs.translations + systemHealth.caches.statementJobs.archiveTranslations : 0}</b></span><span>重试窗口 <b>{systemHealth.caches.statementJobs?.retryWindows || 0}</b></span><span>Codeforces 原榜 <b>{systemHealth.integrations?.codeforcesAuthenticated ? "已接入" : "待配置 API Key"}</b></span></div>
       </> : <div className="system-health-offline"><b>国内 API 暂时不可达</b><span>点击“刷新”重试；若持续失败，再检查阿里云容器。</span></div>}

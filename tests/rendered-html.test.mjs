@@ -651,7 +651,7 @@ test("ships the 2024 Shenyang regional as instant official bilingual statements"
 });
 
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {
-  const [backend, backendScoring, persistence, persistentClient, statements, archiveClient, archiveCatalog, archiveHtmlParser, compose, dockerfile, nginx, browserApi, worker, updater, backup, backupTimer] = await Promise.all([
+  const [backend, backendScoring, persistence, persistentClient, statements, archiveClient, archiveCatalog, archiveHtmlParser, compose, dockerfile, nginx, browserApi, worker, updater, backup, backupTimer, serviceHealth, adminPage, extensionPage] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
     readFile(new URL("backend/vp-scoring.mjs", root), "utf8"),
     readFile(new URL("backend/persistence.mjs", root), "utf8"),
@@ -668,6 +668,9 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
     readFile(new URL("deploy/update-backend.sh", root), "utf8"),
     readFile(new URL("deploy/backup-data.sh", root), "utf8"),
     readFile(new URL("deploy/icpc-trainer-backup.timer", root), "utf8"),
+    readFile(new URL("app/lib/service-health.ts", root), "utf8"),
+    readFile(new URL("app/admin/page.tsx", root), "utf8"),
+    readFile(new URL("app/extension/page.tsx", root), "utf8"),
   ]);
   assert.match(backend, /\/vp\/generate/);
   assert.match(backend, /\/submissions\/raw/);
@@ -730,6 +733,11 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(statements, /edge\.microsoft\.com\/translate\/auth/);
   assert.match(statements, /json_schema/);
   assert.match(statements, /processedBlocks/);
+  assert.match(serviceHealth, /api: 14/);
+  assert.match(serviceHealth, /statementTranslation: 23/);
+  assert.match(serviceHealth, /archiveStatementTranslation: 5/);
+  assert.match(adminPage, /后端版本未切换/);
+  assert.match(extensionPage, /backendIsCurrent/);
   assert.match(archiveClient, /gymId/);
   assert.match(archiveCatalog, /id: "2025-chengdu"[\s\S]*gymId: 106161[\s\S]*A Lot of Paintings/);
   assert.match(archiveHtmlParser, /parseArchiveStatementHtml/);
@@ -784,8 +792,8 @@ test("ships invite-only authentication and administration", async () => {
   assert.match(admin, /数据写入 SQLite/);
   assert.match(admin, /题面任务/);
   assert.match(admin, /重试窗口/);
-  assert.match(admin, /versions\.archiveStatementTranslation/);
-  assert.match(admin, /升级阿里云后显示版本/);
+  assert.match(admin, /backendVersionText/);
+  assert.match(admin, /后端版本未切换/);
   assert.match(admin, /Codeforces 原榜/);
   assert.match(admin, /可注册人数/);
   assert.match(admin, /invite-presets/);

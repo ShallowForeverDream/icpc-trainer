@@ -4,7 +4,7 @@
 import { FormEvent, useEffect, useState } from "react";
 import { AppShell, Icon, Pill } from "../components/AppShell";
 import { authFetch, clearAuth, readAuth, updateAuthUser, type AuthUser } from "../lib/auth-client";
-import { normalizeTeamHandles, readTrainerPreferences, saveTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
+import { normalizeTeamHandles, readTrainerPreferences, saveTrainerPreferences, syncTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
 
 export default function AccountPage() {
   const [user, setUser] = useState<AuthUser | null>(null);
@@ -19,17 +19,26 @@ export default function AccountPage() {
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
+    let active = true;
     const preferences = readTrainerPreferences();
     setCodeforcesHandle(preferences.codeforcesHandle);
     setTeamHandleText(preferences.teamHandles.join(", "));
     setDailyGoal(preferences.dailyGoal);
+    void syncTrainerPreferences().then((remote) => {
+      if (!active) return;
+      setCodeforcesHandle(remote.codeforcesHandle);
+      setTeamHandleText(remote.teamHandles.join(", "));
+      setDailyGoal(remote.dailyGoal);
+    });
     const auth = readAuth();
     if (!auth) { location.replace("/login"); return; }
     setUser(auth.user);
     authFetch("/auth/me").then(async (response) => {
+      if (!active) return;
       if (!response.ok) { location.replace("/login"); return; }
       const data = await response.json() as { user: AuthUser }; setUser(data.user); updateAuthUser(data.user);
-    });
+    }).catch(() => undefined);
+    return () => { active = false; };
   }, []);
 
   async function changePassword(event: FormEvent) {

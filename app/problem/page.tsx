@@ -5,7 +5,7 @@ import { FormEvent, useCallback, useEffect, useMemo, useRef, useState } from "re
 import { AppShell, Icon, ProblemRow } from "../components/AppShell";
 import { apiJson } from "../lib/api-client";
 import { authJson } from "../lib/auth-client";
-import { readTrainerPreferences } from "../lib/preferences";
+import { readTrainerPreferences, syncTrainerPreferences } from "../lib/preferences";
 import { getTrainingClientId } from "../lib/training-client";
 
 type CatalogProblem = { code: string; contestId: number; index: string; title: string; rating: number; tags: string[]; status?: string; reason?: string };
@@ -78,6 +78,7 @@ export default function ProblemLibraryPage() {
   }, [handle, maxRating, minRating, mode, practiceMode, query, selectedTags]);
 
   useEffect(() => {
+    let active = true;
     const params = new URLSearchParams(location.search);
     const requested = params.get("mode") as PracticeMode | null;
     const nextPracticeMode = practiceModes.some((item) => item.id === requested) ? requested! : "balanced";
@@ -85,8 +86,12 @@ export default function ProblemLibraryPage() {
     setHandle(savedHandle);
     setPracticeMode(nextPracticeMode);
     setConcealMeta(params.get("training") !== "0");
-    void loadProblems(1, "recommended", nextPracticeMode, savedHandle);
-    return () => requestRef.current?.abort();
+    void syncTrainerPreferences().then((preferences) => {
+      if (!active) return;
+      setHandle(preferences.codeforcesHandle);
+      void loadProblems(1, "recommended", nextPracticeMode, preferences.codeforcesHandle);
+    });
+    return () => { active = false; requestRef.current?.abort(); };
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
   function toggleTag(tag: string) {

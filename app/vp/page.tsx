@@ -8,7 +8,7 @@ import { JudgeReadiness } from "../components/JudgeReadiness";
 import { authFetch } from "../lib/auth-client";
 import { getDeviceId } from "../lib/device-id";
 import { loadPlatformSubmissions, type PlatformSubmission } from "../lib/platform-submissions";
-import { readTrainerPreferences, saveTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
+import { readTrainerPreferences, saveTrainerPreferences, syncTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
 import { readStoredJson, removeStoredValue, writeStoredJson } from "../lib/storage";
 
 type VpProblem = { slot: string; code: string; contestId: number; index: string; title: string; rating: number; tags: string[]; thinking?: boolean };
@@ -145,15 +145,22 @@ export default function VpPage() {
   const finalSyncFor = useRef("");
 
   useEffect(() => {
+    let active = true;
     const preferences = readTrainerPreferences();
     setParticipantText(preferences.teamHandles.join(", "));
     const saved = readStoredJson<Contest | null>(STORAGE_KEY, null, (value): value is Contest | null => value === null || isContest(value));
     if (saved) { setContest(saved); setParticipantText((saved.participants ?? [saved.handle]).join(", ")); }
-    void vpJson<{ session: Contest | null }>(`/vp/sessions/active?clientId=${encodeURIComponent(getDeviceId())}`, { cache: "no-store" }).then(({ session }) => {
-      if (session && isContest(session)) { save(session); setParticipantText((session.participants ?? [session.handle]).join(", ")); }
-    }).catch(() => undefined);
+    void Promise.allSettled([
+      syncTrainerPreferences(),
+      vpJson<{ session: Contest | null }>(`/vp/sessions/active?clientId=${encodeURIComponent(getDeviceId())}`, { cache: "no-store" }),
+    ]).then(([preferenceResult, sessionResult]) => {
+      if (!active) return;
+      const activeSession = sessionResult.status === "fulfilled" ? sessionResult.value.session : null;
+      if (activeSession && isContest(activeSession)) { save(activeSession); setParticipantText((activeSession.participants ?? [activeSession.handle]).join(", ")); }
+      else if (!saved && preferenceResult.status === "fulfilled") setParticipantText(preferenceResult.value.teamHandles.join(", "));
+    });
     void loadVpHistory();
-    return () => { generateRequest.current?.abort(); standingsRequest.current?.abort(); };
+    return () => { active = false; generateRequest.current?.abort(); standingsRequest.current?.abort(); };
   }, []);
   useEffect(() => {
     if (!contest?.startedAt) return;

@@ -74,10 +74,9 @@ export default function Home() {
   const days = useMemo(() => Array.from({ length: 84 }, (_, index) => { const date = new Date(); date.setDate(date.getDate() - 83 + index); return dateKey(date); }), []);
 
   useEffect(() => {
-    const preferences = readTrainerPreferences();
-    setHandle(preferences.codeforcesHandle);
-    setGoal(preferences.dailyGoal);
-    void syncTrainerPreferences().then((remote) => { setHandle(remote.codeforcesHandle); setGoal(remote.dailyGoal); });
+    const localPreferences = readTrainerPreferences();
+    setHandle(localPreferences.codeforcesHandle);
+    setGoal(localPreferences.dailyGoal);
 
     const localArchive = readStoredJson<ArchiveSession | null>(ARCHIVE_SESSION_KEY, null, (value): value is ArchiveSession | null => value === null || isArchiveSession(value));
     if (localArchive) {
@@ -92,31 +91,32 @@ export default function Home() {
 
     const clientId = getTrainingClientId();
     const controller = new AbortController();
-    const recommendationParams = new URLSearchParams({
-      handle: preferences.codeforcesHandle,
-      min: "800",
-      max: "1800",
-      limit: "18",
-      mode: "balanced",
-      tags: thinkingTags.join(","),
-      clientId,
-    });
-    Promise.allSettled([
-      apiJson<{ submissions?: Submission[] }>(`/codeforces/submissions?handle=${encodeURIComponent(preferences.codeforcesHandle)}&count=1000`, { cache: "no-store", signal: controller.signal }),
-      authJson<{ problems?: Recommendation[] }>(`/codeforces/recommendations?${recommendationParams}`, { cache: "no-store", signal: controller.signal }),
-      loadTrainingSummary(preferences.codeforcesHandle, controller.signal),
-    ]).then(([submissionResult, recommendationResult, summaryResult]) => {
+    void syncTrainerPreferences().then(async (preferences) => {
+      if (controller.signal.aborted) return;
+      setHandle(preferences.codeforcesHandle);
+      setGoal(preferences.dailyGoal);
+      const recommendationParams = new URLSearchParams({
+        handle: preferences.codeforcesHandle,
+        min: "800",
+        max: "1800",
+        limit: "18",
+        mode: "balanced",
+        tags: thinkingTags.join(","),
+        clientId,
+      });
+      const [submissionResult, recommendationResult, summaryResult] = await Promise.allSettled([
+        apiJson<{ submissions?: Submission[] }>(`/codeforces/submissions?handle=${encodeURIComponent(preferences.codeforcesHandle)}&count=1000`, { cache: "no-store", signal: controller.signal }),
+        authJson<{ problems?: Recommendation[] }>(`/codeforces/recommendations?${recommendationParams}`, { cache: "no-store", signal: controller.signal }),
+        loadTrainingSummary(preferences.codeforcesHandle, controller.signal),
+      ]);
       if (controller.signal.aborted) return;
       let failed = 0;
       const submissionData = submissionResult.status === "fulfilled" ? submissionResult.value : (failed += 1, {});
       const nextSubmissions = Array.isArray(submissionData.submissions) ? submissionData.submissions as Submission[] : [];
       setCodeforcesSubmissions(nextSubmissions.slice(0, 10_000));
-
       const recommendationData = recommendationResult.status === "fulfilled" ? recommendationResult.value : (failed += 1, {});
       if (Array.isArray(recommendationData.problems) && recommendationData.problems.length) setRecommendations(recommendationData.problems);
-      if (summaryResult.status === "fulfilled") {
-        setTrainingSummary(summaryResult.value);
-      } else failed += 1;
+      if (summaryResult.status === "fulfilled") setTrainingSummary(summaryResult.value); else failed += 1;
       if (failed) setSyncError(failed === 3 ? "实时数据暂时不可用" : "部分数据同步失败");
     }).finally(() => { if (!controller.signal.aborted) setSyncing(false); });
     return () => controller.abort();

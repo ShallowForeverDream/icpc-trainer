@@ -6,7 +6,7 @@ import { FormEvent, useEffect, useRef, useState } from "react";
 import { AppShell, Icon, Pill } from "../components/AppShell";
 import { apiJson } from "../lib/api-client";
 import { loadPlatformSubmissions, subscribePlatformSubmissions, type PlatformSubmission } from "../lib/platform-submissions";
-import { readTrainerPreferences, saveTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
+import { readTrainerPreferences, saveTrainerPreferences, syncTrainerPreferences, validCodeforcesHandle } from "../lib/preferences";
 
 type Submission = { id: number; createdAt: string; code: string; contestId?: number; index: string; title: string; verdict: string; language: string; timeMs: number };
 const verdictLabel: Record<string, string> = { OK: "Accepted", WRONG_ANSWER: "Wrong answer", TIME_LIMIT_EXCEEDED: "Time limit", MEMORY_LIMIT_EXCEEDED: "Memory limit", RUNTIME_ERROR: "Runtime error", TESTING: "Testing" };
@@ -48,12 +48,17 @@ export default function SubmissionsPage() {
   function sync(event: FormEvent) { event.preventDefault(); void syncHandle(handle, true); }
 
   useEffect(() => {
+    let active = true;
     void loadPlatformSubmissions().then(setPlatformRows);
     const unsubscribe = subscribePlatformSubmissions(setPlatformRows);
     const savedHandle = readTrainerPreferences().codeforcesHandle;
     setHandle(savedHandle);
-    void syncHandle(savedHandle, false);
-    return () => { unsubscribe(); requestRef.current?.abort(); };
+    void syncTrainerPreferences().then((preferences) => {
+      if (!active) return;
+      setHandle(preferences.codeforcesHandle);
+      void syncHandle(preferences.codeforcesHandle, false);
+    });
+    return () => { active = false; unsubscribe(); requestRef.current?.abort(); };
   }, []);
 
   return <AppShell active="提交记录">

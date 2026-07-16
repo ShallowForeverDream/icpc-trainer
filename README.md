@@ -40,7 +40,7 @@ Node.js 版本要求：`>=22.13.0`。
 - `app/problem/`：题库与题目训练界面
 - `app/extension/`：扩展下载与安装指南
 - `extension/`：浏览器扩展源码
-- `public/icpc-trainer-extension.zip`：可下载扩展包
+- `public/icpc-trainer-extension.zip`：可下载的 `v1.4.2` 提交扩展
 - `backend/`：部署在阿里云 ECS 的 Codeforces API、SQLite 题面缓存、图片 OCR、快速翻译与本地模型回退队列
 - `deploy/`：公网 IP HTTPS、Nginx 与证书自动续期配置
 

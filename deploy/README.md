@@ -31,9 +31,20 @@ Recommended server-side update (replace `<commit>` with the released commit):
 curl -fsSL https://raw.githubusercontent.com/ShallowForeverDream/icpc-trainer/<commit>/deploy/update-backend.sh | bash -s -- <commit>
 ```
 
-The script backs up the current backend, preserves `.env` and Docker volumes,
-builds before switching files, recreates only the API container, and verifies
-the persistent submission route.
+The script creates a consistent SQLite backup before every update, backs up the
+current backend, preserves `.env` and Docker volumes, builds before switching
+files, recreates only the API container, and verifies the persistent submission
+route plus the public HTTPS reverse proxy. It also installs a systemd timer that runs the same database backup every
+day around 03:30 and retains 14 days of compressed, root-only backups under
+`/opt/icpc-trainer/backups/data/`.
+
+Run or verify a backup manually:
+
+```bash
+/opt/icpc-trainer/deploy/backup-data.sh
+systemctl status icpc-trainer-backup.timer --no-pager
+ls -lh /opt/icpc-trainer/backups/data/
+```
 
 Upgrade from the repository root on the workstation:
 
@@ -60,3 +71,5 @@ Deployment files:
 - `nginx-icpc-trainer.conf`: isolated HTTPS virtual host
 - `renew-ip-certificate.sh`: automated renewal and Nginx reload
 - `icpc-trainer-cert-renew.*`: systemd unit and timer
+- `backup-data.sh`: online SQLite `VACUUM INTO` backup, gzip verification, and retention
+- `icpc-trainer-backup.*`: daily systemd backup unit and timer

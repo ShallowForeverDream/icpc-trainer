@@ -1,0 +1,11 @@
+[Unit]
+Description=Daily icpc-trainer data backup
+
+[Timer]
+OnCalendar=*-*-* 03:30:00
+RandomizedDelaySec=15m
+Persistent=true
+Unit=icpc-trainer-backup.service
+
+[Install]
+WantedBy=timers.target

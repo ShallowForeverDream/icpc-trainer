@@ -651,7 +651,7 @@ test("ships the 2024 Shenyang regional as instant official bilingual statements"
 });
 
 test("ships the domestic API, SQLite persistence, cached statements, OCR, and local translation deployment", async () => {
-  const [backend, backendScoring, persistence, persistentClient, statements, archiveClient, archiveCatalog, archiveHtmlParser, compose, dockerfile, nginx, browserApi, worker, updater] = await Promise.all([
+  const [backend, backendScoring, persistence, persistentClient, statements, archiveClient, archiveCatalog, archiveHtmlParser, compose, dockerfile, nginx, browserApi, worker, updater, backup, backupTimer] = await Promise.all([
     readFile(new URL("backend/server.mjs", root), "utf8"),
     readFile(new URL("backend/vp-scoring.mjs", root), "utf8"),
     readFile(new URL("backend/persistence.mjs", root), "utf8"),
@@ -666,6 +666,8 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
     readFile(new URL("app/lib/browser-api.ts", root), "utf8"),
     readFile(new URL("worker/index.ts", root), "utf8"),
     readFile(new URL("deploy/update-backend.sh", root), "utf8"),
+    readFile(new URL("deploy/backup-data.sh", root), "utf8"),
+    readFile(new URL("deploy/icpc-trainer-backup.timer", root), "utf8"),
   ]);
   assert.match(backend, /\/vp\/generate/);
   assert.match(backend, /\/submissions\/raw/);
@@ -745,6 +747,14 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(worker, /Permissions-Policy/);
   assert.match(updater, /backend-before-/);
   assert.match(updater, /platform-submissions/);
+  assert.match(updater, /backup-data\.sh/);
+  assert.match(updater, /验证公网 HTTPS 反向代理/);
+  assert.match(updater, /ICPC_TRAINER_PUBLIC_API/);
+  assert.match(backup, /VACUUM INTO/);
+  assert.match(backup, /gzip -t/);
+  assert.match(backup, /-mtime \+13 -delete/);
+  assert.match(backupTimer, /OnCalendar=.*03:30:00/);
+  assert.match(backupTimer, /Persistent=true/);
 });
 
 test("ships invite-only authentication and administration", async () => {

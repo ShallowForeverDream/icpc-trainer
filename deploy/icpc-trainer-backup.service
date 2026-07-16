@@ -1,0 +1,11 @@
+[Unit]
+Description=Back up icpc-trainer SQLite data
+After=docker.service
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/opt/icpc-trainer/deploy/backup-data.sh
+Nice=10
+IOSchedulingClass=best-effort
+IOSchedulingPriority=7

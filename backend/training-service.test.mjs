@@ -1,21 +1,32 @@
 import assert from "node:assert/strict";
 import { spawn } from "node:child_process";
 import { mkdtemp, rm } from "node:fs/promises";
+import { createServer } from "node:net";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
 
 async function waitForHealth(baseUrl) {
-  for (let attempt = 0; attempt < 40; attempt += 1) {
+  for (let attempt = 0; attempt < 80; attempt += 1) {
     try { if ((await fetch(`${baseUrl}/health`)).ok) return; } catch { /* starting */ }
     await new Promise((resolve) => setTimeout(resolve, 100));
   }
   throw new Error("test server did not start");
 }
 
+async function availablePort() {
+  const server = createServer();
+  await new Promise((resolve, reject) => server.once("error", reject).listen(0, "127.0.0.1", resolve));
+  const address = server.address();
+  const port = typeof address === "object" && address ? address.port : 0;
+  await new Promise((resolve) => server.close(resolve));
+  if (!port) throw new Error("could not allocate test port");
+  return port;
+}
+
 test("records deliberate-practice outcomes and accepts product feedback", async () => {
   const directory = await mkdtemp(join(tmpdir(), "icpc-trainer-practice-"));
-  const port = 19_000 + process.pid % 1_000;
+  const port = await availablePort();
   const baseUrl = `http://127.0.0.1:${port}`;
   const child = spawn(process.execPath, ["server.mjs"], {
     cwd: new URL(".", import.meta.url),

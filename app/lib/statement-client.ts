@@ -265,7 +265,7 @@ export function statementHtmlForDisplay(html: string, images: StatementImage[], 
   return root.innerHTML;
 }
 
-type TranslationAvailability = "unavailable" | "downloadable" | "downloading" | "available";
+export type TranslationAvailability = "unavailable" | "downloadable" | "downloading" | "available";
 type TranslatorMonitor = { addEventListener(type: "downloadprogress", listener: (event: { loaded: number }) => void): void };
 type TranslatorSession = { translate(text: string): Promise<string>; destroy?(): void };
 type TranslatorFactory = {
@@ -277,17 +277,14 @@ declare global {
   interface Window { Translator?: TranslatorFactory }
 }
 
-function textNodesForTranslation(root: HTMLElement) {
-  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
-  const nodes: Text[] = [];
-  let node = walker.nextNode();
-  while (node) {
-    const text = node as Text;
-    const parent = text.parentElement;
-    if (parent && !parent.closest("pre, code, .tex-span") && /[A-Za-z]{2}/.test(text.data.trim())) nodes.push(text);
-    node = walker.nextNode();
+export async function browserTranslationAvailability(): Promise<TranslationAvailability> {
+  const factory = typeof window === "undefined" ? undefined : window.Translator;
+  if (!factory) return "unavailable";
+  try {
+    return await factory.availability({ sourceLanguage: "en", targetLanguage: "zh" });
+  } catch {
+    return "unavailable";
   }
-  return nodes;
 }
 
 function maskFormulaText(raw: string) {
@@ -310,6 +307,97 @@ function restoreFormulaText(translated: string, formulas: Array<{ placeholder: s
   return restored;
 }
 
+function polishBrowserTranslation(value: string) {
+  return value
+    .replace(/^你会得到/, "给定")
+    .replace(/^给你/, "给定")
+    .replaceAll("阵列", "数组")
+    .replaceAll("键入", "输入")
+    .replaceAll("索引", "下标")
+    .replaceAll("测试案例", "测试用例")
+    .replaceAll("打印", "输出")
+    .replaceAll("您", "你")
+    .replace(/\s+([，。；：！？])/g, "$1")
+    .trim();
+}
+
+function escapeBrowserHtml(value: string) {
+  const container = document.createElement("div");
+  container.textContent = value;
+  return container.innerHTML;
+}
+
+type BrowserTranslationRecord =
+  | { kind: "block"; element: HTMLElement; source: string; formulas: Array<{ placeholder: string; formula: string }> }
+  | { kind: "text"; node: Text; raw: string; source: string; formulas: Array<{ placeholder: string; formula: string }> };
+
+function browserTranslationRecords(root: HTMLElement) {
+  const records: BrowserTranslationRecord[] = [];
+  const processedBlocks = new Set<HTMLElement>();
+  let formulaIndex = 0;
+  const fixedHeadings = new Map([["input", "输入"], ["output", "输出"], ["example", "样例"], ["examples", "样例"], ["note", "说明"], ["interaction", "交互说明"]]);
+
+  root.querySelectorAll<HTMLElement>(".section-title").forEach((element) => {
+    const translated = fixedHeadings.get((element.textContent || "").trim().toLowerCase());
+    if (translated) element.textContent = translated;
+  });
+
+  root.querySelectorAll<HTMLElement>("p, li, td, th, figcaption").forEach((element) => {
+    if (element.closest("pre, code, .section-title") || element.querySelector("p, li, td, th, figcaption, img, a, pre, code")) return;
+    const clone = element.cloneNode(true) as HTMLElement;
+    const originalFormulaElements = [...element.querySelectorAll<HTMLElement>(".tex-span")];
+    const formulas: Array<{ placeholder: string; formula: string }> = [];
+    clone.querySelectorAll<HTMLElement>(".tex-span").forEach((formula, index) => {
+      const placeholder = `ICPCMATH${formulaIndex++}END`;
+      formulas.push({ placeholder, formula: originalFormulaElements[index]?.outerHTML || formula.outerHTML });
+      formula.replaceWith(document.createTextNode(placeholder));
+    });
+    let source = clone.textContent || "";
+    source = source.replace(/\${3}[\s\S]*?\${3}/g, (formula) => {
+      const placeholder = `ICPCMATH${formulaIndex++}END`;
+      formulas.push({ placeholder, formula: escapeBrowserHtml(formula) });
+      return placeholder;
+    }).replace(/\s+/g, " ").trim();
+    if (!/[A-Za-z]{2}/.test(source.replace(/ICPCMATH\d+END/g, ""))) return;
+    processedBlocks.add(element);
+    records.push({ kind: "block", element, source, formulas });
+  });
+
+  const walker = document.createTreeWalker(root, NodeFilter.SHOW_TEXT);
+  let node = walker.nextNode();
+  while (node) {
+    const text = node as Text;
+    const parent = text.parentElement;
+    if (parent
+      && !parent.closest("pre, code, .tex-span, .section-title")
+      && ![...processedBlocks].some((block) => block.contains(text))
+      && /[A-Za-z]{2}/.test(text.data.replace(/\${3}[\s\S]*?\${3}/g, ""))) {
+      const masked = maskFormulaText(text.data);
+      records.push({ kind: "text", node: text, raw: text.data, source: masked.masked.trim(), formulas: masked.formulas });
+    }
+    node = walker.nextNode();
+  }
+  return records;
+}
+
+function renderBrowserTranslations(records: BrowserTranslationRecord[], translated: Map<string, string>) {
+  for (const record of records) {
+    const translatedText = polishBrowserTranslation(translated.get(record.source) || record.source);
+    if (record.kind === "block") {
+      let html = escapeBrowserHtml(translatedText);
+      for (const { placeholder, formula } of record.formulas) {
+        const flexiblePlaceholder = new RegExp(placeholder.replace("ICPCMATH", "ICPC\\s*MATH\\s*").replace("END", "\\s*END"), "i");
+        if (!flexiblePlaceholder.test(html)) throw new Error(`浏览器翻译未保留公式占位符 ${placeholder}`);
+        html = html.replace(flexiblePlaceholder, () => formula);
+      }
+      record.element.innerHTML = html;
+      continue;
+    }
+    const restored = restoreFormulaText(translatedText, record.formulas);
+    record.node.data = `${record.raw.match(/^\s*/)?.[0] || ""}${restored}${record.raw.match(/\s*$/)?.[0] || ""}`;
+  }
+}
+
 export async function translateStatementInBrowser(
   originalHtml: string,
   images: StatementImage[],
@@ -317,7 +405,7 @@ export async function translateStatementInBrowser(
 ) {
   const factory = window.Translator;
   if (!factory) throw new Error("当前浏览器不支持 Chrome 本地 Translator API；服务器会继续后台翻译");
-  const availability = await factory.availability({ sourceLanguage: "en", targetLanguage: "zh" });
+  const availability = await browserTranslationAvailability();
   if (availability === "unavailable") throw new Error("当前设备没有可用的英译中本地模型");
   onProgress(availability === "available" ? "正在使用浏览器本地模型翻译" : "正在下载浏览器本地翻译模型");
   const translator = await factory.create({
@@ -332,21 +420,14 @@ export async function translateStatementInBrowser(
     const document = new DOMParser().parseFromString(`<div id="browser-translation-root">${originalHtml}</div>`, "text/html");
     const root = document.querySelector<HTMLElement>("#browser-translation-root");
     if (!root) throw new Error("原题面结构无效");
-    const nodes = textNodesForTranslation(root);
-    const records = nodes
-      .filter((node) => /[A-Za-z]{2}/.test(node.data.replace(/\${3}[\s\S]*?\${3}/g, "")))
-      .map((node) => ({ node, raw: node.data, ...maskFormulaText(node.data) }));
-    const unique = [...new Set(records.map((record) => record.masked.trim()))];
+    const records = browserTranslationRecords(root);
+    const unique = [...new Set(records.map((record) => record.source))];
     const translated = new Map<string, string>();
     for (let index = 0; index < unique.length; index += 1) {
       onProgress(`浏览器本地翻译 ${index + 1} / ${unique.length}`);
       translated.set(unique[index], await translator.translate(unique[index]));
     }
-    for (const record of records) {
-      const masked = record.masked.trim();
-      const restored = restoreFormulaText(translated.get(masked) || masked, record.formulas);
-      record.node.data = `${record.raw.match(/^\s*/)?.[0] || ""}${restored.trim()}${record.raw.match(/\s*$/)?.[0] || ""}`;
-    }
+    renderBrowserTranslations(records, translated);
 
     const translatedImages: StatementImage[] = [];
     for (const image of images) {

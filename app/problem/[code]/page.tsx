@@ -25,6 +25,7 @@ import { readStoredJson, readStoredString, removeStoredValue, writeStoredJson, w
 import { saveTrainingEvent, type TrainingDifficulty, type TrainingOutcome } from "../../lib/training-client";
 import {
   CachedStatement,
+  browserTranslationAvailability,
   cacheBrowserTranslation,
   fetchStatementViaExtension,
   importStatementSource,
@@ -380,9 +381,11 @@ export default function ProblemDetailPage() {
   const [tab, setTab] = useState("题目");
   const [language, setLanguage] = useState<StatementLanguage>("original");
   const [statement, setStatement] = useState<CachedStatement | null>(null);
+  const statementRef = useRef<CachedStatement | null>(null);
   const [statementError, setStatementError] = useState("");
   const [statementAction, setStatementAction] = useState("");
   const extensionAttempted = useRef(false);
+  const browserTranslationAttempted = useRef(false);
   const [favorite, setFavorite] = useState(false);
   const [code, setCode] = useState(initialCode);
   const [submitState, setSubmitState] = useState<"idle" | "sending" | "sent" | "empty" | "missing">("idle");
@@ -441,6 +444,35 @@ export default function ProblemDetailPage() {
     }
   }, [officialProblemUrl, requestedCode]);
 
+  const translateInBrowser = useCallback(async () => {
+    const currentStatement = statementRef.current;
+    if (!currentStatement?.originalHtml) return;
+    browserTranslationAttempted.current = true;
+    try {
+      setStatementAction("正在检查 Chrome 本地翻译能力");
+      const translated = await translateStatementInBrowser(currentStatement.originalHtml, currentStatement.images, setStatementAction);
+      const local = cacheBrowserTranslation(currentStatement, translated.chineseHtml, translated.images);
+      setStatement(local);
+      setLanguage("chinese");
+      setStatementError("");
+      setStatementAction("中文题面已生成，正在写入服务器数据库");
+      try {
+        const next = await submitBrowserTranslation(requestedCode, translated.chineseHtml, translated.images);
+        setStatement(next);
+        setStatementAction(next.cacheScope === "device" ? "中文题面已保存到当前设备" : "中文题面已持久保存到服务器数据库");
+      } catch {
+        setStatementAction("中文题面已保存到当前设备；登录后可同步共享缓存");
+      }
+    } catch (error) {
+      setStatementAction("");
+      setStatementError(error instanceof Error ? error.message : "浏览器本地翻译失败");
+    }
+  }, [requestedCode]);
+
+  useEffect(() => {
+    statementRef.current = statement;
+  }, [statement]);
+
   useEffect(() => {
     if (curated) { setProblem(curated); return; }
     const controller = new AbortController();
@@ -454,6 +486,7 @@ export default function ProblemDetailPage() {
 
   useEffect(() => {
     extensionAttempted.current = false;
+    browserTranslationAttempted.current = false;
     setLanguage("original");
     setStatement(null);
     setStatementError("");
@@ -475,6 +508,19 @@ export default function ProblemDetailPage() {
     const timeout = window.setTimeout(() => void importWithExtension(), statement?.status === "importing" ? 1800 : 0);
     return () => window.clearTimeout(timeout);
   }, [importWithExtension, statement?.originalHtml, statement?.status]);
+
+  useEffect(() => {
+    if (language !== "chinese" || !statement?.originalHtml || statement.chineseHtml || statementAction || browserTranslationAttempted.current) return;
+    let cancelled = false;
+    const timeout = window.setTimeout(() => {
+      void browserTranslationAvailability().then((availability) => {
+        if (cancelled || availability !== "available" || browserTranslationAttempted.current) return;
+        browserTranslationAttempted.current = true;
+        void translateInBrowser();
+      });
+    }, 6000);
+    return () => { cancelled = true; window.clearTimeout(timeout); };
+  }, [language, statement?.chineseHtml, statement?.originalHtml, statementAction, translateInBrowser]);
 
   useEffect(() => {
     if (!statement?.title) return;
@@ -608,29 +654,6 @@ export default function ProblemDetailPage() {
     if (favorites.has(problem.code)) favorites.delete(problem.code); else favorites.add(problem.code);
     void savePersistentJson("favorites", "icpc-trainer-favorites", [...favorites].slice(0, 500));
     setFavorite(favorites.has(problem.code));
-  }
-
-  async function translateInBrowser() {
-    if (!statement?.originalHtml) return;
-    try {
-      setStatementAction("正在检查 Chrome 本地翻译能力");
-      const translated = await translateStatementInBrowser(statement.originalHtml, statement.images, setStatementAction);
-      const local = cacheBrowserTranslation(statement, translated.chineseHtml, translated.images);
-      setStatement(local);
-      setLanguage("chinese");
-      setStatementError("");
-      setStatementAction("中文题面已生成，正在写入服务器数据库");
-      try {
-        const next = await submitBrowserTranslation(requestedCode, translated.chineseHtml, translated.images);
-        setStatement(next);
-        setStatementAction(next.cacheScope === "device" ? "中文题面已保存到当前设备" : "中文题面已持久保存到服务器数据库");
-      } catch {
-        setStatementAction("中文题面已保存到当前设备；登录后可同步共享缓存");
-      }
-    } catch (error) {
-      setStatementAction("");
-      setStatementError(error instanceof Error ? error.message : "浏览器本地翻译失败");
-    }
   }
 
   const sendToExtension = useCallback(async () => {

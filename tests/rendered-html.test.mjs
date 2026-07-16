@@ -90,7 +90,9 @@ test("uses a concise white, pink, and violet visual system across the product", 
   assert.match(styles, /--paper:#fffafd/);
   assert.match(styles, /--blue:#8557d9/);
   assert.match(styles, /--lime:#e987b8/);
-  assert.match(styles, /body\{[^}]*font-size:16px/);
+  assert.match(styles, /Readability floor/);
+  assert.match(styles, /body\{font-size:16px;line-height:1\.55\}/);
+  assert.match(styles, /font-size:max\(14px,1em\)!important/);
   assert.match(styles, /small\{font-size:12px!important/);
   assert.match(styles, /\.dashboard-archive-section/);
 });

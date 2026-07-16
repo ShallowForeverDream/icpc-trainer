@@ -119,9 +119,19 @@ async function loadSource(boardPath) {
 }
 
 function codeforcesTeamId(party, index) {
-  if (Number.isInteger(party?.teamId)) return `cf-team-${party.teamId}`;
-  const handles = Array.isArray(party?.members) ? party.members.map((member) => String(member?.handle || "").trim()).filter(Boolean) : [];
-  return `cf-party-${handles.join("+") || index + 1}`;
+  return codeforcesPartyKeys(party)[0] || `cf-party-${index + 1}`;
+}
+
+function codeforcesPartyKeys(party) {
+  const keys = [];
+  if (Number.isInteger(party?.teamId)) keys.push(`cf-team-${party.teamId}`);
+  const teamName = String(party?.teamName || "").trim().replace(/\s+/g, " ");
+  if (teamName) keys.push(`cf-name-${createHash("sha256").update(teamName.toLocaleLowerCase("en-US")).digest("hex").slice(0, 20)}`);
+  const handles = Array.isArray(party?.members)
+    ? party.members.map((member) => String(member?.handle || "").trim().toLocaleLowerCase("en-US")).filter(Boolean).sort()
+    : [];
+  if (handles.length) keys.push(`cf-members-${createHash("sha256").update(handles.join("\n")).digest("hex").slice(0, 20)}`);
+  return [...new Set(keys)];
 }
 
 function codeforcesTeamName(party, index) {
@@ -131,15 +141,16 @@ function codeforcesTeamName(party, index) {
   return handles.join(", ") || `Team ${index + 1}`;
 }
 
-export function normalizeCodeforcesArchiveStandings(value, gymId, submissions = null) {
-  if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new Error("Codeforces Gym 榜单数据无效");
+export function normalizeCodeforcesArchiveStandings(value, contestId, submissions = null, contestKind = "gym") {
+  if (!value?.contest || !Array.isArray(value.problems) || !Array.isArray(value.rows)) throw new Error("Codeforces 赛事榜单数据无效");
   const durationSeconds = Math.max(60, Number(value.contest.durationSeconds) || 5 * 60 * 60);
   const startTimeSeconds = Number(value.contest.startTimeSeconds) || 0;
   const slots = value.problems.map((problem, index) => safeLabel(problem?.index, String.fromCharCode(65 + index), 8));
   const teams = [];
   const runs = [];
-  const officialTeamIds = new Set();
+  const officialPartyIds = new Map();
   let runId = 0;
+  let expectedJudgedSubmissions = 0;
 
   value.rows.forEach((row, rowIndex) => {
     const party = row?.party || {};
@@ -147,45 +158,69 @@ export function normalizeCodeforcesArchiveStandings(value, gymId, submissions = 
     if (!party.ghost && participantType !== "CONTESTANT") return;
     const teamId = codeforcesTeamId(party, rowIndex);
     const members = Array.isArray(party.members) ? party.members.map((member) => String(member?.handle || "").trim()).filter(Boolean) : [];
-    officialTeamIds.add(teamId);
+    codeforcesPartyKeys(party).forEach((key) => officialPartyIds.set(key, teamId));
+    officialPartyIds.set(teamId, teamId);
     teams.push({ id: teamId, name: codeforcesTeamName(party, rowIndex), organization_id: members.join(", "), group: ["official"] });
+    slots.forEach((_, problemIndex) => {
+      const result = row.problemResults?.[problemIndex] || {};
+      const rejected = Math.max(0, Math.min(1000, Number(result.rejectedAttemptCount) || 0));
+      const best = Number(result.bestSubmissionTimeSeconds);
+      const solved = Number(result.points) > 0 || Number.isFinite(best) && best >= 0;
+      expectedJudgedSubmissions += rejected + (solved ? 1 : 0);
+    });
   });
 
   if (Array.isArray(submissions)) {
     const problemIndexes = new Map(slots.map((slot, index) => [slot, index]));
     submissions.forEach((submission, submissionIndex) => {
-      const teamId = codeforcesTeamId(submission?.author || {}, submissionIndex);
+      const author = submission?.author || {};
+      const participantType = String(author.participantType || "").toUpperCase();
+      if (!author.ghost && participantType !== "CONTESTANT") return;
+      const partyKeys = codeforcesPartyKeys(author);
+      const teamId = partyKeys.map((key) => officialPartyIds.get(key)).find(Boolean)
+        || officialPartyIds.get(codeforcesTeamId(author, submissionIndex));
       const problemIndex = problemIndexes.get(String(submission?.problem?.index || ""));
-      if (!officialTeamIds.has(teamId) || problemIndex === undefined) return;
+      if (!teamId || problemIndex === undefined) return;
       const timestamp = Math.max(0, Math.min(durationSeconds, Math.floor(Number(submission.relativeTimeSeconds) || 0)));
       runs.push({
-        id: `cf-${gymId}-${Number.isInteger(submission.id) ? submission.id : ++runId}`,
+        id: `cf-${contestId}-${Number.isInteger(submission.id) ? submission.id : ++runId}`,
         team_id: teamId,
         problem_id: problemIndex,
         timestamp,
         status: String(submission.verdict || "UNKNOWN"),
       });
     });
-  } else value.rows.forEach((row, rowIndex) => {
-    const party = row?.party || {};
-    const participantType = String(party.participantType || "").toUpperCase();
-    if (!party.ghost && participantType !== "CONTESTANT") return;
-    const teamId = codeforcesTeamId(party, rowIndex);
-    slots.forEach((_, problemIndex) => {
-      const result = row.problemResults?.[problemIndex] || {};
-      const rejected = Math.max(0, Math.min(1000, Number(result.rejectedAttemptCount) || 0));
-      const best = Number(result.bestSubmissionTimeSeconds);
-      const solved = Number(result.points) > 0 || Number.isFinite(best) && best >= 0;
-      const timestamp = solved ? Math.max(0, Math.min(durationSeconds, Math.floor(best))) : durationSeconds;
-      if (rejected) runs.push({ id: `cf-${gymId}-${++runId}`, team_id: teamId, problem_id: problemIndex, timestamp, status: "WRONG_ANSWER", attempts: rejected });
-      if (solved) runs.push({ id: `cf-${gymId}-${++runId}`, team_id: teamId, problem_id: problemIndex, timestamp, status: "ACCEPTED" });
+  }
+
+  const matchedJudgedSubmissions = runs.filter((run) => {
+    const status = String(run.status || "UNKNOWN").toUpperCase();
+    return acceptedStatuses.has(status) || !ignoredStatuses.has(status) && !pendingStatuses.has(status);
+  }).length;
+  const exactTimeline = Array.isArray(submissions) && (expectedJudgedSubmissions === 0 || matchedJudgedSubmissions >= expectedJudgedSubmissions);
+  if (!exactTimeline) {
+    runs.length = 0;
+    value.rows.forEach((row, rowIndex) => {
+      const party = row?.party || {};
+      const participantType = String(party.participantType || "").toUpperCase();
+      if (!party.ghost && participantType !== "CONTESTANT") return;
+      const teamId = codeforcesTeamId(party, rowIndex);
+      slots.forEach((_, problemIndex) => {
+        const result = row.problemResults?.[problemIndex] || {};
+        const rejected = Math.max(0, Math.min(1000, Number(result.rejectedAttemptCount) || 0));
+        const best = Number(result.bestSubmissionTimeSeconds);
+        const solved = Number(result.points) > 0 || Number.isFinite(best) && best >= 0;
+        const timestamp = solved ? Math.max(0, Math.min(durationSeconds, Math.floor(best))) : durationSeconds;
+        if (rejected) runs.push({ id: `cf-${contestId}-${++runId}`, team_id: teamId, problem_id: problemIndex, timestamp, status: "WRONG_ANSWER", attempts: rejected });
+        if (solved) runs.push({ id: `cf-${contestId}-${++runId}`, team_id: teamId, problem_id: problemIndex, timestamp, status: "ACCEPTED" });
+      });
     });
-  });
+  }
 
   const submissionCount = runs.reduce((total, run) => total + Math.max(1, Math.floor(Number(run.attempts) || 1)), 0);
+  const isGym = contestKind !== "contest";
   return {
     config: {
-      contest_name: String(value.contest.name || `Codeforces Gym ${gymId}`),
+      contest_name: String(value.contest.name || `Codeforces ${isGym ? "Gym " : ""}${contestId}`),
       start_time: startTimeSeconds,
       end_time: startTimeSeconds + durationSeconds,
       frozen_time: Math.min(3600, durationSeconds),
@@ -198,26 +233,26 @@ export function normalizeCodeforcesArchiveStandings(value, gymId, submissions = 
     runs,
     submissionCount,
     organizations: [],
-    boardUrl: `https://codeforces.com/gym/${gymId}/standings`,
-    sourceFidelity: Array.isArray(submissions) ? "Codeforces 原场逐提交时间轴" : "Codeforces 原榜解题时间与最终罚时重放",
+    boardUrl: `https://codeforces.com/${isGym ? "gym" : "contest"}/${contestId}/standings`,
+    sourceFidelity: exactTimeline ? "Codeforces 原场逐提交时间轴" : "Codeforces 原榜解题时间与最终罚时重放",
   };
 }
 
-async function loadCodeforcesSubmissions(gymId, codeforces) {
+async function loadCodeforcesSubmissions(contestId, codeforces) {
   const submissions = [];
   const pageSize = 10_000;
   for (let from = 1; from <= 100_000; from += pageSize) {
-    const page = await codeforces("contest.status", new URLSearchParams({ contestId: String(gymId), from: String(from), count: String(pageSize) }));
-    if (!Array.isArray(page)) throw new Error("Codeforces Gym 提交时间轴数据无效");
+    const page = await codeforces("contest.status", new URLSearchParams({ contestId: String(contestId), from: String(from), count: String(pageSize) }));
+    if (!Array.isArray(page)) throw new Error("Codeforces 提交时间轴数据无效");
     submissions.push(...page);
     if (page.length < pageSize) return submissions;
   }
-  throw new Error("Codeforces Gym 提交时间轴超过安全上限");
+  throw new Error("Codeforces 提交时间轴超过安全上限");
 }
 
-async function loadCodeforcesSource(gymId, codeforces) {
-  if (typeof codeforces !== "function") throw new Error("Codeforces Gym 榜单服务未配置");
-  const cacheKey = `codeforces:${gymId}`;
+async function loadCodeforcesSource(contestId, contestKind, codeforces) {
+  if (typeof codeforces !== "function") throw new Error("Codeforces 榜单服务未配置");
+  const cacheKey = `codeforces-v2:${contestKind}:${contestId}`;
   const timestamp = Date.now();
   const cached = readRuntimeCache(SOURCE_NAMESPACE, cacheKey);
   if (cached && cached.expiresAt > timestamp) return { ...cached, cacheHit: true };
@@ -225,14 +260,14 @@ async function loadCodeforcesSource(gymId, codeforces) {
   if (sourceJobs.size >= 8) throw new HttpError(503, "真实榜单同步队列繁忙，请稍后重试", { expose: true });
   const job = (async () => {
     try {
-      const standings = await codeforces("contest.standings", new URLSearchParams({ contestId: String(gymId), from: "1", count: "5000", showUnofficial: "true" }));
+      const standings = await codeforces("contest.standings", new URLSearchParams({ contestId: String(contestId), from: "1", count: "5000", showUnofficial: "true" }));
       let submissions = null;
       try {
-        submissions = await loadCodeforcesSubmissions(gymId, codeforces);
+        submissions = await loadCodeforcesSubmissions(contestId, codeforces);
       } catch (error) {
-        console.warn(`Codeforces Gym ${gymId} submission timeline unavailable; using final standings`, error instanceof Error ? error.message : error);
+        console.warn(`Codeforces contest ${contestId} submission timeline unavailable; using final standings`, error instanceof Error ? error.message : error);
       }
-      const value = normalizeCodeforcesArchiveStandings(standings, gymId, submissions);
+      const value = normalizeCodeforcesArchiveStandings(standings, contestId, submissions, contestKind);
       const fetchedAt = Date.now();
       writeRuntimeCache(SOURCE_NAMESPACE, cacheKey, value, {
         itemCount: value.runs.length,
@@ -328,7 +363,10 @@ async function scoreboard(url, codeforces) {
   const sourceKind = url.searchParams.get("source") === "codeforces" ? "codeforces" : "xcpcio";
   const boardPath = sourceKind === "xcpcio" ? safeBoardPath(url.searchParams.get("boardPath")) : null;
   const gymId = sourceKind === "codeforces" ? boundedInteger(url.searchParams.get("gymId"), { min: 1, max: 10_000_000, fallback: 0 }) : 0;
-  if (sourceKind === "codeforces" && !gymId) throw new HttpError(400, "Codeforces Gym 编号无效");
+  const regularContestId = sourceKind === "codeforces" ? boundedInteger(url.searchParams.get("contestId"), { min: 1, max: 10_000_000, fallback: 0 }) : 0;
+  const codeforcesContestId = regularContestId || gymId;
+  const contestKind = regularContestId ? "contest" : "gym";
+  if (sourceKind === "codeforces" && !codeforcesContestId) throw new HttpError(400, "Codeforces 赛事编号无效");
   const id = safeContestId(url.searchParams.get("id"));
   const name = safeLabel(url.searchParams.get("name"), id);
   const group = safeLabel(url.searchParams.get("group"), "all", 100);
@@ -336,8 +374,8 @@ async function scoreboard(url, codeforces) {
   const requestedElapsed = boundedInteger(url.searchParams.get("elapsed"), { min: 0, max: 24 * 60 * 60, fallback: 0 });
   const elapsedBucket = Math.floor(requestedElapsed / 10);
   const elapsed = elapsedBucket * 10;
-  const sourceKey = sourceKind === "codeforces" ? `codeforces:${gymId}` : `xcpcio:${boardPath}`;
-  const source = sourceKind === "codeforces" ? await loadCodeforcesSource(gymId, codeforces) : await loadSource(boardPath);
+  const sourceKey = sourceKind === "codeforces" ? `codeforces-v2:${contestKind}:${codeforcesContestId}` : `xcpcio:${boardPath}`;
+  const source = sourceKind === "codeforces" ? await loadCodeforcesSource(codeforcesContestId, contestKind, codeforces) : await loadSource(boardPath);
   const key = snapshotKey({ sourceKey, elapsedBucket, reveal, group, sourceFetchedAt: source.fetchedAt });
   const cached = readRuntimeCache(SNAPSHOT_NAMESPACE, key);
   if (cached && cached.expiresAt > Date.now()) return { ...cached.value, cache: { source: true, snapshot: true, persistent: "sqlite" } };

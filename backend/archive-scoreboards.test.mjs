@@ -119,6 +119,26 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
     assert.equal(calculateArchiveStandings(exact, 500, false, "official").rows[0].problems.A.wrongAttempts, 1);
     assert.equal(calculateArchiveStandings(exact, 1_300, false, "official").rows[0].penalty, 40);
 
+    const missingTimeline = normalizeCodeforcesArchiveStandings({
+      contest: { name: "Private Gym", startTimeSeconds: 1_730_000_000, durationSeconds: 18_000 },
+      problems: [{ index: "A" }],
+      rows: [{ party: { ghost: true, teamName: "Imported Team" }, problemResults: [{ points: 1, rejectedAttemptCount: 2, bestSubmissionTimeSeconds: 900 }] }],
+    }, 106268, []);
+    assert.equal(missingTimeline.submissionCount, 3);
+    assert.match(missingTimeline.sourceFidelity, /解题时间与最终罚时/);
+
+    const ghostTimeline = normalizeCodeforcesArchiveStandings({
+      contest: { name: "Imported Regional", startTimeSeconds: 1_730_000_000, durationSeconds: 18_000 },
+      problems: [{ index: "A" }],
+      rows: [{ party: { ghost: true, teamName: "Stable Ghost Team" }, problemResults: [{ points: 1, bestSubmissionTimeSeconds: 600 }] }],
+    }, 2172, [
+      { id: 21, relativeTimeSeconds: 600, author: { ghost: true, teamName: "Stable Ghost Team" }, problem: { index: "A" }, verdict: "OK" },
+      { id: 22, relativeTimeSeconds: 700, author: { participantType: "PRACTICE", teamName: "Stable Ghost Team" }, problem: { index: "A" }, verdict: "WRONG_ANSWER" },
+    ], "contest");
+    assert.equal(ghostTimeline.runs.length, 1);
+    assert.match(ghostTimeline.sourceFidelity, /逐提交时间轴/);
+    assert.equal(ghostTimeline.boardUrl, "https://codeforces.com/contest/2172/standings");
+
     const methods = [];
     let response;
     const handler = createArchiveScoreboardHandler({
@@ -137,6 +157,10 @@ test("replays ICPC penalties and hides frozen submissions", async () => {
     assert.equal(response.status, 200);
     assert.equal(response.value.rows[0].solved, 1);
     assert.match(response.value.contest.sourceFidelity, /逐提交时间轴/);
+
+    await handler({ method: "GET" }, {}, new URL("http://localhost/archive/scoreboards?source=codeforces&contestId=2172&id=2025-taichung&name=Taichung&elapsed=1300&reveal=1&group=official"));
+    assert.deepEqual(methods, ["contest.standings", "contest.status", "contest.standings", "contest.status"]);
+    assert.equal(response.value.contest.boardUrl, "https://codeforces.com/contest/2172/standings");
   } finally {
     persistence.closePersistenceForTests();
     await rm(directory, { recursive: true, force: true });
@@ -179,7 +203,7 @@ test("persists XCPCIO sources and generated scoreboard views in SQLite across re
     assert.equal(health.caches.archiveScoreboardSources, 1);
     assert.equal(health.caches.archiveScoreboardViews, 1);
     assert.equal(health.memory.limitMiB, 512);
-    assert.equal(health.versions.api, 8);
+    assert.equal(health.versions.api, 9);
     assert.equal(health.integrations.codeforcesAuthenticated, false);
     assert.equal(health.versions.statementTranslation, 22);
     assert.equal(health.versions.archiveStatementTranslation, 4);

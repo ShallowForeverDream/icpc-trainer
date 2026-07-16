@@ -12,7 +12,8 @@ export async function archiveScoreboard(contest: ArchiveContest, elapsedSeconds:
   });
   if (contest.boardSource === "codeforces") {
     params.set("source", "codeforces");
-    if (contest.gymId) params.set("gymId", String(contest.gymId));
+    if (contest.codeforcesContestId) params.set("contestId", String(contest.codeforcesContestId));
+    else if (contest.gymId) params.set("gymId", String(contest.gymId));
   } else if (contest.boardPath) {
     params.set("boardPath", contest.boardPath);
   }

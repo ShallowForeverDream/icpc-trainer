@@ -15,9 +15,9 @@ export async function GET(request: NextRequest) {
       headers: { "Cache-Control": "public, max-age=5, s-maxage=15, stale-while-revalidate=120" },
     });
   } catch (error) {
-    const message = error instanceof Error && /XCPCIO 数据源 HTTP \d{3}/.test(error.message)
+    const message = error instanceof Error && /^(XCPCIO|Codeforces|真实榜单)/.test(error.message)
       ? error.message
-      : "XCPCIO 真实榜单暂时不可用，请稍后重试";
+      : "真实榜单暂时不可用，请稍后重试";
     return NextResponse.json({ error: message }, { status: 502 });
   }
 }

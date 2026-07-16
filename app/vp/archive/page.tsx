@@ -415,7 +415,7 @@ export default function ArchiveVpPage() {
     <section className="archive-grid">{filteredContests.map((contest) => {
       const integrated = archiveContestIntegrated(contest);
       return <article key={contest.id} className={`archive-card${integrated ? "" : " pending"}`}>
-        <div><span>{contest.year}</span><i>{contest.type}</i></div><h2>{contest.name}</h2><p>{contest.city} · {contest.problemCount} 题 · {integrated ? contest.boardSource === "codeforces" ? "Gym 原榜、题面与提交" : "题面与提交已接入" : "题面接入中"}</p>
+        <div><span>{contest.year}</span><i>{contest.type}</i></div><h2>{contest.name}</h2><p>{contest.city} · {contest.problemCount} 题 · {integrated ? contest.boardSource === "codeforces" ? "Codeforces 原榜、题面与提交" : "题面与提交已接入" : "题面接入中"}</p>
         <button className="button button-primary" disabled={!integrated} onClick={() => chooseContest(contest.id)}>{integrated ? "开始准备" : "即将开放"}</button>
       </article>;
     })}</section>

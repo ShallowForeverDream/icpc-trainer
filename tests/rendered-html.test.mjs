@@ -379,6 +379,15 @@ test("ships historical ICPC upsolving with timestamp-replayed real standings", a
   assert.match(catalog, /gymId: 106554/);
   assert.match(catalog, /id: "2025-yokohama"[\s\S]*boardSource: "codeforces"[\s\S]*gymId: 106268/);
   assert.match(catalog, /id: "2024-yokohama"[\s\S]*boardSource: "codeforces"[\s\S]*gymId: 105633/);
+  assert.match(catalog, /id: "2025-bangkok"[\s\S]*gymId: 106164/);
+  assert.match(catalog, /id: "2025-taichung"[\s\S]*codeforcesContestId: 2172/);
+  assert.match(catalog, /id: "2024-taichung"[\s\S]*codeforcesContestId: 2041/);
+  assert.match(catalog, /No Distance is Too Far Apart/);
+  assert.match(catalog, /Railway Construction/);
+  assert.match(scoreboard, /contest\.codeforcesContestId/);
+  assert.match(backendScoreboard, /codeforces-v2/);
+  assert.match(backendScoreboard, /expectedJudgedSubmissions/);
+  assert.match(backendScoreboard, /Codeforces 原场逐提交时间轴/);
   assert.match(page, /国际区域赛/);
   assert.match(page, /同时间轴真实榜单/);
   assert.match(page, /同时间轴真实榜单/);
@@ -737,7 +746,7 @@ test("ships invite-only authentication and administration", async () => {
   assert.match(admin, /数据写入 SQLite/);
   assert.match(admin, /versions\.archiveStatementTranslation/);
   assert.match(admin, /升级阿里云后显示版本/);
-  assert.match(admin, /Gym 原榜/);
+  assert.match(admin, /Codeforces 原榜/);
   assert.match(admin, /可注册人数/);
   assert.match(admin, /invite-presets/);
   assert.match(admin, /撤销/);

@@ -8,6 +8,7 @@ export type ArchiveContest = {
   boardSource?: "xcpcio" | "codeforces";
   problemCount: number;
   gymId?: number;
+  codeforcesContestId?: number;
   qojContestId?: number;
   qojProblemIds?: number[];
   luoguContestId?: number;
@@ -73,6 +74,14 @@ export const archiveContests: ArchiveContest[] = [
   },
   { id: "2025-ecfinal", year: 2025, name: "ICPC 东亚区决赛", city: "EC-Final", type: "东亚决赛", boardPath: "icpc/50th/ecfinal", problemCount: 12, qojContestId: 3295, qojProblemIds: [16328, 16329, 16330, 16331, 16332, 16333, 16334, 16335, 16336, 16337, 16338, 16339] },
   {
+    id: "2025-bangkok", year: 2025, name: "ICPC 亚洲曼谷区域赛", city: "泰国 · 曼谷", type: "国际区域赛", boardSource: "codeforces", problemCount: 14, gymId: 106164,
+    problemTitles: ["Among Us", "Bring It To Back", "Challenge to the Reader", "Dungeons and Dragons", "Elena and Travel Pass", "Festival Stroll", "Galactic Adventure Agency", "Home Workout Playlist", "ICPC Extractor", "Joyeuse", "Kickshot Tournament", "Laser", "Merticulous Manipulation", "No Distance is Too Far Apart"],
+  },
+  {
+    id: "2025-taichung", year: 2025, name: "ICPC 亚洲台中区域赛", city: "中国台湾 · 台中", type: "国际区域赛", boardSource: "codeforces", problemCount: 14, codeforcesContestId: 2172,
+    problemTitles: ["ASCII Art Contest", "Buses", "Circles Are Far from Each Other", "Divisor Card Game", "Number Maze", "Cluster Computing System", "Gene Editor", "Shuffling Cards with Problem Solver 68!", "Birthday", "Sliding Tiles", "Kindergarten Homework", "Maximum Color Segment", "Maximum Distance To Port", "New Kingdom"],
+  },
+  {
     id: "2025-yokohama", year: 2025, name: "ICPC 亚洲横滨区域赛", city: "日本 · 横滨", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 106268,
     problemTitles: ["Tatami Renovation", "Minimizing Wildlife Damage", "Seagull Population", "Decompose and Concatenate", "Cutting Tofu", "Astral Geometry", "Charity Raffle", "U-Shaped Panels", "Game of Names", "ICPC Board", "Membership Structure of a Secret Society", "Common Tangent Lines"],
   },
@@ -120,6 +129,10 @@ export const archiveContests: ArchiveContest[] = [
     problemTitles: ["Hitoshizuku", "Guess the Polygon 2", "Norte da Universidade", "Keystone Correction", "Corrupted Scoreboard Log", "Boolean Function Reconstruction", "Collatz Conjecture", "Staircase Museum", "Color-Balanced Tree", "The Mysterious Shop", "Exploration Boundary", "Shiori"],
   },
   {
+    id: "2024-taichung", year: 2024, name: "ICPC 亚洲台中区域赛", city: "中国台湾 · 台中", type: "国际区域赛", boardSource: "codeforces", problemCount: 14, codeforcesContestId: 2041,
+    problemTitles: ["The Bento Box Adventure", "Bowling Frame", "Cube", "Drunken Maze", "Beautiful Array", "Segmentation Folds", "Grid Game", "Sheet Music", "Auto Complete", "Bottle Arrangement", "Trophic Balance Species", "Building Castle", "Selection Sort", "Railway Construction"],
+  },
+  {
     id: "2024-yokohama", year: 2024, name: "ICPC 亚洲横滨区域赛", city: "日本 · 横滨", type: "国际区域赛", boardSource: "codeforces", problemCount: 12, gymId: 105633,
     problemTitles: ["Ribbon on the Christmas Present", "The Sparsest Number in Between", "Omnes Viae Yokohamam Ducunt?", "Tree Generators", "E-Circuit Is Now on Sale!", "The Farthest Point", "Beyond the Former Explorer", "Remodeling the Dungeon 2", "Greatest of the Greatest Common Divisors", "Mixing Solutions", "Scheduling Two Meetings", "Peculiar Protocol"],
   },
@@ -143,12 +156,13 @@ export function findArchiveContest(id: string) {
 }
 
 export function archiveContestIntegrated(contest: ArchiveContest) {
-  return Boolean(contest.gymId
+  return Boolean(contest.gymId || contest.codeforcesContestId
     || (contest.qojContestId && contest.qojProblemIds?.length && contest.qojProblemIds.length >= contest.problemCount)
     || (contest.luoguContestId && contest.luoguProblemIds?.length && contest.luoguProblemIds.length >= contest.problemCount));
 }
 
 export function archiveProblemUrl(contest: ArchiveContest, slot: string) {
+  if (contest.codeforcesContestId) return `https://codeforces.com/contest/${contest.codeforcesContestId}/problem/${slot}`;
   if (contest.gymId) return `https://codeforces.com/gym/${contest.gymId}/problem/${slot}`;
   const problemId = contest.qojProblemIds?.[slot.charCodeAt(0) - 65];
   if (contest.qojContestId && problemId) return `https://contest.ucup.ac/contest/${contest.qojContestId}/problem/${problemId}?v=1`;
@@ -164,7 +178,8 @@ export function archiveProblemHref(contest: ArchiveContest, slot: string) {
   if (contest.qojContestId && problemId) return `/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
   const luoguProblemId = contest.luoguProblemIds?.[slot.charCodeAt(0) - 65];
   if (contest.luoguContestId && luoguProblemId) return `/vp/archive/problem?contest=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
-  if (contest.gymId) return `/problem/${contest.gymId}${slot}?archive=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
+  const codeforcesId = contest.codeforcesContestId || contest.gymId;
+  if (codeforcesId) return `/problem/${codeforcesId}${slot}?archive=${encodeURIComponent(contest.id)}&slot=${encodeURIComponent(slot)}`;
   return archiveProblemUrl(contest, slot);
 }
 

@@ -38,20 +38,21 @@ if [[ "$(docker inspect -f '{{.State.Running}}' "$container" 2>/dev/null || true
   exit 1
 fi
 
-docker exec \
+docker exec -i \
   -e BACKUP_SOURCE="/data/icpc-trainer.sqlite" \
   -e BACKUP_TARGET="$container_tmp" \
-  "$container" node -e '
-    const { unlinkSync } = require("node:fs");
-    const { DatabaseSync } = require("node:sqlite");
-    const source = process.env.BACKUP_SOURCE;
-    const target = process.env.BACKUP_TARGET;
-    if (source !== "/data/icpc-trainer.sqlite" || !/^\/data\/\.icpc-trainer-backup-[0-9-]+\.sqlite$/.test(target)) throw new Error("backup path rejected");
-    try { unlinkSync(target); } catch (error) { if (error.code !== "ENOENT") throw error; }
-    const db = new DatabaseSync(source);
-    db.exec(`VACUUM INTO '${target}'`);
-    db.close();
-  '
+  "$container" node - <<'NODE'
+const { unlinkSync } = require("node:fs");
+const { DatabaseSync } = require("node:sqlite");
+const source = process.env.BACKUP_SOURCE;
+const target = process.env.BACKUP_TARGET;
+if (source !== "/data/icpc-trainer.sqlite" || !/^\/data\/\.icpc-trainer-backup-[0-9-]+\.sqlite$/.test(target)) throw new Error("backup path rejected");
+try { unlinkSync(target); } catch (error) { if (error.code !== "ENOENT") throw error; }
+const db = new DatabaseSync(source);
+const quote = String.fromCharCode(39);
+db.exec(`VACUUM INTO ${quote}${target.replaceAll(quote, quote + quote)}${quote}`);
+db.close();
+NODE
 
 docker cp "$container:$container_tmp" "$host_tmp" >/dev/null
 gzip -9 -c "$host_tmp" > "$final.tmp"

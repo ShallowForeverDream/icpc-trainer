@@ -776,6 +776,8 @@ test("ships the domestic API, SQLite persistence, cached statements, OCR, and lo
   assert.match(updater, /验证公网 HTTPS 反向代理/);
   assert.match(updater, /ICPC_TRAINER_PUBLIC_API/);
   assert.match(backup, /VACUUM INTO/);
+  assert.match(backup, /node - <<'NODE'/);
+  assert.doesNotMatch(backup, /VACUUM INTO '\$\{target\}'/);
   assert.match(backup, /gzip -t/);
   assert.match(backup, /-mtime \+13 -delete/);
   assert.match(backupTimer, /OnCalendar=.*03:30:00/);
